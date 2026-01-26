@@ -6,10 +6,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
-class Agent extends Model
+class Tool extends Model
 {
     use HasFactory;
 
@@ -21,11 +19,8 @@ class Agent extends Model
     protected $fillable = [
         'user_id',
         'name',
-        'description',
-        'code',
+        'type',
         'config',
-        'status',
-        'ai_backend',
     ];
 
     /**
@@ -41,7 +36,7 @@ class Agent extends Model
     }
 
     /**
-     * Get the user that owns the agent.
+     * Get the user that owns the tool.
      */
     public function user(): BelongsTo
     {
@@ -49,26 +44,10 @@ class Agent extends Model
     }
 
     /**
-     * Get the tasks for the agent.
+     * Get the agents that use this tool.
      */
-    public function tasks(): HasMany
+    public function agents(): BelongsToMany
     {
-        return $this->hasMany(Task::class);
-    }
-
-    /**
-     * Get the tools assigned to the agent.
-     */
-    public function tools(): BelongsToMany
-    {
-        return $this->belongsToMany(Tool::class, 'agent_tools');
-    }
-
-    /**
-     * Get the executions for the agent through tasks.
-     */
-    public function executions(): HasManyThrough
-    {
-        return $this->hasManyThrough(Execution::class, Task::class);
+        return $this->belongsToMany(Agent::class, 'agent_tools');
     }
 }

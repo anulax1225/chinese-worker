@@ -1,0 +1,52 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class UpdateAgentRequest extends FormRequest
+{
+    /**
+     * Determine if the user is authorized to make this request.
+     */
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        return [
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
+            'description' => ['nullable', 'string'],
+            'code' => ['sometimes', 'required', 'string'],
+            'config' => ['nullable', 'array'],
+            'status' => ['nullable', 'in:active,inactive,error'],
+            'ai_backend' => ['nullable', 'string', 'in:ollama,anthropic,openai'],
+            'tool_ids' => ['nullable', 'array'],
+            'tool_ids.*' => ['integer', 'exists:tools,id'],
+        ];
+    }
+
+    /**
+     * Get custom error messages for validator errors.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'name.required' => 'The agent name is required.',
+            'name.max' => 'The agent name must not exceed 255 characters.',
+            'code.required' => 'The agent code is required.',
+            'status.in' => 'The status must be one of: active, inactive, or error.',
+            'ai_backend.in' => 'The AI backend must be one of: ollama, anthropic, or openai.',
+            'tool_ids.*.exists' => 'One or more selected tools do not exist.',
+        ];
+    }
+}
