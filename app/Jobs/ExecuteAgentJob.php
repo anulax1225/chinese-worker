@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Events\ExecutionStatusUpdated;
 use App\Models\Execution;
-use App\Services\AIBackendManager;
+use App\Services\AgentLoop\AgentLoopService;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -16,14 +16,14 @@ class ExecuteAgentJob implements ShouldQueue
     use InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * The number of seconds the job can run before timing out.
-     */
-    public int $timeout = 300;
-
-    /**
      * The number of times the job may be attempted.
      */
     public int $tries = 3;
+
+    /**
+     * The number of seconds the job can run before timing out.
+     */
+    public int $timeout = 600; // 10 minutes for agentic loops
 
     /**
      * Create a new job instance.
@@ -33,7 +33,7 @@ class ExecuteAgentJob implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(AIBackendManager $backendManager): void
+    public function handle(AgentLoopService $agentLoopService): void
     {
         // Update execution status to running
         $this->execution->update([
@@ -52,23 +52,17 @@ class ExecuteAgentJob implements ShouldQueue
             $task = $this->execution->task;
 
             $logs[] = sprintf('[%s] Execution started for agent: %s', Carbon::now()->toDateTimeString(), $agent->name);
-
-            // Get the AI backend
-            $backend = $backendManager->driver($agent->ai_backend);
             $logs[] = sprintf('[%s] Using AI backend: %s', Carbon::now()->toDateTimeString(), $agent->ai_backend);
 
             // Build the context for execution
+            $taskPayload = $task->payload;
             $context = [
-                'task' => $task->payload,
-                'agent_code' => $agent->code,
-                'agent_config' => $agent->config,
-                'tools' => $agent->tools->map(function ($tool) {
-                    return [
-                        'name' => $tool->name,
-                        'type' => $tool->type,
-                        'config' => $tool->config,
-                    ];
-                })->toArray(),
+                'input' => $taskPayload['payload']['input'] ?? '',
+                'parameters' => $taskPayload['payload']['parameters'] ?? [],
+                'messages' => $taskPayload['payload']['messages'] ?? [],
+                'images' => $taskPayload['payload']['images'] ?? null,
+                'max_turns' => $taskPayload['payload']['max_turns'] ?? config('agent.max_turns', 25),
+                'agentic' => $taskPayload['payload']['agentic'] ?? true,
                 'input_files' => $this->execution->files()
                     ->wherePivot('role', 'input')
                     ->get()
@@ -82,26 +76,41 @@ class ExecuteAgentJob implements ShouldQueue
                     })->toArray(),
             ];
 
-            $logs[] = sprintf('[%s] Executing agent with context...', Carbon::now()->toDateTimeString());
+            $logs[] = sprintf('[%s] Executing agent with agentic loop...', Carbon::now()->toDateTimeString());
 
-            // Execute the agent
-            $response = $backend->execute($agent, $context);
+            // Execute the agent with agentic loop
+            $result = $agentLoopService->execute($agent, $context);
 
-            $logs[] = sprintf('[%s] Execution completed successfully', Carbon::now()->toDateTimeString());
-            $logs[] = sprintf('[%s] Tokens used: %d', Carbon::now()->toDateTimeString(), $response->tokensUsed);
-            $logs[] = sprintf('[%s] Finish reason: %s', Carbon::now()->toDateTimeString(), $response->finishReason);
+            $logs[] = sprintf('[%s] Agentic loop completed', Carbon::now()->toDateTimeString());
+            $logs[] = sprintf('[%s] Status: %s', Carbon::now()->toDateTimeString(), $result->status);
+            $logs[] = sprintf('[%s] Turns used: %d', Carbon::now()->toDateTimeString(), $result->turnsUsed);
 
-            // Update execution with successful result
+            if (! empty($result->toolResults)) {
+                $logs[] = sprintf('[%s] Tool calls executed: %d', Carbon::now()->toDateTimeString(), count($result->toolResults));
+                foreach ($result->toolResults as $toolResult) {
+                    $status = $toolResult['result']['success'] ? 'success' : 'failed';
+                    $logs[] = sprintf(
+                        '  - Turn %d: %s (%s)',
+                        $toolResult['turn'],
+                        $toolResult['tool'],
+                        $status
+                    );
+                }
+            }
+
+            // Determine final status
+            $status = $result->isCompleted() ? 'completed' : 'failed';
+
+            if ($result->error) {
+                $logs[] = sprintf('[%s] Error: %s', Carbon::now()->toDateTimeString(), $result->error);
+            }
+
+            // Update execution with result
             $this->execution->update([
-                'status' => 'completed',
+                'status' => $status,
                 'completed_at' => Carbon::now(),
-                'result' => [
-                    'content' => $response->content,
-                    'model' => $response->model,
-                    'tokens_used' => $response->tokensUsed,
-                    'finish_reason' => $response->finishReason,
-                    'metadata' => $response->metadata,
-                ],
+                'result' => $result->toArray(),
+                'error' => $result->error,
                 'logs' => implode("\n", $logs),
             ]);
 

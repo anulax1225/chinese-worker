@@ -8,7 +8,6 @@ use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\ExecutionController;
 use App\Http\Controllers\Api\V1\FileController;
 use App\Http\Controllers\Api\V1\ToolController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -20,12 +19,11 @@ Route::prefix('v1')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         // Authentication
         Route::post('/auth/logout', LogoutController::class);
-        Route::get('/auth/user', function (Request $request) {
-            return $request->user();
-        });
+        Route::get('/auth/user', [LoginController::class, 'user']);
 
         // Agents
         Route::apiResource('agents', AgentController::class);
+        Route::get('agents/{agent}/executions', [AgentController::class, 'executions']);
         Route::post('agents/{agent}/tools', [AgentController::class, 'attachTools']);
         Route::delete('agents/{agent}/tools/{toolId}', [AgentController::class, 'detachTool']);
 
@@ -43,6 +41,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('executions/{execution}', [ExecutionController::class, 'show']);
         Route::get('executions/{execution}/logs', [ExecutionController::class, 'logs']);
         Route::get('executions/{execution}/outputs', [ExecutionController::class, 'outputs']);
+        Route::post('executions/{execution}/cancel', [ExecutionController::class, 'cancel']);
 
         // AI Backends
         Route::get('ai-backends', [AIBackendController::class, 'index']);

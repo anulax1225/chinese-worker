@@ -131,6 +131,38 @@ class ExecutionController extends Controller
     }
 
     /**
+     * Cancel Execution
+     *
+     * Cancel a pending or running execution.
+     *
+     * @urlParam execution integer required The execution ID. Example: 1
+     *
+     * @response 200 {"message": "Execution cancelled", "execution": {"id": 1, "status": "cancelled", ...}}
+     * @response 422 {"error": "Cannot cancel execution with status: completed"}
+     */
+    public function cancel(Execution $execution): JsonResponse
+    {
+        $this->authorize('view', $execution->task->agent);
+
+        if (! in_array($execution->status, ['pending', 'running'])) {
+            return response()->json([
+                'error' => 'Cannot cancel execution with status: '.$execution->status,
+            ], 422);
+        }
+
+        $execution->update([
+            'status' => 'cancelled',
+            'completed_at' => now(),
+            'error' => 'Cancelled by user',
+        ]);
+
+        return response()->json([
+            'message' => 'Execution cancelled',
+            'execution' => $execution->fresh(['task.agent']),
+        ]);
+    }
+
+    /**
      * Stream Agent Execution
      *
      * Execute an agent with real-time streaming response using Server-Sent Events (SSE).

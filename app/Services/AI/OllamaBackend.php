@@ -4,9 +4,13 @@ namespace App\Services\AI;
 
 use App\Contracts\AIBackendInterface;
 use App\DTOs\AIResponse;
+use App\DTOs\ChatMessage;
+use App\DTOs\ToolCall;
 use App\Models\Agent;
+use App\Models\Tool;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -46,29 +50,29 @@ class OllamaBackend implements AIBackendInterface
     public function execute(Agent $agent, array $context): AIResponse
     {
         try {
-            $response = $this->client->post('/api/generate', [
-                'json' => [
-                    'model' => $this->model,
-                    'prompt' => $this->buildPrompt($agent, $context),
-                    'stream' => false,
-                    'options' => $this->options,
-                ],
+            $messages = $this->buildMessages($agent, $context);
+            // Use tools from context if provided (from AgentLoopService), otherwise build from agent
+            $tools = $context['tools'] ?? $this->buildTools($agent);
+
+            $payload = [
+                'model' => $this->model,
+                'messages' => array_map(fn (ChatMessage $m) => $m->toOllama(), $messages),
+                'stream' => false,
+                'options' => $this->options,
+            ];
+
+            if (! empty($tools)) {
+                $payload['tools'] = $tools;
+            }
+            Log::info('Ollama request payload'."\n".json_encode($payload, JSON_PRETTY_PRINT));
+            $response = $this->client->post('/api/chat', [
+                'json' => $payload,
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
+            Log::info('Ollama response data\n'.json_encode($data, JSON_PRETTY_PRINT));
 
-            return new AIResponse(
-                content: $data['response'] ?? '',
-                model: $data['model'] ?? $this->model,
-                tokensUsed: ($data['eval_count'] ?? 0) + ($data['prompt_eval_count'] ?? 0),
-                finishReason: $data['done'] ? 'stop' : 'length',
-                metadata: [
-                    'total_duration' => $data['total_duration'] ?? null,
-                    'load_duration' => $data['load_duration'] ?? null,
-                    'prompt_eval_count' => $data['prompt_eval_count'] ?? 0,
-                    'eval_count' => $data['eval_count'] ?? 0,
-                ]
-            );
+            return $this->parseResponse($data);
         } catch (GuzzleException $e) {
             throw new RuntimeException(
                 "Ollama API request failed: {$e->getMessage()}",
@@ -81,19 +85,30 @@ class OllamaBackend implements AIBackendInterface
     public function streamExecute(Agent $agent, array $context, callable $callback): AIResponse
     {
         try {
-            $response = $this->client->post('/api/generate', [
-                'json' => [
-                    'model' => $this->model,
-                    'prompt' => $this->buildPrompt($agent, $context),
-                    'stream' => true,
-                    'options' => $this->options,
-                ],
+            $messages = $this->buildMessages($agent, $context);
+            // Use tools from context if provided (from AgentLoopService), otherwise build from agent
+            $tools = $context['tools'] ?? $this->buildTools($agent);
+
+            $payload = [
+                'model' => $this->model,
+                'messages' => array_map(fn (ChatMessage $m) => $m->toOllama(), $messages),
+                'stream' => true,
+                'options' => $this->options,
+            ];
+
+            if (! empty($tools)) {
+                $payload['tools'] = $tools;
+            }
+
+            $response = $this->client->post('/api/chat', [
+                'json' => $payload,
                 'stream' => true,
             ]);
 
             $body = $response->getBody();
             $fullContent = '';
             $lastData = [];
+            $toolCalls = [];
 
             while (! $body->eof()) {
                 $line = $this->readLine($body);
@@ -108,9 +123,16 @@ class OllamaBackend implements AIBackendInterface
                     continue;
                 }
 
-                if (isset($data['response'])) {
-                    $fullContent .= $data['response'];
-                    $callback($data['response']);
+                // Handle content streaming
+                if (isset($data['message']['content'])) {
+                    $content = $data['message']['content'];
+                    $fullContent .= $content;
+                    $callback($content);
+                }
+
+                // Collect tool calls
+                if (isset($data['message']['tool_calls'])) {
+                    $toolCalls = array_merge($toolCalls, $data['message']['tool_calls']);
                 }
 
                 if (! empty($data['done'])) {
@@ -119,18 +141,7 @@ class OllamaBackend implements AIBackendInterface
                 }
             }
 
-            return new AIResponse(
-                content: $fullContent,
-                model: $lastData['model'] ?? $this->model,
-                tokensUsed: ($lastData['eval_count'] ?? 0) + ($lastData['prompt_eval_count'] ?? 0),
-                finishReason: 'stop',
-                metadata: [
-                    'total_duration' => $lastData['total_duration'] ?? null,
-                    'load_duration' => $lastData['load_duration'] ?? null,
-                    'prompt_eval_count' => $lastData['prompt_eval_count'] ?? 0,
-                    'eval_count' => $lastData['eval_count'] ?? 0,
-                ]
-            );
+            return $this->buildAIResponse($fullContent, $lastData, $toolCalls);
         } catch (GuzzleException $e) {
             throw new RuntimeException(
                 "Ollama streaming request failed: {$e->getMessage()}",
@@ -151,8 +162,8 @@ class OllamaBackend implements AIBackendInterface
     {
         return [
             'streaming' => true,
-            'function_calling' => false,
-            'vision' => false,
+            'function_calling' => true,
+            'vision' => true,
             'embeddings' => true,
         ];
     }
@@ -181,29 +192,224 @@ class OllamaBackend implements AIBackendInterface
         }
     }
 
-    protected function buildPrompt(Agent $agent, array $context): string
+    /**
+     * Build the messages array for the chat API.
+     *
+     * @param  array<string, mixed>  $context
+     * @return array<ChatMessage>
+     */
+    protected function buildMessages(Agent $agent, array $context): array
     {
-        $prompt = "Agent: {$agent->name}\n";
-        $prompt .= "Description: {$agent->description}\n\n";
+        $messages = [];
 
-        if (! empty($agent->code)) {
-            $prompt .= "Instructions:\n{$agent->code}\n\n";
+        // System message with agent instructions
+        $systemPrompt = $this->buildSystemPrompt($agent);
+        if (! empty($systemPrompt)) {
+            $messages[] = ChatMessage::system($systemPrompt);
         }
 
-        if (! empty($context['input'])) {
-            $prompt .= "Input: {$context['input']}\n";
-        }
-
-        if (! empty($context['history'])) {
-            $prompt .= "\nConversation History:\n";
-            foreach ($context['history'] as $entry) {
-                $prompt .= "{$entry['role']}: {$entry['content']}\n";
+        // Add conversation history if provided
+        if (! empty($context['messages'])) {
+            foreach ($context['messages'] as $message) {
+                $messages[] = ChatMessage::fromArray($message);
             }
         }
 
-        return $prompt;
+        // Add the current user input
+        if (! empty($context['input'])) {
+            $images = $context['images'] ?? null;
+            $messages[] = ChatMessage::user($context['input'], $images);
+        }
+
+        return $messages;
     }
 
+    /**
+     * Build the system prompt from agent configuration.
+     */
+    protected function buildSystemPrompt(Agent $agent): string
+    {
+        $parts = [];
+
+        if (! empty($agent->description)) {
+            $parts[] = $agent->description;
+        }
+
+        if (! empty($agent->code)) {
+            $parts[] = $agent->code;
+        }
+
+        // Add tool descriptions if the agent has tools
+        $tools = $agent->tools;
+        if ($tools->isNotEmpty()) {
+            $toolDescriptions = $tools->map(function (Tool $tool) {
+                return "- {$tool->name}: {$tool->type} tool";
+            })->join("\n");
+
+            $parts[] = "Available tools:\n{$toolDescriptions}";
+        }
+
+        return implode("\n\n", $parts);
+    }
+
+    /**
+     * Build tools array in Ollama format from agent's tools.
+     *
+     * @return array<array<string, mixed>>
+     */
+    protected function buildTools(Agent $agent): array
+    {
+        $tools = $agent->tools;
+
+        if ($tools->isEmpty()) {
+            return [];
+        }
+
+        return $tools->map(function (Tool $tool) {
+            return $this->convertToolToOllamaFormat($tool);
+        })->filter()->values()->all();
+    }
+
+    /**
+     * Convert a Tool model to Ollama tool format.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function convertToolToOllamaFormat(Tool $tool): ?array
+    {
+        $config = $tool->config;
+
+        // Build parameters schema based on tool config
+        $parameters = $this->buildToolParameters($tool);
+
+        return [
+            'type' => 'function',
+            'function' => [
+                'name' => $this->sanitizeToolName($tool->name),
+                'description' => $config['description'] ?? "Execute {$tool->name} ({$tool->type} tool)",
+                'parameters' => $parameters,
+            ],
+        ];
+    }
+
+    /**
+     * Build parameters schema for a tool.
+     *
+     * @return array<string, mixed>
+     */
+    protected function buildToolParameters(Tool $tool): array
+    {
+        $config = $tool->config;
+
+        // If parameters are explicitly defined in config, use them
+        if (isset($config['parameters'])) {
+            return $config['parameters'];
+        }
+
+        // Build default parameters based on tool type
+        return match ($tool->type) {
+            'api' => [
+                'type' => 'object',
+                'properties' => [
+                    'query' => [
+                        'type' => 'string',
+                        'description' => 'Query parameters or request body',
+                    ],
+                ],
+                'required' => [],
+            ],
+            'function' => [
+                'type' => 'object',
+                'properties' => [
+                    'input' => [
+                        'type' => 'string',
+                        'description' => 'Input for the function',
+                    ],
+                ],
+                'required' => ['input'],
+            ],
+            'command' => [
+                'type' => 'object',
+                'properties' => [
+                    'args' => [
+                        'type' => 'array',
+                        'items' => ['type' => 'string'],
+                        'description' => 'Command arguments',
+                    ],
+                ],
+                'required' => [],
+            ],
+            default => [
+                'type' => 'object',
+                'properties' => new \stdClass,
+                'required' => [],
+            ],
+        };
+    }
+
+    /**
+     * Sanitize tool name for Ollama (must match pattern ^[a-zA-Z0-9_-]+$).
+     */
+    protected function sanitizeToolName(string $name): string
+    {
+        return preg_replace('/[^a-zA-Z0-9_-]/', '_', $name);
+    }
+
+    /**
+     * Parse the response from Ollama chat API.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function parseResponse(array $data): AIResponse
+    {
+        $message = $data['message'] ?? [];
+        $content = $message['content'] ?? '';
+        $toolCalls = $message['tool_calls'] ?? [];
+
+        return $this->buildAIResponse($content, $data, $toolCalls);
+    }
+
+    /**
+     * Build an AIResponse from parsed data.
+     *
+     * @param  array<string, mixed>  $data
+     * @param  array<array<string, mixed>>  $toolCallsData
+     */
+    protected function buildAIResponse(string $content, array $data, array $toolCallsData): AIResponse
+    {
+        $toolCalls = array_map(
+            fn ($tc) => ToolCall::fromOllama($tc),
+            $toolCallsData
+        );
+
+        // Determine finish reason
+        $finishReason = 'stop';
+        if (! empty($toolCalls)) {
+            $finishReason = 'tool_calls';
+        } elseif (! ($data['done'] ?? true)) {
+            $finishReason = 'length';
+        }
+
+        return new AIResponse(
+            content: $content,
+            model: $data['model'] ?? $this->model,
+            tokensUsed: ($data['eval_count'] ?? 0) + ($data['prompt_eval_count'] ?? 0),
+            finishReason: $finishReason,
+            toolCalls: $toolCalls,
+            metadata: [
+                'total_duration' => $data['total_duration'] ?? null,
+                'load_duration' => $data['load_duration'] ?? null,
+                'prompt_eval_count' => $data['prompt_eval_count'] ?? 0,
+                'eval_count' => $data['eval_count'] ?? 0,
+            ]
+        );
+    }
+
+    /**
+     * Read a line from the stream.
+     *
+     * @param  \Psr\Http\Message\StreamInterface  $stream
+     */
     protected function readLine($stream): string
     {
         $line = '';

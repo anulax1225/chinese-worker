@@ -1,9 +1,14 @@
 <?php
 
+use App\Http\Controllers\Web\AgentController;
+use App\Http\Controllers\Web\AIBackendController;
 use App\Http\Controllers\Web\Auth\LoginController;
 use App\Http\Controllers\Web\Auth\LogoutController;
 use App\Http\Controllers\Web\Auth\RegisterController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\ExecutionController;
+use App\Http\Controllers\Web\FileController;
+use App\Http\Controllers\Web\ToolController;
 use Illuminate\Support\Facades\Route;
 
 // Redirect root to dashboard if authenticated, otherwise to login
@@ -27,17 +32,17 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // Agents
-    // Route::resource('agents', AgentController::class);
+    Route::resource('agents', AgentController::class);
 
     // Tools
-    // Route::resource('tools', ToolController::class);
+    Route::resource('tools', ToolController::class);
 
     // Files
-    // Route::resource('files', FileController::class);
+    Route::resource('files', FileController::class)->only(['index', 'store', 'show', 'destroy']);
 
     // Executions
-    // Route::resource('executions', ExecutionController::class)->only(['index', 'show']);
+    Route::resource('executions', ExecutionController::class)->only(['index', 'show']);
 
     // AI Backends
-    // Route::get('/ai-backends', [AIBackendController::class, 'index'])->name('ai-backends.index');
+    Route::get('/ai-backends', [AIBackendController::class, 'index'])->name('ai-backends.index');
 });

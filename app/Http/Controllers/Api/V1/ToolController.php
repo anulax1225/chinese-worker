@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolRequest;
 use App\Http\Requests\UpdateToolRequest;
 use App\Models\Tool;
+use App\Services\AgentLoop\BuiltinToolExecutor;
 use App\Services\ToolService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,25 +18,82 @@ use Illuminate\Http\Request;
  */
 class ToolController extends Controller
 {
-    public function __construct(protected ToolService $toolService) {}
+    public function __construct(
+        protected ToolService $toolService,
+        protected BuiltinToolExecutor $builtinToolExecutor
+    ) {}
 
     /**
      * List Tools
      *
      * Get a paginated list of all tools for the authenticated user.
+     * Includes builtin tools by default (Read, Write, Edit, Glob, Grep, Bash).
      *
      * @queryParam page integer Page number for pagination. Example: 1
      * @queryParam per_page integer Number of items per page. Example: 15
+     * @queryParam include_builtin boolean Include builtin tools in the response. Default: true. Example: true
+     * @queryParam type string Filter by tool type (api, function, command, builtin). Example: builtin
      *
      * @response 200 {"data": [{"id": 1, "user_id": 1, "name": "API Tool", "type": "api", "config": {"url": "https://api.example.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}]}
      */
     public function index(Request $request): JsonResponse
     {
-        $tools = $request->user()
-            ->tools()
-            ->paginate($request->input('per_page', 15));
+        $includeBuiltin = $request->boolean('include_builtin', true);
+        $typeFilter = $request->input('type');
 
-        return response()->json($tools);
+        // Get user's custom tools
+        $query = $request->user()->tools();
+
+        if ($typeFilter && $typeFilter !== 'builtin') {
+            $query->where('type', $typeFilter);
+        }
+
+        $userTools = $query->get();
+
+        // Get builtin tools if requested
+        $builtinTools = collect();
+        if ($includeBuiltin && (! $typeFilter || $typeFilter === 'builtin')) {
+            $builtinTools = collect($this->builtinToolExecutor->getBuiltinTools())
+                ->map(fn ($tool) => [
+                    'id' => 'builtin_'.strtolower($tool->getName()),
+                    'user_id' => null,
+                    'name' => $tool->getName(),
+                    'type' => 'builtin',
+                    'description' => $tool->getDescription(),
+                    'parameters' => $tool->getParameterSchema(),
+                    'created_at' => null,
+                    'updated_at' => null,
+                ]);
+        }
+
+        // If filtering for builtin only, return just builtin tools
+        if ($typeFilter === 'builtin') {
+            return response()->json([
+                'data' => $builtinTools->values(),
+            ]);
+        }
+
+        // Merge user tools with builtin tools
+        $allTools = $builtinTools->merge(
+            $userTools->map(fn ($tool) => $tool->toArray())
+        );
+
+        // Manual pagination
+        $perPage = (int) $request->input('per_page', 15);
+        $page = (int) $request->input('page', 1);
+        $total = $allTools->count();
+
+        $paginatedTools = $allTools->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return response()->json([
+            'data' => $paginatedTools,
+            'meta' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => (int) ceil($total / $perPage),
+            ],
+        ]);
     }
 
     /**

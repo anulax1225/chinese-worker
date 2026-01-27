@@ -1,23 +1,23 @@
-name: 'Tool Management'
+name: 'File Management'
 description: |-
 
-  APIs for managing tools that agents can use
+  APIs for managing files used in agent executions
 endpoints:
   -
     custom: []
     httpMethods:
       - GET
-    uri: api/v1/tools
+    uri: api/v1/files
     metadata:
       custom: []
-      groupName: 'Tool Management'
+      groupName: 'File Management'
       groupDescription: |-
 
-        APIs for managing tools that agents can use
+        APIs for managing files used in agent executions
       subgroup: ''
       subgroupDescription: ''
-      title: 'List Tools'
-      description: 'Get a paginated list of all tools for the authenticated user.'
+      title: 'List Files'
+      description: 'Get a paginated list of all files for the authenticated user.'
       authenticated: false
       deprecated: false
     headers:
@@ -48,9 +48,21 @@ endpoints:
         exampleWasSpecified: true
         nullable: false
         deprecated: false
+      type:
+        custom: []
+        name: type
+        description: 'Filter by file type.'
+        required: false
+        example: input
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
     cleanQueryParameters:
       page: 1
       per_page: 15
+      type: input
     bodyParameters: []
     cleanBodyParameters: []
     fileParameters: []
@@ -58,7 +70,7 @@ endpoints:
       -
         custom: []
         status: 200
-        content: '{"data": [{"id": 1, "user_id": 1, "name": "API Tool", "type": "api", "config": {"url": "https://api.example.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}]}'
+        content: '{"data": [{"id": 1, "user_id": 1, "path": "files/input/document.pdf", "type": "input", "size": 1024, "mime_type": "application/pdf", "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}]}'
         headers: []
         description: ''
     responseFields: []
@@ -70,74 +82,58 @@ endpoints:
     custom: []
     httpMethods:
       - POST
-    uri: api/v1/tools
+    uri: api/v1/files
     metadata:
       custom: []
-      groupName: 'Tool Management'
+      groupName: 'File Management'
       groupDescription: |-
 
-        APIs for managing tools that agents can use
+        APIs for managing files used in agent executions
       subgroup: ''
       subgroupDescription: ''
-      title: 'Create Tool'
-      description: 'Create a new tool.'
+      title: 'Upload File'
+      description: 'Upload a new file.'
       authenticated: false
       deprecated: false
     headers:
-      Content-Type: application/json
+      Content-Type: multipart/form-data
       Accept: application/json
     urlParameters: []
     cleanUrlParameters: []
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters:
-      name:
+      file:
         custom: []
-        name: name
-        description: "The tool's name."
+        name: file
+        description: 'The file to upload. Max 10MB.'
         required: true
-        example: 'Weather API'
-        type: string
+        example: null
+        type: file
         enumValues: []
-        exampleWasSpecified: true
+        exampleWasSpecified: false
         nullable: false
         deprecated: false
       type:
         custom: []
         name: type
-        description: 'The tool type. Must be one of: api, function, command.'
+        description: 'The file type. Must be one of: input, output, temp.'
         required: true
-        example: api
+        example: input
         type: string
         enumValues: []
         exampleWasSpecified: true
         nullable: false
         deprecated: false
-      config:
-        custom: []
-        name: config
-        description: "The tool's configuration."
-        required: true
-        example:
-          url: 'https://api.weather.com'
-          method: GET
-        type: object
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
     cleanBodyParameters:
-      name: 'Weather API'
-      type: api
-      config:
-        url: 'https://api.weather.com'
-        method: GET
-    fileParameters: []
+      type: input
+    fileParameters:
+      file: null
     responses:
       -
         custom: []
         status: 201
-        content: '{"id": 1, "user_id": 1, "name": "Weather API", "type": "api", "config": {"url": "https://api.weather.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}'
+        content: '{"id": 1, "user_id": 1, "path": "files/input/document.pdf", "type": "input", "size": 1024, "mime_type": "application/pdf", "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}'
         headers: []
         description: ''
     responseFields: []
@@ -149,17 +145,17 @@ endpoints:
     custom: []
     httpMethods:
       - GET
-    uri: 'api/v1/tools/{id}'
+    uri: 'api/v1/files/{id}'
     metadata:
       custom: []
-      groupName: 'Tool Management'
+      groupName: 'File Management'
       groupDescription: |-
 
-        APIs for managing tools that agents can use
+        APIs for managing files used in agent executions
       subgroup: ''
       subgroupDescription: ''
-      title: 'Show Tool'
-      description: 'Get details of a specific tool.'
+      title: 'Show File'
+      description: 'Get details of a specific file.'
       authenticated: false
       deprecated: false
     headers:
@@ -169,7 +165,7 @@ endpoints:
       id:
         custom: []
         name: id
-        description: 'The ID of the tool.'
+        description: 'The ID of the file.'
         required: true
         example: 16
         type: integer
@@ -177,10 +173,10 @@ endpoints:
         exampleWasSpecified: false
         nullable: false
         deprecated: false
-      tool:
+      file:
         custom: []
-        name: tool
-        description: 'The tool ID.'
+        name: file
+        description: 'The file ID.'
         required: true
         example: 1
         type: integer
@@ -190,7 +186,7 @@ endpoints:
         deprecated: false
     cleanUrlParameters:
       id: 16
-      tool: 1
+      file: 1
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -200,109 +196,7 @@ endpoints:
       -
         custom: []
         status: 200
-        content: '{"id": 1, "user_id": 1, "name": "Weather API", "type": "api", "config": {"url": "https://api.weather.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}'
-        headers: []
-        description: ''
-    responseFields: []
-    auth: []
-    controller: null
-    method: null
-    route: null
-  -
-    custom: []
-    httpMethods:
-      - PUT
-      - PATCH
-    uri: 'api/v1/tools/{id}'
-    metadata:
-      custom: []
-      groupName: 'Tool Management'
-      groupDescription: |-
-
-        APIs for managing tools that agents can use
-      subgroup: ''
-      subgroupDescription: ''
-      title: 'Update Tool'
-      description: 'Update an existing tool.'
-      authenticated: false
-      deprecated: false
-    headers:
-      Content-Type: application/json
-      Accept: application/json
-    urlParameters:
-      id:
-        custom: []
-        name: id
-        description: 'The ID of the tool.'
-        required: true
-        example: 16
-        type: integer
-        enumValues: []
-        exampleWasSpecified: false
-        nullable: false
-        deprecated: false
-      tool:
-        custom: []
-        name: tool
-        description: 'The tool ID.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-    cleanUrlParameters:
-      id: 16
-      tool: 1
-    queryParameters: []
-    cleanQueryParameters: []
-    bodyParameters:
-      name:
-        custom: []
-        name: name
-        description: "The tool's name."
-        required: false
-        example: 'Updated Weather API'
-        type: string
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      type:
-        custom: []
-        name: type
-        description: 'The tool type. Must be one of: api, function, command.'
-        required: false
-        example: api
-        type: string
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      config:
-        custom: []
-        name: config
-        description: "The tool's configuration."
-        required: false
-        example:
-          url: 'https://api.weather.com/v2'
-        type: object
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-    cleanBodyParameters:
-      name: 'Updated Weather API'
-      type: api
-      config:
-        url: 'https://api.weather.com/v2'
-    fileParameters: []
-    responses:
-      -
-        custom: []
-        status: 200
-        content: '{"id": 1, "user_id": 1, "name": "Updated Weather API", "type": "api", "config": {"url": "https://api.weather.com/v2"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T11:00:00.000000Z"}'
+        content: '{"id": 1, "user_id": 1, "path": "files/input/document.pdf", "type": "input", "size": 1024, "mime_type": "application/pdf", "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}'
         headers: []
         description: ''
     responseFields: []
@@ -314,17 +208,17 @@ endpoints:
     custom: []
     httpMethods:
       - DELETE
-    uri: 'api/v1/tools/{id}'
+    uri: 'api/v1/files/{id}'
     metadata:
       custom: []
-      groupName: 'Tool Management'
+      groupName: 'File Management'
       groupDescription: |-
 
-        APIs for managing tools that agents can use
+        APIs for managing files used in agent executions
       subgroup: ''
       subgroupDescription: ''
-      title: 'Delete Tool'
-      description: 'Delete a tool permanently.'
+      title: 'Delete File'
+      description: 'Delete a file permanently.'
       authenticated: false
       deprecated: false
     headers:
@@ -334,7 +228,7 @@ endpoints:
       id:
         custom: []
         name: id
-        description: 'The ID of the tool.'
+        description: 'The ID of the file.'
         required: true
         example: 16
         type: integer
@@ -342,10 +236,10 @@ endpoints:
         exampleWasSpecified: false
         nullable: false
         deprecated: false
-      tool:
+      file:
         custom: []
-        name: tool
-        description: 'The tool ID.'
+        name: file
+        description: 'The file ID.'
         required: true
         example: 1
         type: integer
@@ -355,7 +249,7 @@ endpoints:
         deprecated: false
     cleanUrlParameters:
       id: 16
-      tool: 1
+      file: 1
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -366,6 +260,69 @@ endpoints:
         custom: []
         status: 204
         content: '{}'
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/files/{file_id}/download'
+    metadata:
+      custom: []
+      groupName: 'File Management'
+      groupDescription: |-
+
+        APIs for managing files used in agent executions
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Download File'
+      description: 'Download a file.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      file_id:
+        custom: []
+        name: file_id
+        description: 'The ID of the file.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      file:
+        custom: []
+        name: file
+        description: 'The file ID.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      file_id: 16
+      file: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: '(binary file content)'
         headers: []
         description: ''
     responseFields: []

@@ -120,11 +120,12 @@ services:
             - sail
     ollama:
         image: 'ollama/ollama:latest'
-        devices:
-           # - /dev/kfd
-            - /dev/dri
-        environment:
-            OLLAMA_VULKAN: 1
+        gpus: all
+        # devices:
+        #     - /dev/kfd
+        #     - /dev/dri
+        # environment:
+        #     OLLAMA_VULKAN: 1
         ports:
             - '${FORWARD_OLLAMA_PORT:-11434}:11434'
         volumes:

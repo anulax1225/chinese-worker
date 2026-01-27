@@ -24,14 +24,17 @@ export interface Agent {
 }
 
 export interface Tool {
-    id: number;
-    user_id: number;
+    id: number | string; // string for builtin tools like 'builtin_read'
+    user_id: number | null; // null for builtin tools
     name: string;
-    type: 'api' | 'function' | 'command';
-    config: ToolConfig;
-    created_at: string;
-    updated_at: string;
+    type: 'api' | 'function' | 'command' | 'builtin';
+    config?: ToolConfig;
+    description?: string; // for builtin tools
+    parameters?: Record<string, unknown>; // schema for builtin tools
+    created_at: string | null;
+    updated_at: string | null;
     agents?: Agent[];
+    agents_count?: number;
 }
 
 export type ToolConfig =
@@ -42,7 +45,7 @@ export type ToolConfig =
 export interface ApiToolConfig {
     url: string;
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-    headers: Record<string, string>;
+    headers?: Record<string, string>;
 }
 
 export interface FunctionToolConfig {

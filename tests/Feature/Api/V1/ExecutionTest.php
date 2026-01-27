@@ -381,7 +381,7 @@ describe('Execution Management', function () {
 
             // Execute the job (this will fail because Ollama is not running, but that's ok)
             try {
-                $job->handle(app(\App\Services\AIBackendManager::class));
+                $job->handle(app(\App\Services\AgentLoop\AgentLoopService::class));
             } catch (\Exception $e) {
                 // Expected to fail in test environment
             }

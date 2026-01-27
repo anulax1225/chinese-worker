@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Request;
 
 class LoginController extends Controller
 {
@@ -58,5 +59,26 @@ class LoginController extends Controller
             'user' => $user,
             'token' => $token,
         ]);
+    }
+
+    /**
+     * Get User
+     *
+     * Get current authentificated user.
+     *
+     * @group Authentication
+     *
+     * @authenticated
+     *
+     * @response 200 {
+     *  "id": 1,
+     *  "name": "John Doe",
+     *  "email": "john@example.com",
+     *  "created_at": "2026-01-26T14:00:00.000000Z",
+     *  "updated_at": "2026-01-26T14:00:00.000000Z"
+     * }
+     */
+    public function user(Request $request) {
+        return $request->user();
     }
 }

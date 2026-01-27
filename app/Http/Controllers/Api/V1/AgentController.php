@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAgentRequest;
 use App\Http\Requests\UpdateAgentRequest;
+use App\Http\Resources\AgentResource;
 use App\Models\Agent;
 use App\Services\AgentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
  * @group Agent Management
@@ -46,14 +48,14 @@ class AgentController extends Controller
      *   "meta": {}
      * }
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $agents = $request->user()
             ->agents()
             ->with('tools')
             ->paginate($request->input('per_page', 15));
 
-        return response()->json($agents);
+        return AgentResource::collection($agents);
     }
 
     /**
@@ -90,7 +92,7 @@ class AgentController extends Controller
 
         $agent = $this->agentService->create($data);
 
-        return response()->json($agent, 201);
+        return (new AgentResource($agent))->response()->setStatusCode(201);
     }
 
     /**
@@ -121,7 +123,7 @@ class AgentController extends Controller
 
         $agent->load(['tools', 'tasks']);
 
-        return response()->json($agent);
+        return (new AgentResource($agent))->response();
     }
 
     /**
@@ -159,7 +161,7 @@ class AgentController extends Controller
 
         $agent = $this->agentService->update($agent, $request->validated());
 
-        return response()->json($agent);
+        return (new AgentResource($agent))->response();
     }
 
     /**
@@ -178,6 +180,34 @@ class AgentController extends Controller
         $this->agentService->delete($agent);
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Agent Executions
+     *
+     * Get a paginated list of all executions for a specific agent.
+     *
+     * @urlParam agent integer required The agent ID. Example: 1
+     *
+     * @queryParam page integer Page number for pagination. Example: 1
+     * @queryParam per_page integer Number of items per page. Example: 15
+     * @queryParam status string Filter by execution status (pending, running, completed, failed, cancelled). Example: completed
+     *
+     * @response 200 {"data": [{"id": 1, "task_id": 1, "status": "completed", ...}]}
+     */
+    public function executions(Request $request, Agent $agent): JsonResponse
+    {
+        $this->authorize('view', $agent);
+
+        $query = $agent->executions()->with('task')->latest();
+
+        if ($request->has('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        return response()->json(
+            $query->paginate($request->input('per_page', 15))
+        );
     }
 
     /**

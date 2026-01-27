@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
         ]);
+
+        // Enable Sanctum stateful authentication for SPA
+        $middleware->statefulApi();
     })
     ->withSchedule(function (Schedule $schedule): void {
         // Clean up temporary files daily at 2 AM
