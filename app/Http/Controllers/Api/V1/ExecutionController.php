@@ -129,4 +129,51 @@ class ExecutionController extends Controller
             'outputs' => $this->executionService->getOutputs($execution),
         ]);
     }
+
+    /**
+     * Stream Agent Execution
+     *
+     * Execute an agent with real-time streaming response using Server-Sent Events (SSE).
+     *
+     * @urlParam agent integer required The agent ID. Example: 1
+     *
+     * @bodyParam payload object required The execution payload/input data. Example: {"task": "Generate code", "context": "User authentication"}
+     * @bodyParam file_ids array List of file IDs to use as input. Example: [1, 2]
+     *
+     * @response 200 stream:data: {"type": "chunk", "content": "Hello"}\ndata: {"type": "chunk", "content": " World"}\ndata: {"type": "done", "execution_id": 1}\n
+     */
+    public function stream(ExecuteAgentRequest $request, Agent $agent)
+    {
+        $this->authorize('view', $agent);
+
+        return response()->stream(function () use ($request, $agent) {
+            $execution = $this->executionService->streamExecute(
+                $agent,
+                $request->validated(),
+                $request->input('file_ids', []),
+                function (string $chunk) {
+                    echo 'data: '.json_encode([
+                        'type' => 'chunk',
+                        'content' => $chunk,
+                    ])."\n\n";
+                    ob_flush();
+                    flush();
+                }
+            );
+
+            // Send completion event
+            echo 'data: '.json_encode([
+                'type' => 'done',
+                'execution_id' => $execution->id,
+                'status' => $execution->status,
+            ])."\n\n";
+            ob_flush();
+            flush();
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'no-cache',
+            'Connection' => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
+    }
 }

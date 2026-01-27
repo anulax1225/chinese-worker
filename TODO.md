@@ -1,632 +1,535 @@
-# Laravel Code Agent Platform - Implementation Guide
+Frontend Implementation Plan for Chinese Worker AI Agent Platform
+Overview
+Build a complete Vue 3 frontend using Inertia.js v2 that fully utilizes the Chinese Worker API. The frontend will use shadcn-vue (stone theme) with Tailwind CSS v4 and Lucide icons.
 
-## Project Status
-✅ Laravel Sail is set up
-✅ Project scaffolded
+Current State Analysis
+Existing Setup
+Frontend Framework: Vue 3.5.13 + Inertia.js v2.3.7 + TypeScript
+Styling: Tailwind CSS v4.1.1 (inline config)
+Build Tool: Vite 7.0.4
+Current Pages: Only Welcome.vue exists
+Components: None exist yet
+Layouts: No layout system implemented
+UI Library: None installed (shadcn-vue needs to be added)
+Icons: No icon library installed (Lucide will be added)
+API Coverage
+The backend provides 30 endpoints across 7 functional areas:
 
-## Implementation Order
+Authentication (4 endpoints)
+Agent Management (7 endpoints)
+Tool Management (5 endpoints)
+File Management (5 endpoints)
+Execution Management (6 endpoints)
+AI Backend Management (2 endpoints)
+Real-time Features (WebSocket broadcasting + SSE streaming)
+Implementation Strategy
+Phase 1: Foundation Setup
+Goal: Install dependencies and configure base infrastructure
 
-### Phase 1: Database Schema (Priority 1)
+1.1 Install shadcn-vue
+Run: npx shadcn-vue@latest init
+Configure with:
+Style: Default
+Base color: Stone
+CSS variables: Yes
+TypeScript: Yes
+Components directory: resources/js/components
+Utils directory: resources/js/lib
+Import alias: @/*
+1.2 Install Additional Dependencies
 
-**Create migrations:**
-```bash
-sail artisan make:migration create_agents_table
-sail artisan make:migration create_tasks_table
-sail artisan make:migration create_executions_table
-sail artisan make:migration create_tools_table
-sail artisan make:migration create_agent_tools_table
-sail artisan make:migration create_files_table
-sail artisan make:migration create_execution_files_table
-```
+npm install lucide-vue-next
+npm install @vueuse/core (already installed)
+npm install date-fns (for date formatting)
+npm install zod (for client-side validation)
+1.3 Install Core shadcn-vue Components
 
-**Schema definitions:**
+npx shadcn-vue@latest add button
+npx shadcn-vue@latest add input
+npx shadcn-vue@latest add card
+npx shadcn-vue@latest add dialog
+npx shadcn-vue@latest add dropdown-menu
+npx shadcn-vue@latest add select
+npx shadcn-vue@latest add textarea
+npx shadcn-vue@latest add table
+npx shadcn-vue@latest add badge
+npx shadcn-vue@latest add alert
+npx shadcn-vue@latest add toast
+npx shadcn-vue@latest add tabs
+npx shadcn-vue@latest add separator
+npx shadcn-vue@latest add avatar
+npx shadcn-vue@latest add skeleton
+npx shadcn-vue@latest add progress
+npx shadcn-vue@latest add switch
+npx shadcn-vue@latest add label
+npx shadcn-vue@latest add form
+Phase 2: Type Definitions
+Goal: Define TypeScript types for all API responses and models
 
-**agents table:**
-- id (bigint, primary)
-- user_id (bigint, foreign -> users.id)
-- name (string, 255)
-- description (text, nullable)
-- code (longtext)
-- config (json, nullable)
-- status (enum: active, inactive, error)
-- ai_backend (string, default: 'ollama')
-- timestamps
+2.1 Create Type Files
+resources/js/types/models.ts - Agent, Tool, File, Task, Execution types
+resources/js/types/api.ts - API request/response types
+resources/js/types/forms.ts - Form validation schemas
+2.2 Example Type Definitions
 
-**tasks table:**
-- id (bigint, primary)
-- agent_id (bigint, foreign -> agents.id)
-- payload (json)
-- priority (int, default: 0)
-- scheduled_at (timestamp, nullable)
-- timestamps
-
-**executions table:**
-- id (bigint, primary)
-- task_id (bigint, foreign -> tasks.id)
-- status (enum: pending, running, completed, failed)
-- started_at (timestamp, nullable)
-- completed_at (timestamp, nullable)
-- result (json, nullable)
-- logs (longtext, nullable)
-- error (text, nullable)
-- timestamps
-
-**tools table:**
-- id (bigint, primary)
-- user_id (bigint, foreign -> users.id)
-- name (string, 255)
-- type (enum: api, function, command)
-- config (json)
-- timestamps
-
-**agent_tools table:**
-- agent_id (bigint, foreign -> agents.id)
-- tool_id (bigint, foreign -> tools.id)
-- primary key (agent_id, tool_id)
-
-**files table:**
-- id (bigint, primary)
-- user_id (bigint, foreign -> users.id)
-- path (string, 500)
-- type (enum: input, output, temp)
-- size (bigint)
-- mime_type (string, 100)
-- timestamps
-
-**execution_files table:**
-- execution_id (bigint, foreign -> executions.id)
-- file_id (bigint, foreign -> files.id)
-- role (enum: input, output)
-- primary key (execution_id, file_id)
-
-**Run migrations:**
-```bash
-sail artisan migrate
-```
-
-### Phase 2: Authentication Setup (Priority 2)
-
-**Install Sanctum:**
-```bash
-sail composer require laravel/sanctum
-sail artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
-sail artisan migrate
-```
-
-**Update User model (app/Models/User.php):**
-```php
-use Laravel\Sanctum\HasApiTokens;
-
-class User extends Authenticatable
-{
-    use HasApiTokens, HasFactory, Notifiable;
+// models.ts
+export interface Agent {
+  id: number;
+  user_id: number;
+  name: string;
+  description: string | null;
+  code: string;
+  config: Record<string, any>;
+  status: 'active' | 'inactive' | 'error';
+  ai_backend: 'ollama' | 'anthropic' | 'openai';
+  created_at: string;
+  updated_at: string;
+  tools?: Tool[];
 }
-```
 
-**Create auth controllers:**
-```bash
-sail artisan make:controller Api/V1/Auth/RegisterController
-sail artisan make:controller Api/V1/Auth/LoginController
-sail artisan make:controller Api/V1/Auth/LogoutController
-```
+export interface Execution {
+  id: number;
+  task_id: number;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  started_at: string | null;
+  completed_at: string | null;
+  result: ExecutionResult | null;
+  logs: string | null;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  task?: Task;
+  files?: File[];
+}
+Phase 3: Layouts & Navigation
+Goal: Create reusable layout components with navigation
 
-**RegisterController:**
-- Validate: name, email, password
-- Create user
-- Generate token
-- Return user + token
+3.1 Create Layout Components
+resources/js/layouts/AuthenticatedLayout.vue
 
-**LoginController:**
-- Validate: email, password
-- Attempt authentication
-- Generate token
-- Return user + token
+Contains: Sidebar navigation, header with user menu, main content area
+Navigation items: Dashboard, Agents, Tools, Files, Executions, AI Backends
+User dropdown: Profile, Settings, Logout
+resources/js/layouts/GuestLayout.vue
 
-**LogoutController:**
-- Revoke current token
-- Return success message
+Simple centered layout for login/register pages
+Branding/logo area
+3.2 Navigation Structure
 
-**Add routes (routes/api.php):**
-```php
-Route::prefix('v1')->group(function () {
-    Route::post('/auth/register', [RegisterController::class, 'register']);
-    Route::post('/auth/login', [LoginController::class, 'login']);
-    
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/auth/logout', [LogoutController::class, 'logout']);
-        Route::get('/auth/user', function (Request $request) {
-            return $request->user();
-        });
-    });
+Sidebar Navigation:
+├── Dashboard (Home icon)
+├── Agents (Bot icon)
+├── Tools (Wrench icon)
+├── Files (FolderOpen icon)
+├── Executions (PlayCircle icon)
+└── AI Backends (Settings icon)
+
+User Menu (top-right):
+├── Profile
+├── Settings
+└── Logout
+Phase 4: Authentication Pages
+Goal: Implement login and registration
+
+4.1 Create Authentication Pages
+resources/js/pages/Auth/Login.vue
+
+Email + Password form
+Remember me checkbox
+"Don't have an account?" link to register
+Uses GuestLayout
+resources/js/pages/Auth/Register.vue
+
+Name + Email + Password form
+"Already have an account?" link to login
+Uses GuestLayout
+4.2 Create Authentication Service
+resources/js/composables/useAuth.ts
+login(email, password)
+register(name, email, password)
+logout()
+Uses Wayfinder-generated routes from @/actions/
+Phase 5: Dashboard Page
+Goal: Create overview dashboard with key metrics
+
+5.1 Dashboard Components
+resources/js/pages/Dashboard.vue
+Stats cards: Total Agents, Total Executions, Success Rate, Active Tools
+Recent Executions table (5 most recent)
+Quick Actions: Create Agent, Execute Agent, Upload File
+Real-time execution status updates via WebSocket
+Phase 6: Agent Management
+Goal: Full CRUD for agents with tool attachment
+
+6.1 Agent Pages
+resources/js/pages/Agents/Index.vue
+
+Table with columns: Name, Description, Status, AI Backend, Actions
+Search/filter by status
+Pagination
+"Create Agent" button
+resources/js/pages/Agents/Create.vue
+
+Form: Name, Description, Code (textarea), Config (JSON), Status, AI Backend
+Tool selection (multi-select dropdown)
+Form validation
+resources/js/pages/Agents/Edit.vue
+
+Same as Create but pre-filled
+Tool attachment/detachment interface
+resources/js/pages/Agents/Show.vue
+
+Agent details
+Attached tools list
+"Execute Agent" button
+Recent executions for this agent
+Edit/Delete actions
+6.2 Agent Components
+resources/js/components/agents/AgentCard.vue - Card display for agents
+resources/js/components/agents/AgentForm.vue - Reusable form component
+resources/js/components/agents/ExecuteAgentDialog.vue - Execute agent modal
+resources/js/components/agents/AgentStatusBadge.vue - Status indicator
+Phase 7: Tool Management
+Goal: CRUD operations for tools
+
+7.1 Tool Pages
+resources/js/pages/Tools/Index.vue
+
+Table: Name, Type, Actions
+Filter by type (api, function, command)
+resources/js/pages/Tools/Create.vue
+
+Form: Name, Type (select), Config (dynamic based on type)
+Type-specific config editors:
+API: URL, Method, Headers
+Function: Code textarea
+Command: Command template
+resources/js/pages/Tools/Edit.vue
+
+Same as Create but pre-filled
+resources/js/pages/Tools/Show.vue
+
+Tool details
+Agents using this tool
+Edit/Delete actions
+7.2 Tool Components
+resources/js/components/tools/ToolCard.vue
+resources/js/components/tools/ToolForm.vue
+resources/js/components/tools/ToolTypeBadge.vue
+resources/js/components/tools/ConfigEditor.vue - Dynamic config editor
+Phase 8: File Management
+Goal: Upload, list, download, delete files
+
+8.1 File Pages
+resources/js/pages/Files/Index.vue
+
+Table: Name, Type, Size, MIME Type, Uploaded, Actions
+Filter by type (input, output, temp)
+Upload button (opens dialog)
+Download/Delete actions
+resources/js/components/files/FileUploadDialog.vue
+
+Drag & drop file upload
+File type selection
+Progress indicator
+8.2 File Components
+resources/js/components/files/FileCard.vue
+resources/js/components/files/FileTypeBadge.vue
+resources/js/components/files/FilePreview.vue - Preview for text/JSON files
+Phase 9: Execution Management
+Goal: View executions with real-time updates and streaming
+
+9.1 Execution Pages
+resources/js/pages/Executions/Index.vue
+
+Table: ID, Agent, Status, Started, Completed, Actions
+Filter by status (pending, running, completed, failed)
+Real-time status updates via WebSocket
+Click to view details
+resources/js/pages/Executions/Show.vue
+
+Execution details
+Live status updates
+Logs viewer (scrollable, auto-scroll to bottom)
+Output files list with download
+Execution metadata (tokens used, model, duration)
+Retry button (if failed)
+9.2 Streaming Execution
+resources/js/components/executions/StreamingExecutor.vue
+Connect to SSE endpoint /agents/{agent}/stream
+Display chunks in real-time
+Show progress/completion status
+Save completed output
+9.3 Execution Components
+resources/js/components/executions/ExecutionCard.vue
+resources/js/components/executions/ExecutionStatusBadge.vue
+resources/js/components/executions/LogsViewer.vue - Syntax highlighted logs
+resources/js/components/executions/OutputsList.vue
+Phase 10: Real-time Features
+Goal: Implement WebSocket and SSE for live updates
+
+10.1 WebSocket Integration (Laravel Reverb)
+resources/js/composables/useBroadcasting.ts
+Configure Laravel Echo with Reverb
+Subscribe to user.{userId} private channel
+Listen for execution.updated events
+Update execution state reactively
+10.2 Server-Sent Events Integration
+resources/js/composables/useStreaming.ts
+Connect to /agents/{agent}/stream
+Handle chunk events
+Handle completion events
+Reconnection logic
+10.3 Setup Laravel Echo
+
+npm install laravel-echo pusher-js
+
+// resources/js/echo.ts
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
+
+window.Pusher = Pusher;
+
+export const echo = new Echo({
+    broadcaster: 'reverb',
+    key: import.meta.env.VITE_REVERB_APP_KEY,
+    wsHost: import.meta.env.VITE_REVERB_HOST,
+    wsPort: import.meta.env.VITE_REVERB_PORT ?? 80,
+    wssPort: import.meta.env.VITE_REVERB_PORT ?? 443,
+    forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https',
+    enabledTransports: ['ws', 'wss'],
 });
-```
+Phase 11: AI Backend Management
+Goal: View and select AI backends
 
-### Phase 3: API Documentation Setup (Priority 3)
+11.1 AI Backend Pages
+resources/js/pages/AIBackends/Index.vue
+List available backends (Ollama, Anthropic, OpenAI)
+Show capabilities for each
+View available models per backend
+Set default backend
+11.2 Components
+resources/js/components/ai-backends/BackendCard.vue
+resources/js/components/ai-backends/ModelList.vue
+Phase 12: Shared Components & Utilities
+Goal: Create reusable components and utilities
 
-**Install Scribe:**
-```bash
-sail composer require knuckleswtf/scribe
-sail artisan vendor:publish --tag=scribe-config
-```
+12.1 Shared Components
+resources/js/components/shared/PageHeader.vue - Page title + actions
+resources/js/components/shared/EmptyState.vue - Empty state placeholder
+resources/js/components/shared/LoadingSpinner.vue
+resources/js/components/shared/ErrorAlert.vue
+resources/js/components/shared/ConfirmDialog.vue - Confirmation dialogs
+resources/js/components/shared/DataTable.vue - Reusable table component
+12.2 Composables
+resources/js/composables/useApi.ts - API wrapper with error handling
+resources/js/composables/usePagination.ts - Pagination helper
+resources/js/composables/useToast.ts - Toast notifications
+resources/js/composables/useConfirm.ts - Confirmation dialogs
+12.3 Utilities
+resources/js/lib/api.ts - Axios/fetch wrapper
+resources/js/lib/formatters.ts - Date/size formatters
+resources/js/lib/validators.ts - Zod schemas
+Phase 13: Laravel Integration
+Goal: Create Inertia controller responses
 
-**Update config/scribe.php:**
-```php
-return [
-    'type' => 'laravel',
-    'theme' => 'scalar',
-    'title' => 'Code Agent Platform API',
-    'description' => 'API for managing AI-powered code agents',
-    'base_url' => env('APP_URL', 'http://localhost'),
-    'routes' => [
-        [
-            'match' => [
-                'prefixes' => ['api/v1/*'],
-            ],
-            'apply' => [
-                'headers' => [
-                    'Authorization' => 'Bearer {token}',
-                    'Content-Type' => 'application/json',
-                    'Accept' => 'application/json',
-                ],
-            ],
-        ],
-    ],
-    'auth' => [
-        'enabled' => true,
-        'default' => false,
-        'in' => 'bearer',
-    ],
-];
-```
+13.1 Create Inertia Controllers
+app/Http/Controllers/DashboardController.php
+app/Http/Controllers/AgentController.php (Inertia version)
+app/Http/Controllers/ToolController.php (Inertia version)
+app/Http/Controllers/FileController.php (Inertia version)
+app/Http/Controllers/ExecutionController.php (Inertia version)
+app/Http/Controllers/Auth/LoginController.php (Inertia version)
+app/Http/Controllers/Auth/RegisterController.php (Inertia version)
+13.2 Web Routes
+routes/web.php - Add all web routes returning Inertia responses
 
-**Add Scribe annotations to auth controllers:**
-```php
-/**
- * Register User
- * 
- * @group Authentication
- * @unauthenticated
- * 
- * @bodyParam name string required User's name. Example: John Doe
- * @bodyParam email string required User's email. Example: john@example.com
- * @bodyParam password string required User's password. Example: password123
- * 
- * @response 201 {
- *   "user": {"id": 1, "name": "John Doe", "email": "john@example.com"},
- *   "token": "1|abc123..."
- * }
- */
-```
+Route::get('/', fn() => redirect('/dashboard'));
 
-### Phase 4: AI Backend Abstraction (Priority 4 - CRITICAL)
-
-**Create interface:**
-```bash
-sail artisan make:interface Contracts/AIBackendInterface
-```
-
-**AIBackendInterface (app/Contracts/AIBackendInterface.php):**
-```php
-interface AIBackendInterface {
-    public function execute(Agent $agent, array $context): AIResponse;
-    public function streamExecute(Agent $agent, array $context, callable $callback): AIResponse;
-    public function validateConfig(array $config): bool;
-    public function getCapabilities(): array;
-    public function listModels(): array;
-}
-```
-
-**Create AIResponse DTO:**
-```bash
-sail artisan make:class DTOs/AIResponse
-```
-
-**AIResponse structure:**
-- content (string)
-- model (string)
-- tokens_used (int)
-- finish_reason (string)
-- metadata (array)
-
-**Create AIBackendManager:**
-```bash
-sail artisan make:class Services/AIBackendManager
-```
-
-**AIBackendManager (app/Services/AIBackendManager.php):**
-```php
-class AIBackendManager {
-    protected array $drivers = [];
-    
-    public function driver(?string $name = null): AIBackendInterface {
-        $name = $name ?? config('ai.default');
-        
-        if (!isset($this->drivers[$name])) {
-            $this->drivers[$name] = $this->createDriver($name);
-        }
-        
-        return $this->drivers[$name];
-    }
-    
-    protected function createDriver(string $name): AIBackendInterface {
-        $config = config("ai.backends.{$name}");
-        $driver = $config['driver'];
-        
-        return match($driver) {
-            'ollama' => new OllamaBackend($config),
-            'anthropic' => new AnthropicBackend($config),
-            'openai' => new OpenAIBackend($config),
-            default => throw new InvalidArgumentException("Driver [{$driver}] not supported.")
-        };
-    }
-    
-    public function extend(string $name, Closure $callback): void {
-        // Allow custom driver registration
-    }
-}
-```
-
-**Create config file (config/ai.php):**
-```php
-return [
-    'default' => env('AI_BACKEND', 'ollama'),
-    
-    'backends' => [
-        'ollama' => [
-            'driver' => 'ollama',
-            'base_url' => env('OLLAMA_BASE_URL', 'http://host.docker.internal:11434'),
-            'model' => env('OLLAMA_MODEL', 'llama3.1'),
-            'timeout' => env('OLLAMA_TIMEOUT', 120),
-            'options' => [
-                'temperature' => 0.7,
-                'num_ctx' => 4096,
-            ],
-        ],
-        
-        'claude' => [
-            'driver' => 'anthropic',
-            'api_key' => env('ANTHROPIC_API_KEY'),
-            'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-5-20250929'),
-            'max_tokens' => 4096,
-        ],
-        
-        'openai' => [
-            'driver' => 'openai',
-            'api_key' => env('OPENAI_API_KEY'),
-            'model' => env('OPENAI_MODEL', 'gpt-4'),
-        ],
-    ],
-];
-```
-
-**Register service provider:**
-```bash
-sail artisan make:provider AIServiceProvider
-```
-
-**AIServiceProvider:**
-```php
-public function register() {
-    $this->app->singleton(AIBackendManager::class, function ($app) {
-        return new AIBackendManager();
-    });
-}
-```
-
-**Add to config/app.php providers array:**
-```php
-App\Providers\AIServiceProvider::class,
-```
-
-### Phase 5: Ollama Backend Implementation (Priority 5 - CRITICAL)
-
-**Create Ollama backend:**
-```bash
-sail artisan make:class Services/AI/OllamaBackend
-```
-
-**OllamaBackend (app/Services/AI/OllamaBackend.php):**
-```php
-use GuzzleHttp\Client;
-use App\Contracts\AIBackendInterface;
-use App\DTOs\AIResponse;
-
-class OllamaBackend implements AIBackendInterface
-{
-    protected Client $client;
-    protected array $config;
-    
-    public function __construct(array $config)
-    {
-        $this->config = $config;
-        $this->client = new Client([
-            'base_uri' => $config['base_url'],
-            'timeout' => $config['timeout'],
-        ]);
-    }
-    
-    public function execute(Agent $agent, array $context): AIResponse
-    {
-        $response = $this->client->post('/api/generate', [
-            'json' => [
-                'model' => $this->config['model'],
-                'prompt' => $this->buildPrompt($agent, $context),
-                'stream' => false,
-                'options' => $this->config['options'],
-            ],
-        ]);
-        
-        $data = json_decode($response->getBody(), true);
-        
-        return new AIResponse(
-            content: $data['response'],
-            model: $data['model'],
-            tokens_used: $data['eval_count'] ?? 0,
-            finish_reason: $data['done'] ? 'stop' : 'length',
-            metadata: $data
-        );
-    }
-    
-    public function streamExecute(Agent $agent, array $context, callable $callback): AIResponse
-    {
-        // Implement streaming
-    }
-    
-    public function listModels(): array
-    {
-        $response = $this->client->get('/api/tags');
-        $data = json_decode($response->getBody(), true);
-        
-        return array_map(fn($model) => [
-            'name' => $model['name'],
-            'size' => $model['size'],
-            'modified' => $model['modified_at'],
-        ], $data['models'] ?? []);
-    }
-    
-    public function validateConfig(array $config): bool
-    {
-        try {
-            $this->client->get('/api/tags');
-            return true;
-        } catch (\Exception $e) {
-            return false;
-        }
-    }
-    
-    public function getCapabilities(): array
-    {
-        return [
-            'streaming' => true,
-            'function_calling' => false,
-            'vision' => false,
-            'max_context' => $this->config['options']['num_ctx'] ?? 4096,
-        ];
-    }
-    
-    protected function buildPrompt(Agent $agent, array $context): string
-    {
-        // Build prompt from agent code and context
-    }
-}
-```
-
-**Test Ollama connection:**
-```bash
-sail artisan make:command TestOllamaConnection
-```
-
-**Command to verify Ollama:**
-```php
-public function handle()
-{
-    $backend = app(AIBackendManager::class)->driver('ollama');
-    
-    $this->info('Testing Ollama connection...');
-    
-    if ($backend->validateConfig(config('ai.backends.ollama'))) {
-        $this->info('✓ Connected to Ollama');
-        
-        $models = $backend->listModels();
-        $this->info('Available models: ' . count($models));
-        
-        foreach ($models as $model) {
-            $this->line("  - {$model['name']}");
-        }
-    } else {
-        $this->error('✗ Failed to connect to Ollama');
-    }
-}
-```
-
-**Run test:**
-```bash
-sail artisan test:ollama
-```
-
-### Phase 6: Models and Relationships (Priority 6)
-
-**Create models:**
-```bash
-sail artisan make:model Agent
-sail artisan make:model Task
-sail artisan make:model Execution
-sail artisan make:model Tool
-sail artisan make:model File
-```
-
-**Define relationships in models:**
-
-**Agent model:**
-- belongsTo User
-- hasMany Tasks
-- hasMany Executions (through Tasks)
-- belongsToMany Tools
-
-**Task model:**
-- belongsTo Agent
-- hasOne Execution
-
-**Execution model:**
-- belongsTo Task
-- belongsToMany Files
-
-**Tool model:**
-- belongsTo User
-- belongsToMany Agents
-
-**File model:**
-- belongsTo User
-- belongsToMany Executions
-
-### Phase 7: Core Services (Priority 7)
-
-**Create services:**
-```bash
-sail artisan make:class Services/AgentService
-sail artisan make:class Services/ExecutionService
-sail artisan make:class Services/ToolService
-sail artisan make:class Services/FileService
-```
-
-**AgentService:**
-- create(array $data): Agent
-- update(Agent $agent, array $data): Agent
-- delete(Agent $agent): bool
-- attachTools(Agent $agent, array $toolIds): void
-- detachTools(Agent $agent, array $toolIds): void
-
-**ExecutionService:**
-- execute(Agent $agent, array $payload, array $fileIds = []): Execution
-- getStatus(Execution $execution): string
-- getLogs(Execution $execution): string
-- getOutputs(Execution $execution): Collection
-
-**ToolService:**
-- create(array $data): Tool
-- update(Tool $tool, array $data): Tool
-- delete(Tool $tool): bool
-- execute(Tool $tool, array $params): mixed
-
-**FileService:**
-- upload(UploadedFile $file, string $type): File
-- download(File $file): StreamedResponse
-- delete(File $file): bool
-- cleanup(string $type, Carbon $before): int
-
-### Phase 8: API Controllers (Priority 8)
-
-**Create controllers:**
-```bash
-sail artisan make:controller Api/V1/AgentController --api
-sail artisan make:controller Api/V1/ToolController --api
-sail artisan make:controller Api/V1/FileController --api
-sail artisan make:controller Api/V1/ExecutionController
-sail artisan make:controller Api/V1/AIBackendController
-```
-
-**Add Scribe annotations to each controller method**
-
-**Create API routes (routes/api.php):**
-```php
-Route::prefix('v1')->middleware('auth:sanctum')->group(function () {
-    // Agents
-    Route::apiResource('agents', AgentController::class);
-    Route::post('agents/{agent}/tools', [AgentController::class, 'attachTools']);
-    Route::delete('agents/{agent}/tools/{tool}', [AgentController::class, 'detachTool']);
-    
-    // Tools
-    Route::apiResource('tools', ToolController::class);
-    
-    // Files
-    Route::apiResource('files', FileController::class)->except(['update']);
-    
-    // Execution
-    Route::post('agents/{agent}/execute', [ExecutionController::class, 'execute']);
-    Route::get('executions', [ExecutionController::class, 'index']);
-    Route::get('executions/{execution}', [ExecutionController::class, 'show']);
-    Route::get('executions/{execution}/logs', [ExecutionController::class, 'logs']);
-    Route::get('executions/{execution}/outputs', [ExecutionController::class, 'outputs']);
-    
-    // AI Backends
-    Route::get('ai-backends', [AIBackendController::class, 'index']);
-    Route::get('ai-backends/{backend}/models', [AIBackendController::class, 'models']);
+Route::middleware('guest')->group(function() {
+    Route::get('/login', [LoginController::class, 'show']);
+    Route::get('/register', [RegisterController::class, 'show']);
 });
-```
 
-### Phase 9: Queue Jobs (Priority 9)
+Route::middleware('auth')->group(function() {
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::resource('agents', AgentController::class);
+    Route::resource('tools', ToolController::class);
+    Route::resource('files', FileController::class);
+    Route::resource('executions', ExecutionController::class);
+    Route::get('/ai-backends', [AIBackendController::class, 'index']);
+});
+Critical Files to Modify/Create
+New Files to Create (Frontend)
+resources/js/layouts/AuthenticatedLayout.vue
+resources/js/layouts/GuestLayout.vue
+resources/js/pages/Auth/Login.vue
+resources/js/pages/Auth/Register.vue
+resources/js/pages/Dashboard.vue
+resources/js/pages/Agents/{Index,Create,Edit,Show}.vue
+resources/js/pages/Tools/{Index,Create,Edit,Show}.vue
+resources/js/pages/Files/Index.vue
+resources/js/pages/Executions/{Index,Show}.vue
+resources/js/pages/AIBackends/Index.vue
+resources/js/types/models.ts
+resources/js/types/api.ts
+resources/js/composables/useAuth.ts
+resources/js/composables/useBroadcasting.ts
+resources/js/composables/useStreaming.ts
+resources/js/composables/useApi.ts
+resources/js/echo.ts
+Multiple component files (40+)
+New Files to Create (Backend)
+app/Http/Controllers/DashboardController.php
+app/Http/Controllers/AgentController.php (web version)
+app/Http/Controllers/ToolController.php (web version)
+app/Http/Controllers/FileController.php (web version)
+app/Http/Controllers/ExecutionController.php (web version)
+app/Http/Controllers/Auth/LoginController.php (web version)
+app/Http/Controllers/Auth/RegisterController.php (web version)
+Files to Modify
+routes/web.php - Add all web routes
+resources/js/app.ts - Add Echo setup
+package.json - Add new dependencies
+.env.example - Document Reverb settings
+Verification Plan
+Step 1: Component Installation
+Run npx shadcn-vue@latest init and verify components are in resources/js/components/ui/
+Check that stone theme is applied in components.json
+Step 2: Build & Compile
+Run npm run build - should compile without errors
+Run npm run dev - Vite dev server should start
+Run ./vendor/bin/sail up -d - Laravel should be accessible
+Step 3: Authentication Flow
+Visit /login - Should show login page with shadcn-vue UI
+Register new account - Should create user and redirect to dashboard
+Login with credentials - Should authenticate and show dashboard
+Check that auth state persists across page navigations
+Step 4: CRUD Operations
+Agents:
 
-**Create jobs:**
-```bash
-sail artisan make:job ExecuteAgentJob
-sail artisan make:job CleanupTempFilesJob
-sail artisan make:job ProcessToolCallJob
-```
+Create agent with name, code, backend selection
+List agents in table
+Edit agent and see changes
+Delete agent with confirmation
+Attach/detach tools
+Tools:
 
-**ExecuteAgentJob:**
-- Receive Execution model
-- Load agent, tools, input files
-- Call AIBackendManager
-- Update execution status, result, logs
-- Store output files
-- Handle errors and timeouts
+Create tool with type-specific config
+View tool details
+Edit and delete tools
+Files:
 
-**Schedule cleanup job (app/Console/Kernel.php):**
-```php
-protected function schedule(Schedule $schedule)
-{
-    $schedule->job(new CleanupTempFilesJob)->daily();
-}
-```
+Upload file via drag-and-drop
+List files with type filter
+Download file
+Delete file
+Step 5: Execution Flow
+Execute agent from agent detail page
+See execution appear in executions list with "pending" status
+Verify WebSocket updates change status to "running" then "completed"
+View execution details page
+Check logs are displayed
+Download output files
+Step 6: Streaming Execution
+Start streaming execution
+Verify chunks appear in real-time
+Check final result is saved
+Confirm UI updates to show completion
+Step 7: Real-time Features
+Open two browser windows (logged in as same user)
+Execute agent in window 1
+Verify window 2 receives WebSocket update and UI updates automatically
+Check Reverb server is running (./vendor/bin/sail artisan reverb:start)
+Step 8: UI/UX Polish
+Test on mobile viewport (responsive design)
+Verify all icons are from Lucide
+Check stone theme is applied consistently
+Validate loading states appear during API calls
+Verify error messages are user-friendly
+Test keyboard navigation and accessibility
+Technical Considerations
+State Management
+Use Inertia's reactive page props for server-driven state
+Use Vue ref/reactive for client-side UI state
+Use @vueuse/core for common composable patterns
+Error Handling
+Catch API errors and display user-friendly messages
+Use toast notifications for success/error feedback
+Implement retry logic for failed operations
+Performance
+Lazy-load heavy components
+Paginate long lists
+Debounce search inputs
+Use skeleton loaders during data fetching
+Accessibility
+Use semantic HTML
+Add ARIA labels where needed
+Ensure keyboard navigation works
+Test with screen readers
+Security
+CSRF token handling (automatic via Inertia)
+XSS prevention (automatic via Vue)
+Input sanitization on server
+Rate limiting on sensitive operations
+Implementation Order
+Phase 1: Foundation Setup (shadcn-vue + dependencies)
+Phase 2: Type Definitions
+Phase 3: Layouts & Navigation
+Phase 4: Authentication Pages
+Phase 13: Laravel Integration (web routes + controllers)
+Phase 5: Dashboard
+Phase 6: Agent Management
+Phase 7: Tool Management
+Phase 8: File Management
+Phase 9: Execution Management
+Phase 10: Real-time Features
+Phase 11: AI Backend Management
+Phase 12: Shared Components & Polish
+Success Criteria
+✅ All API endpoints are utilized by the frontend
+✅ Authentication flow works (login, register, logout)
+✅ All CRUD operations functional (Agents, Tools, Files)
+✅ Real-time execution updates via WebSocket
+✅ SSE streaming for live agent responses
+✅ Responsive design works on mobile
+✅ Stone-themed shadcn-vue components throughout
+✅ Lucide icons used consistently
+✅ No TypeScript errors
+✅ All existing tests still pass
+✅ User-friendly error handling and loading states
 
-### Phase 10: Testing (Priority 10)
+User approved the plan
+Excellent! The plan has been approved. Let me create a comprehensive TODO list and start implementing the frontend.
 
-**Create tests:**
-```bash
-sail artisan make:test OllamaBackendTest
-sail artisan make:test AgentTest
-sail artisan make:test ExecutionTest
-sail artisan make:test AuthTest
-```
+Update Todos
 
-**Run tests:**
-```bash
-sail test
-```
+Phase 1: Install shadcn-vue with stone theme
 
-### Phase 11: Documentation Generation (Priority 11)
+Phase 1: Install additional dependencies (lucide, date-fns, zod, echo)
 
-**Generate API docs:**
-```bash
-sail artisan scribe:generate
-```
+Phase 1: Install core shadcn-vue components
 
-**Access at:** http://localhost/docs
+Phase 2: Create TypeScript type definitions
 
-### Environment Configuration
+Phase 3: Create layout components
 
-**Update .env:**
-```env
-AI_BACKEND=ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=llama3.1
-OLLAMA_TIMEOUT=120
+Phase 4: Create authentication pages
 
-QUEUE_CONNECTION=redis
+Phase 13: Create Laravel web controllers and routes
 
-FILESYSTEM_DISK=local
-MAX_EXECUTION_TIME=300
-MAX_FILE_SIZE=10485760
-```
+Phase 5: Create dashboard page
 
-## Next Steps After Base Implementation
+Phase 6: Create agent management pages and components
 
-1. Implement streaming responses
-2. Add WebSocket support for real-time updates
-3. Create admin panel
-4. Add metrics and monitoring
-5. Implement additional AI backends (Claude, OpenAI)
-6. Add agent versioning
-7. Implement scheduled executions
+Phase 7: Create tool management pages and components
 
-Start with Phase 1 (Database Schema) and proceed sequentially through Phase 11.
+Phase 8: Create file management pages and components
+
+Phase 9: Create execution management pages and components
+
+Phase 10: Implement real-time features (WebSocket + SSE)
+
+Phase 11: Create AI backend management pages
+
+Phase 12: Create shared components and utilities

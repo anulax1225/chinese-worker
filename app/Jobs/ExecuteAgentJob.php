@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Events\ExecutionStatusUpdated;
 use App\Models\Execution;
 use App\Services\AIBackendManager;
 use Carbon\Carbon;
@@ -39,6 +40,9 @@ class ExecuteAgentJob implements ShouldQueue
             'status' => 'running',
             'started_at' => Carbon::now(),
         ]);
+
+        // Broadcast status update
+        broadcast(new ExecutionStatusUpdated($this->execution->fresh()));
 
         $logs = [];
 
@@ -100,6 +104,9 @@ class ExecuteAgentJob implements ShouldQueue
                 ],
                 'logs' => implode("\n", $logs),
             ]);
+
+            // Broadcast completion
+            broadcast(new ExecutionStatusUpdated($this->execution->fresh()));
         } catch (\Exception $e) {
             $logs[] = sprintf('[%s] Execution failed: %s', Carbon::now()->toDateTimeString(), $e->getMessage());
 
@@ -110,6 +117,9 @@ class ExecuteAgentJob implements ShouldQueue
                 'error' => $e->getMessage(),
                 'logs' => implode("\n", $logs),
             ]);
+
+            // Broadcast failure
+            broadcast(new ExecutionStatusUpdated($this->execution->fresh()));
 
             // Re-throw the exception to trigger retry logic
             throw $e;
@@ -127,5 +137,8 @@ class ExecuteAgentJob implements ShouldQueue
             'completed_at' => Carbon::now(),
             'error' => sprintf('Job failed after %d attempts: %s', $this->tries, $exception->getMessage()),
         ]);
+
+        // Broadcast final failure
+        broadcast(new ExecutionStatusUpdated($this->execution->fresh()));
     }
 }

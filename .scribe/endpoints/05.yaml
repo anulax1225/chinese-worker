@@ -29,7 +29,7 @@ endpoints:
         name: agent_id
         description: 'The ID of the agent.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -47,7 +47,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      agent_id: 16
+      agent_id: 1
       agent: 1
     queryParameters: []
     cleanQueryParameters: []
@@ -115,6 +115,125 @@ endpoints:
         custom: []
         status: 201
         content: '{"id": 1, "task_id": 1, "status": "pending", "started_at": null, "completed_at": null, "result": null, "logs": null, "error": null, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z", "files": []}'
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/agents/{agent_id}/stream'
+    metadata:
+      custom: []
+      groupName: 'Execution Management'
+      groupDescription: |-
+
+        APIs for executing agents and monitoring executions
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Stream Agent Execution'
+      description: 'Execute an agent with real-time streaming response using Server-Sent Events (SSE).'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      agent_id:
+        custom: []
+        name: agent_id
+        description: 'The ID of the agent.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      agent:
+        custom: []
+        name: agent
+        description: 'The agent ID.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      agent_id: 1
+      agent: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      payload:
+        custom: []
+        name: payload
+        description: 'The execution payload/input data.'
+        required: true
+        example:
+          task: 'Generate code'
+          context: 'User authentication'
+        type: object
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      file_ids:
+        custom: []
+        name: file_ids
+        description: 'List of file IDs to use as input.'
+        required: false
+        example:
+          - 1
+          - 2
+        type: 'string[]'
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      priority:
+        custom: []
+        name: priority
+        description: 'Must be at least 0. Must not be greater than 10.'
+        required: false
+        example: 2
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+      scheduled_at:
+        custom: []
+        name: scheduled_at
+        description: 'Must be a valid date. Must be a date after <code>now</code>.'
+        required: false
+        example: '2052-02-20'
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      payload:
+        task: 'Generate code'
+        context: 'User authentication'
+      file_ids:
+        - 1
+        - 2
+      priority: 2
+      scheduled_at: '2052-02-20'
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: 'stream:data: {"type": "chunk", "content": "Hello"}\ndata: {"type": "chunk", "content": " World"}\ndata: {"type": "done", "execution_id": 1}\n'
         headers: []
         description: ''
     responseFields: []
@@ -223,7 +342,7 @@ endpoints:
         name: execution_id
         description: 'The ID of the execution.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -241,7 +360,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      execution_id: 16
+      execution_id: 1
       execution: 1
     queryParameters: []
     cleanQueryParameters: []
@@ -286,7 +405,7 @@ endpoints:
         name: execution_id
         description: 'The ID of the execution.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -304,7 +423,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      execution_id: 16
+      execution_id: 1
       execution: 1
     queryParameters: []
     cleanQueryParameters: []
@@ -349,7 +468,7 @@ endpoints:
         name: execution_id
         description: 'The ID of the execution.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -367,7 +486,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      execution_id: 16
+      execution_id: 1
       execution: 1
     queryParameters: []
     cleanQueryParameters: []

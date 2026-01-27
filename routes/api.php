@@ -38,6 +38,7 @@ Route::prefix('v1')->group(function (): void {
 
         // Execution
         Route::post('agents/{agent}/execute', [ExecutionController::class, 'execute']);
+        Route::post('agents/{agent}/stream', [ExecutionController::class, 'stream']);
         Route::get('executions', [ExecutionController::class, 'index']);
         Route::get('executions/{execution}', [ExecutionController::class, 'show']);
         Route::get('executions/{execution}/logs', [ExecutionController::class, 'logs']);

@@ -1,11 +1,13 @@
 <?php
 
+use App\Events\ExecutionStatusUpdated;
 use App\Jobs\ExecuteAgentJob;
 use App\Models\Agent;
 use App\Models\Execution;
 use App\Models\File;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 
 describe('Execution Management', function () {
@@ -319,6 +321,119 @@ describe('Execution Management', function () {
                 ->and($execution->error)->not()->toBeNull()
                 ->and($execution->started_at)->not()->toBeNull()
                 ->and($execution->completed_at)->not()->toBeNull();
+        });
+    });
+
+    describe('Streaming Execution', function () {
+        test('user can stream agent execution with SSE', function () {
+            Queue::fake();
+
+            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
+
+            $response = $this->postJson("/api/v1/agents/{$agent->id}/stream", [
+                'payload' => [
+                    'input' => 'Test streaming input',
+                    'parameters' => ['temperature' => 0.7],
+                ],
+            ]);
+
+            $response->assertStatus(200)
+                ->assertHeader('Content-Type', 'text/event-stream; charset=utf-8')
+                ->assertHeader('Cache-Control', 'no-cache, private');
+        });
+
+        test('user cannot stream another user\'s agent', function () {
+            $otherAgent = Agent::factory()->create();
+
+            $response = $this->postJson("/api/v1/agents/{$otherAgent->id}/stream", [
+                'payload' => [
+                    'input' => 'Test input',
+                ],
+            ]);
+
+            $response->assertStatus(403);
+        });
+
+        test('streaming execution fails without payload', function () {
+            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
+
+            $response = $this->postJson("/api/v1/agents/{$agent->id}/stream", []);
+
+            $response->assertStatus(422)
+                ->assertJsonValidationErrors(['payload']);
+        });
+    });
+
+    describe('WebSocket Broadcasting', function () {
+        beforeEach(function () {
+            $this->user = User::factory()->create();
+        });
+
+        test('execution status update broadcasts event', function () {
+            Event::fake();
+
+            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
+            $task = Task::factory()->create(['agent_id' => $agent->id]);
+            $execution = Execution::factory()->pending()->create(['task_id' => $task->id]);
+
+            // Simulate execution job
+            $job = new ExecuteAgentJob($execution);
+
+            // Execute the job (this will fail because Ollama is not running, but that's ok)
+            try {
+                $job->handle(app(\App\Services\AIBackendManager::class));
+            } catch (\Exception $e) {
+                // Expected to fail in test environment
+            }
+
+            // Verify that ExecutionStatusUpdated event was dispatched
+            Event::assertDispatched(ExecutionStatusUpdated::class);
+        });
+
+        test('broadcast event contains execution data', function () {
+            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
+            $task = Task::factory()->create(['agent_id' => $agent->id]);
+            $execution = Execution::factory()->completed()->create(['task_id' => $task->id]);
+
+            $event = new ExecutionStatusUpdated($execution);
+
+            $broadcastData = $event->broadcastWith();
+
+            expect($broadcastData)->toHaveKeys([
+                'id',
+                'task_id',
+                'status',
+                'started_at',
+                'completed_at',
+                'result',
+                'error',
+                'updated_at',
+            ])
+                ->and($broadcastData['id'])->toBe($execution->id)
+                ->and($broadcastData['status'])->toBe('completed');
+        });
+
+        test('broadcast event uses correct channel for user', function () {
+            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
+            $task = Task::factory()->create(['agent_id' => $agent->id]);
+            $execution = Execution::factory()->completed()->create(['task_id' => $task->id]);
+
+            $event = new ExecutionStatusUpdated($execution);
+
+            $channels = $event->broadcastOn();
+
+            expect($channels)->toHaveCount(1)
+                ->and($channels[0]->name)->toBe('private-user.'.$this->user->id);
+        });
+
+        test('broadcast event has correct event name', function () {
+            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
+            $task = Task::factory()->create(['agent_id' => $agent->id]);
+            $execution = Execution::factory()->completed()->create(['task_id' => $task->id]);
+
+            $event = new ExecutionStatusUpdated($execution);
+
+            expect($event->broadcastAs())->toBe('execution.updated');
         });
     });
 });
