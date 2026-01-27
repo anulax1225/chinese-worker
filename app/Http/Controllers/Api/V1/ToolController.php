@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreToolRequest;
 use App\Http\Requests\UpdateToolRequest;
+use App\Http\Resources\ToolResource;
 use App\Models\Tool;
 use App\Services\AgentLoop\BuiltinToolExecutor;
 use App\Services\ToolService;
@@ -114,7 +115,7 @@ class ToolController extends Controller
 
         $tool = $this->toolService->create($data);
 
-        return response()->json($tool, 201);
+        return (new ToolResource($tool))->response()->setStatusCode(201);
     }
 
     /**
@@ -130,7 +131,7 @@ class ToolController extends Controller
     {
         $this->authorize('view', $tool);
 
-        return response()->json($tool);
+        return (new ToolResource($tool))->response();
     }
 
     /**
@@ -152,7 +153,7 @@ class ToolController extends Controller
 
         $tool = $this->toolService->update($tool, $request->validated());
 
-        return response()->json($tool);
+        return (new ToolResource($tool))->response();
     }
 
     /**

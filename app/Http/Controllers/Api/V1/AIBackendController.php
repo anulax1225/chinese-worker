@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\AIBackendResource;
 use App\Services\AIBackendManager;
 use Illuminate\Http\JsonResponse;
 
@@ -26,25 +27,31 @@ class AIBackendController extends Controller
      *       "name": "ollama",
      *       "driver": "ollama",
      *       "is_default": true,
+     *       "model": "llama3.1:latest",
+     *       "status": "connected",
      *       "capabilities": {
      *         "streaming": true,
      *         "function_calling": false,
      *         "vision": false,
      *         "max_context": 4096
-     *       }
+     *       },
+     *       "models": []
      *     },
      *     {
      *       "name": "claude",
      *       "driver": "anthropic",
      *       "is_default": false,
+     *       "status": "connected",
      *       "capabilities": {
      *         "streaming": true,
      *         "function_calling": true,
      *         "vision": true,
      *         "max_context": 200000
-     *       }
+     *       },
+     *       "models": []
      *     }
-     *   ]
+     *   ],
+     *   "default_backend": "ollama"
      * }
      */
     public function index(): JsonResponse
@@ -52,22 +59,42 @@ class AIBackendController extends Controller
         $defaultBackend = config('ai.default');
         $backends = [];
 
-        foreach (config('ai.backends') as $name => $config) {
+        foreach (config('ai.backends', []) as $name => $config) {
+            $backend = [
+                'name' => $name,
+                'driver' => $config['driver'],
+                'is_default' => $name === $defaultBackend,
+                'model' => $config['model'] ?? null,
+                'capabilities' => [],
+                'models' => [],
+                'status' => 'unknown',
+            ];
+
             try {
                 $driver = $this->backendManager->driver($name);
+                $backend['capabilities'] = $driver->getCapabilities();
+                $backend['status'] = 'connected';
 
-                $backends[] = [
-                    'name' => $name,
-                    'driver' => $config['driver'],
-                    'is_default' => $name === $defaultBackend,
-                    'capabilities' => $driver->getCapabilities(),
-                ];
-            } catch (\Exception $e) {
-                // Skip backends that fail to initialize
+                // Try to list models (only for ollama which has local models)
+                if ($config['driver'] === 'ollama') {
+                    try {
+                        $backend['models'] = $driver->listModels();
+                    } catch (\Throwable $e) {
+                        $backend['models'] = [];
+                    }
+                }
+            } catch (\Throwable $e) {
+                $backend['status'] = 'error';
+                $backend['error'] = $e->getMessage();
             }
+
+            $backends[] = $backend;
         }
 
-        return response()->json(['backends' => $backends]);
+        return response()->json([
+            'backends' => AIBackendResource::collection($backends),
+            'default_backend' => $defaultBackend,
+        ]);
     }
 
     /**

@@ -203,4 +203,47 @@ Summary:
    - `resources/js/pages/AIBackends/Index.vue`
 
 If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /home/dessinateur/.claude/projects/-home-dessinateur-chinese-worker/679fe3f7-bb67-44b8-abab-d0ffc3f8c410.jsonl
-Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on.
+
+---
+
+## Continuation Session (2026-01-27)
+
+10. Continued Work on Frontend SDK Migration:
+   - Executions/Index.vue - Already using SDK pattern ✓
+   - Executions/Show.vue - Already using SDK pattern ✓
+   - Files/Index.vue - Updated to use SDK (listFiles, uploadFile, deleteFile, downloadAndSaveFile) ✓
+   - AIBackends/Index.vue - Updated to use SDK (listAIBackends) ✓
+
+11. Backend API Enhancement:
+   - Updated `app/Http/Controllers/Api/V1/AIBackendController.php`:
+     - Modified index() method to return status ('connected', 'error', 'unknown')
+     - Added error field for failed backends
+     - Added models array (for Ollama)
+     - Added model field from config
+     - Added default_backend to response
+     - Now matches Web controller behavior
+
+12. SDK Type Updates:
+   - Updated `resources/js/sdk/types.ts`:
+     - Added status, error, models fields to AIBackend interface
+     - Updated AIBackendsResponse to include default_backend
+   - Updated `resources/js/sdk/ai-backends.ts`:
+     - Modified list() to return full AIBackendsResponse
+     - Added getBackends() for just the array
+     - Updated all methods to use getBackends()
+     - Added getAIBackends() standalone function
+
+13. All Changes:
+   Files modified:
+   - `/home/anulax/chinese-worker/resources/js/pages/Files/Index.vue` - Full rewrite to use SDK
+   - `/home/anulax/chinese-worker/resources/js/pages/AIBackends/Index.vue` - Full rewrite to use SDK
+   - `/home/anulax/chinese-worker/app/Http/Controllers/Api/V1/AIBackendController.php` - Enhanced API
+   - `/home/anulax/chinese-worker/resources/js/sdk/types.ts` - Type updates
+   - `/home/anulax/chinese-worker/resources/js/sdk/ai-backends.ts` - API updates
+
+14. Testing:
+   - Ran Pint: 124 files formatted, 1 style issue fixed
+   - All 142 tests passing
+
+15. Result:
+   All frontend pages now use the SDK pattern exclusively. Only `auth` (and sometimes `id`) are passed through Inertia props. All data is fetched client-side via the SDK/API.

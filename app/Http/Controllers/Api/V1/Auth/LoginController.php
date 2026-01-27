@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\Auth\LoginRequest;
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Http\Request;
 
 class LoginController extends Controller
 {
@@ -56,7 +57,7 @@ class LoginController extends Controller
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([
-            'user' => $user,
+            'user' => new UserResource($user),
             'token' => $token,
         ]);
     }
@@ -78,7 +79,8 @@ class LoginController extends Controller
      *  "updated_at": "2026-01-26T14:00:00.000000Z"
      * }
      */
-    public function user(Request $request) {
-        return $request->user();
+    public function user(Request $request)
+    {
+        return new UserResource($request->user());
     }
 }

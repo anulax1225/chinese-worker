@@ -120,12 +120,14 @@ services:
             - sail
     ollama:
         image: 'ollama/ollama:latest'
-        gpus: all
-        # devices:
-        #     - /dev/kfd
-        #     - /dev/dri
-        # environment:
-        #     OLLAMA_VULKAN: 1
+        environment:
+            OLLAMA_CONTEXT_LENGTH: 64000
+        # Vulkan adapter if not an nvidia card
+            OLLAMA_VULKAN: 1
+        devices:
+            - /dev/dri
+        # if it's an nvdia card (also install nvidia-container-kit for integration with docker) 
+        # gpus: all
         ports:
             - '${FORWARD_OLLAMA_PORT:-11434}:11434'
         volumes:

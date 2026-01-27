@@ -20,8 +20,15 @@ export class AIBackendsApi {
     /**
      * List all available AI backends
      */
-    async list(): Promise<AIBackend[]> {
-        const response = await this.client.get<AIBackendsResponse>('/ai-backends');
+    async list(): Promise<AIBackendsResponse> {
+        return this.client.get<AIBackendsResponse>('/ai-backends');
+    }
+
+    /**
+     * Get just the backends array
+     */
+    async getBackends(): Promise<AIBackend[]> {
+        const response = await this.list();
         return response.backends;
     }
 
@@ -29,7 +36,7 @@ export class AIBackendsApi {
      * Get the default AI backend
      */
     async getDefault(): Promise<AIBackend | undefined> {
-        const backends = await this.list();
+        const backends = await this.getBackends();
         return backends.find((b) => b.is_default);
     }
 
@@ -37,7 +44,7 @@ export class AIBackendsApi {
      * Get a specific AI backend by name
      */
     async get(name: string): Promise<AIBackend | undefined> {
-        const backends = await this.list();
+        const backends = await this.getBackends();
         return backends.find((b) => b.name === name);
     }
 
@@ -65,7 +72,7 @@ export class AIBackendsApi {
      * Get backends that support streaming
      */
     async getStreamingBackends(): Promise<AIBackend[]> {
-        const backends = await this.list();
+        const backends = await this.getBackends();
         return backends.filter((b) => b.capabilities.streaming);
     }
 
@@ -73,7 +80,7 @@ export class AIBackendsApi {
      * Get backends that support function calling
      */
     async getFunctionCallingBackends(): Promise<AIBackend[]> {
-        const backends = await this.list();
+        const backends = await this.getBackends();
         return backends.filter((b) => b.capabilities.function_calling);
     }
 
@@ -81,7 +88,7 @@ export class AIBackendsApi {
      * Get backends that support vision
      */
     async getVisionBackends(): Promise<AIBackend[]> {
-        const backends = await this.list();
+        const backends = await this.getBackends();
         return backends.filter((b) => b.capabilities.vision);
     }
 }
@@ -93,10 +100,17 @@ export class AIBackendsApi {
 const defaultAIBackends = new AIBackendsApi();
 
 /**
- * List all available AI backends
+ * List all available AI backends with metadata
  */
-export async function listAIBackends(): Promise<AIBackend[]> {
+export async function listAIBackends(): Promise<AIBackendsResponse> {
     return defaultAIBackends.list();
+}
+
+/**
+ * Get just the backends array
+ */
+export async function getAIBackends(): Promise<AIBackend[]> {
+    return defaultAIBackends.getBackends();
 }
 
 /**

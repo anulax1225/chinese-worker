@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
+import { ref, watch, onMounted, computed } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
     Select,
     SelectContent,
@@ -23,15 +24,6 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
@@ -45,30 +37,46 @@ import {
     DialogHeader as UploadDialogHeader,
     DialogTitle as UploadDialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Search, MoreHorizontal, Download, Trash2, Upload, FileIcon, Loader2 } from 'lucide-vue-next';
+import { Search, MoreHorizontal, Download, Trash2, Upload, FileIcon, Loader2 } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
-import type { File as FileModel, PaginatedResponse } from '@/types/models';
+import type { File as FileModel, FileType } from '@/sdk/types';
 import type { Auth } from '@/types/auth';
 import { useDebounceFn } from '@vueuse/core';
+import { listFiles, uploadFile as uploadFileApi, deleteFile as deleteFileApi, downloadAndSaveFile } from '@/sdk/files';
 
 interface Props {
     auth: Auth;
-    files: PaginatedResponse<FileModel>;
-    filters: {
-        type: string | null;
-        search: string | null;
-    };
 }
 
 const props = defineProps<Props>();
 
-const search = ref(props.filters.search || '');
-const type = ref(props.filters.type || 'all');
+// State
+const loading = ref(true);
+const error = ref<string | null>(null);
+const files = ref<FileModel[]>([]);
+const meta = ref({
+    current_page: 1,
+    per_page: 15,
+    total: 0,
+    last_page: 1,
+    from: 1,
+    to: 0,
+});
+
+// Filters
+const search = ref('');
+const type = ref('all');
+const currentPage = ref(1);
+
+// Upload state
 const uploadDialogOpen = ref(false);
 const uploadFile = ref<File | null>(null);
-const uploadType = ref<'input' | 'output' | 'temp'>('input');
+const uploadType = ref<FileType>('input');
 const uploading = ref(false);
 const dragActive = ref(false);
+
+// Computed
+const hasFiles = computed(() => files.value.length > 0);
 
 const getTypeVariant = (type: string) => {
     switch (type) {
@@ -102,17 +110,50 @@ const getFileName = (path: string) => {
     return path.split('/').pop() || path;
 };
 
+// Fetch files from API
+const fetchFiles = async () => {
+    loading.value = true;
+    error.value = null;
+
+    try {
+        const params: Record<string, unknown> = {
+            page: currentPage.value,
+            per_page: 15,
+        };
+
+        if (search.value) {
+            params.search = search.value;
+        }
+
+        if (type.value && type.value !== 'all') {
+            params.type = type.value as FileType;
+        }
+
+        const response = await listFiles(params);
+        files.value = response.data;
+        meta.value = {
+            current_page: response.meta.current_page,
+            per_page: response.meta.per_page,
+            total: response.meta.total,
+            last_page: response.meta.last_page,
+            from: response.meta.from ?? ((response.meta.current_page - 1) * response.meta.per_page + 1),
+            to: response.meta.to ?? Math.min(response.meta.current_page * response.meta.per_page, response.meta.total),
+        };
+    } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Failed to load files';
+        console.error('Failed to fetch files:', e);
+    } finally {
+        loading.value = false;
+    }
+};
+
+// Debounced filter application
 const applyFilters = useDebounceFn(() => {
-    router.get(
-        '/files',
-        {
-            search: search.value || undefined,
-            type: type.value === 'all' ? undefined : type.value,
-        },
-        { preserveState: true, replace: true },
-    );
+    currentPage.value = 1;
+    fetchFiles();
 }, 300);
 
+// Watch for filter changes
 watch([search, type], () => {
     applyFilters();
 });
@@ -141,31 +182,55 @@ const handleFileSelect = (e: Event) => {
     }
 };
 
-const submitUpload = () => {
+const submitUpload = async () => {
     if (!uploadFile.value) return;
 
     uploading.value = true;
 
-    const formData = new FormData();
-    formData.append('file', uploadFile.value);
-    formData.append('type', uploadType.value);
-
-    router.post('/files', formData, {
-        forceFormData: true,
-        onFinish: () => {
-            uploading.value = false;
-            uploadDialogOpen.value = false;
-            uploadFile.value = null;
-            uploadType.value = 'input';
-        },
-    });
-};
-
-const deleteFile = (file: FileModel) => {
-    if (confirm(`Are you sure you want to delete "${getFileName(file.path)}"?`)) {
-        router.delete(`/files/${file.id}`);
+    try {
+        await uploadFileApi(uploadFile.value, uploadType.value);
+        await fetchFiles();
+        uploadDialogOpen.value = false;
+        uploadFile.value = null;
+        uploadType.value = 'input';
+    } catch (e) {
+        alert(e instanceof Error ? e.message : 'Failed to upload file');
+    } finally {
+        uploading.value = false;
     }
 };
+
+const handleDeleteFile = async (file: FileModel) => {
+    if (!confirm(`Are you sure you want to delete "${getFileName(file.path)}"?`)) {
+        return;
+    }
+
+    try {
+        await deleteFileApi(file.id);
+        await fetchFiles();
+    } catch (e) {
+        alert(e instanceof Error ? e.message : 'Failed to delete file');
+    }
+};
+
+const handleDownloadFile = async (file: FileModel) => {
+    try {
+        await downloadAndSaveFile(file.id, getFileName(file.path));
+    } catch (e) {
+        alert(e instanceof Error ? e.message : 'Failed to download file');
+    }
+};
+
+// Pagination
+const goToPage = (page: number) => {
+    currentPage.value = page;
+    fetchFiles();
+};
+
+// Initial load
+onMounted(() => {
+    fetchFiles();
+});
 </script>
 
 <template>
@@ -292,14 +357,33 @@ const deleteFile = (file: FileModel) => {
             <Card>
                 <CardHeader>
                     <CardTitle>Your Files</CardTitle>
-                    <CardDescription>
-                        {{ files.total }} file{{ files.total !== 1 ? 's' : '' }} found
+                    <CardDescription v-if="!loading">
+                        {{ meta.total }} file{{ meta.total !== 1 ? 's' : '' }} found
+                    </CardDescription>
+                    <CardDescription v-else>
+                        Loading...
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div v-if="files.data.length === 0" class="text-center py-8 text-muted-foreground">
+                    <!-- Loading State -->
+                    <div v-if="loading" class="space-y-4">
+                        <div v-for="i in 5" :key="i" class="flex items-center space-x-4">
+                            <Skeleton class="h-12 w-full" />
+                        </div>
+                    </div>
+
+                    <!-- Error State -->
+                    <div v-else-if="error" class="text-center py-8 text-destructive">
+                        {{ error }}
+                        <Button variant="link" @click="fetchFiles">Try again</Button>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div v-else-if="!hasFiles" class="text-center py-8 text-muted-foreground">
                         No files found. Upload your first file to get started.
                     </div>
+
+                    <!-- Files Table -->
                     <Table v-else>
                         <TableHeader>
                             <TableRow>
@@ -312,7 +396,7 @@ const deleteFile = (file: FileModel) => {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            <TableRow v-for="file in files.data" :key="file.id">
+                            <TableRow v-for="file in files" :key="file.id">
                                 <TableCell class="font-medium">
                                     <div class="flex items-center gap-2">
                                         <FileIcon class="h-4 w-4 text-muted-foreground" />
@@ -335,15 +419,13 @@ const deleteFile = (file: FileModel) => {
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
-                                            <DropdownMenuItem as-child>
-                                                <a :href="`/files/${file.id}`" download>
-                                                    <Download class="mr-2 h-4 w-4" />
-                                                    Download
-                                                </a>
+                                            <DropdownMenuItem @click="handleDownloadFile(file)">
+                                                <Download class="mr-2 h-4 w-4" />
+                                                Download
                                             </DropdownMenuItem>
                                             <DropdownMenuItem
                                                 class="text-destructive"
-                                                @click="deleteFile(file)"
+                                                @click="handleDeleteFile(file)"
                                             >
                                                 <Trash2 class="mr-2 h-4 w-4" />
                                                 Delete
@@ -356,23 +438,19 @@ const deleteFile = (file: FileModel) => {
                     </Table>
 
                     <!-- Pagination -->
-                    <div v-if="files.last_page > 1" class="mt-4 flex items-center justify-between">
+                    <div v-if="meta.last_page > 1" class="mt-4 flex items-center justify-between">
                         <p class="text-sm text-muted-foreground">
-                            Showing {{ files.from }} to {{ files.to }} of {{ files.total }} results
+                            Showing {{ meta.from }} to {{ meta.to }} of {{ meta.total }} results
                         </p>
                         <div class="flex gap-2">
                             <Button
-                                v-for="page in files.last_page"
+                                v-for="page in meta.last_page"
                                 :key="page"
-                                :variant="page === files.current_page ? 'default' : 'outline'"
+                                :variant="page === meta.current_page ? 'default' : 'outline'"
                                 size="sm"
-                                as-child
+                                @click="goToPage(page)"
                             >
-                                <Link
-                                    :href="`/files?page=${page}${search ? `&search=${search}` : ''}${type !== 'all' ? `&type=${type}` : ''}`"
-                                >
-                                    {{ page }}
-                                </Link>
+                                {{ page }}
                             </Button>
                         </div>
                     </div>

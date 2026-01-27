@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { router } from '@inertiajs/vue3';
+import { ref, onMounted, computed } from 'vue';
 import AuthenticatedLayout from '@/layouts/AuthenticatedLayout.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
     Table,
     TableBody,
@@ -26,34 +27,23 @@ import {
     Code,
 } from 'lucide-vue-next';
 import type { Auth } from '@/types/auth';
-
-interface AIBackend {
-    name: string;
-    driver: string;
-    is_default: boolean;
-    model: string | null;
-    capabilities: {
-        streaming: boolean;
-        function_calling: boolean;
-        vision: boolean;
-        embeddings?: boolean;
-    };
-    models: Array<{
-        name: string;
-        modified_at?: string;
-        size?: number;
-    }>;
-    status: 'connected' | 'error' | 'unknown';
-    error?: string;
-}
+import type { AIBackend } from '@/sdk/types';
+import { listAIBackends } from '@/sdk/ai-backends';
 
 interface Props {
     auth: Auth;
-    backends: AIBackend[];
-    defaultBackend: string;
 }
 
 const props = defineProps<Props>();
+
+// State
+const loading = ref(true);
+const error = ref<string | null>(null);
+const backends = ref<AIBackend[]>([]);
+const defaultBackend = ref<string>('');
+
+// Computed
+const hasBackends = computed(() => backends.value.length > 0);
 
 const getStatusVariant = (status: string) => {
     switch (status) {
@@ -89,9 +79,31 @@ const formatSize = (bytes: number | undefined) => {
     return `${size.toFixed(1)} ${units[unitIndex]}`;
 };
 
-const refresh = () => {
-    router.reload();
+// Fetch backends from API
+const fetchBackends = async () => {
+    loading.value = true;
+    error.value = null;
+
+    try {
+        const response = await listAIBackends();
+        backends.value = response.backends;
+        defaultBackend.value = response.default_backend;
+    } catch (e) {
+        error.value = e instanceof Error ? e.message : 'Failed to load AI backends';
+        console.error('Failed to fetch AI backends:', e);
+    } finally {
+        loading.value = false;
+    }
 };
+
+const refresh = () => {
+    fetchBackends();
+};
+
+// Initial load
+onMounted(() => {
+    fetchBackends();
+});
 </script>
 
 <template>
@@ -109,8 +121,36 @@ const refresh = () => {
                 </Button>
             </div>
 
+            <!-- Loading State -->
+            <div v-if="loading" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <Card v-for="i in 3" :key="i">
+                    <CardHeader>
+                        <Skeleton class="h-6 w-32 mb-2" />
+                        <Skeleton class="h-4 w-48" />
+                    </CardHeader>
+                    <CardContent>
+                        <Skeleton class="h-20 w-full" />
+                    </CardContent>
+                </Card>
+            </div>
+
+            <!-- Error State -->
+            <Card v-else-if="error">
+                <CardContent class="pt-6 text-center py-8 text-destructive">
+                    {{ error }}
+                    <Button variant="link" @click="fetchBackends">Try again</Button>
+                </CardContent>
+            </Card>
+
+            <!-- Empty State -->
+            <Card v-else-if="!hasBackends">
+                <CardContent class="pt-6 text-center py-8 text-muted-foreground">
+                    No AI backends configured. Check your config/ai.php file.
+                </CardContent>
+            </Card>
+
             <!-- Backends Grid -->
-            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div v-else class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 <Card v-for="backend in backends" :key="backend.name" class="relative">
                     <div v-if="backend.is_default" class="absolute -top-2 -right-2">
                         <Badge class="flex items-center gap-1 bg-yellow-500 text-yellow-950">

@@ -291,12 +291,16 @@ export interface AIBackend {
     name: string;
     driver: string;
     is_default: boolean;
-    model?: string;
+    model?: string | null;
     capabilities: AIBackendCapabilities;
+    models: AIModel[];
+    status: 'connected' | 'error' | 'unknown';
+    error?: string;
 }
 
 export interface AIBackendsResponse {
     backends: AIBackend[];
+    default_backend: string;
 }
 
 export interface AIModel {

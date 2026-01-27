@@ -46,14 +46,14 @@ class ExecutionController extends Controller
     public function show(Request $request, Execution $execution): Response
     {
         // Authorization: ensure the execution belongs to the user
-        $execution->load(['task.agent', 'files']);
+        $execution->load(['task.agent']);
 
         if ($execution->task->agent->user_id !== $request->user()->id) {
             abort(403);
         }
 
         return Inertia::render('Executions/Show', [
-            'execution' => $execution,
+            'id' => $execution->id,
         ]);
     }
 }

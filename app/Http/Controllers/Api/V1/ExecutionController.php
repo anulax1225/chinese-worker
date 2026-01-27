@@ -4,11 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ExecuteAgentRequest;
+use App\Http\Resources\ExecutionResource;
+use App\Http\Resources\FileResource;
 use App\Models\Agent;
 use App\Models\Execution;
 use App\Services\ExecutionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 /**
  * @group Execution Management
@@ -30,7 +33,7 @@ class ExecutionController extends Controller
      *
      * @response 200 {"data": [{"id": 1, "task_id": 1, "status": "completed", "started_at": "2026-01-26T10:00:00.000000Z", "completed_at": "2026-01-26T10:05:00.000000Z", "result": {"output": "Success"}, "logs": "Execution logs...", "error": null, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:05:00.000000Z"}]}
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $query = Execution::query()
             ->whereHas('task.agent', function ($q) use ($request) {
@@ -46,7 +49,7 @@ class ExecutionController extends Controller
             ->latest()
             ->paginate($request->input('per_page', 15));
 
-        return response()->json($executions);
+        return ExecutionResource::collection($executions);
     }
 
     /**
@@ -73,7 +76,7 @@ class ExecutionController extends Controller
             $request->input('file_ids', [])
         );
 
-        return response()->json($execution, 201);
+        return (new ExecutionResource($execution))->response()->setStatusCode(201);
     }
 
     /**
@@ -91,7 +94,7 @@ class ExecutionController extends Controller
 
         $execution->load(['task.agent', 'files']);
 
-        return response()->json($execution);
+        return (new ExecutionResource($execution))->response();
     }
 
     /**
@@ -126,7 +129,7 @@ class ExecutionController extends Controller
         $this->authorize('view', $execution->task->agent);
 
         return response()->json([
-            'outputs' => $this->executionService->getOutputs($execution),
+            'outputs' => FileResource::collection($this->executionService->getOutputs($execution)),
         ]);
     }
 
@@ -158,7 +161,7 @@ class ExecutionController extends Controller
 
         return response()->json([
             'message' => 'Execution cancelled',
-            'execution' => $execution->fresh(['task.agent']),
+            'execution' => new ExecutionResource($execution->fresh(['task.agent'])),
         ]);
     }
 

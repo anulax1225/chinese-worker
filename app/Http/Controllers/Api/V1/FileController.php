@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UploadFileRequest;
+use App\Http\Resources\FileResource;
 use App\Models\File;
 use App\Services\FileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -30,7 +32,7 @@ class FileController extends Controller
      *
      * @response 200 {"data": [{"id": 1, "user_id": 1, "path": "files/input/document.pdf", "type": "input", "size": 1024, "mime_type": "application/pdf", "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}]}
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): AnonymousResourceCollection
     {
         $query = $request->user()->files();
 
@@ -40,7 +42,7 @@ class FileController extends Controller
 
         $files = $query->paginate($request->input('per_page', 15));
 
-        return response()->json($files);
+        return FileResource::collection($files);
     }
 
     /**
@@ -61,7 +63,7 @@ class FileController extends Controller
             $request->user()->id
         );
 
-        return response()->json($file, 201);
+        return (new FileResource($file))->response()->setStatusCode(201);
     }
 
     /**
@@ -77,7 +79,7 @@ class FileController extends Controller
     {
         $this->authorize('view', $file);
 
-        return response()->json($file);
+        return (new FileResource($file))->response();
     }
 
     /**
