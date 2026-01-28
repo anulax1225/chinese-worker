@@ -11,7 +11,7 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from typing import Optional, Dict, Any, List
 
-from .api import APIClient, AuthManager
+from .api import APIClient, AuthManager, SSEClient, SSEEventHandler
 from .tools import BashTool, ReadTool, WriteTool, EditTool, GlobTool, GrepTool
 
 console = Console()
@@ -446,7 +446,146 @@ def handle_conversation_status(
     poll_interval: int,
 ) -> str:
     """
-    Handle conversation status with polling for tool requests.
+    Handle conversation status with SSE (preferred) or polling fallback.
+
+    Returns:
+        Status: "completed", "error", or "active"
+    """
+    # Try SSE first for real-time updates
+    try:
+        return handle_sse_events(client, conversation_id, initial_response, tools)
+    except Exception as e:
+        console.print(f"[dim]SSE unavailable ({str(e)[:30]}), using polling...[/dim]")
+
+    # Fall back to polling
+    return handle_polling_status(client, conversation_id, initial_response, tools, poll_interval)
+
+
+def handle_sse_events(
+    client: APIClient,
+    conversation_id: int,
+    initial_response: Dict[str, Any],
+    tools: Dict[str, Any],
+) -> str:
+    """
+    Handle conversation status via SSE stream.
+
+    Returns:
+        Status: "completed", "error", or "active"
+    """
+    auto_approve = False
+    last_shown_message_index = -1
+
+    # Check if already in a terminal or waiting state
+    current_status = initial_response.get("status")
+    if current_status == "completed":
+        return handle_completed_status(client, conversation_id, last_shown_message_index)
+    elif current_status == "failed":
+        console.print(f"[red]Error:[/red] {initial_response.get('error', 'Unknown error')}")
+        return "error"
+    elif current_status == "waiting_for_tool":
+        # Handle immediate tool request
+        result, auto_approve, last_shown_message_index = handle_tool_request_status(
+            client, conversation_id, initial_response, tools, auto_approve, last_shown_message_index
+        )
+        if result == "continue":
+            pass  # Continue to SSE loop
+        else:
+            return result
+
+    # Create SSE client
+    sse_client = SSEClient(
+        base_url=client.base_url,
+        conversation_id=conversation_id,
+        headers=client._get_headers(),
+        timeout=120,  # 2 minute read timeout
+    )
+
+    console.print("[dim]Connected via SSE[/dim]")
+    accumulated_content = ""
+    accumulated_thinking = ""
+
+    for event_type, data in sse_client.events():
+        if event_type == "connected":
+            continue
+
+        elif event_type == "text_chunk":
+            # Progressive text rendering
+            chunk = data.get("chunk", "")
+            chunk_type = data.get("type", "content")
+            if chunk_type == "thinking":
+                if not accumulated_thinking:
+                    console.print("[dim italic]💭 ", end="")
+                accumulated_thinking += chunk
+                console.print(f"[dim italic]{chunk}[/dim italic]", end="")
+            else:
+                if accumulated_thinking and not accumulated_content:
+                    console.print("[/dim italic]")  # Close thinking
+                if not accumulated_content:
+                    console.print("\n[bold green]Assistant:[/bold green]")
+                accumulated_content += chunk
+                console.print(chunk, end="")
+
+        elif event_type == "status_changed":
+            # Status update (e.g., processing)
+            pass
+
+        elif event_type == "tool_request":
+            # Clear any streaming output
+            if accumulated_content or accumulated_thinking:
+                console.print()  # Newline after streamed content
+
+            # Get latest conversation state for thinking
+            try:
+                conv_response = client.get_conversation(conversation_id)
+                conversation = safe_get(conv_response, "data", default=conv_response)
+                last_shown_message_index = show_thinking(conversation, last_shown_message_index)
+            except Exception:
+                pass
+
+            # Handle the tool request
+            tool_request = data.get("tool_request")
+            result, auto_approve, last_shown_message_index = execute_tool_request(
+                client, conversation_id, tool_request, tools, auto_approve, last_shown_message_index
+            )
+
+            if result == "error":
+                return "error"
+
+            # Reset accumulated content for next response
+            accumulated_content = ""
+            accumulated_thinking = ""
+
+            # Continue listening for more events after tool submission
+
+        elif event_type == "completed":
+            # Clear any streaming output
+            if accumulated_content or accumulated_thinking:
+                console.print()  # Newline after streamed content
+            else:
+                # No streaming happened, fetch and show final message
+                return handle_completed_status(client, conversation_id, last_shown_message_index)
+            return "completed"
+
+        elif event_type == "failed":
+            if accumulated_content or accumulated_thinking:
+                console.print()
+            error_msg = data.get("error", "Unknown error")
+            console.print(f"\n[red]Error:[/red] {error_msg}")
+            return "error"
+
+    return "completed"
+
+
+def handle_polling_status(
+    client: APIClient,
+    conversation_id: int,
+    initial_response: Dict[str, Any],
+    tools: Dict[str, Any],
+    poll_interval: int,
+) -> str:
+    """
+    Handle conversation status with polling for tool requests (fallback mode).
 
     Returns:
         Status: "completed", "error", or "active"
@@ -457,14 +596,7 @@ def handle_conversation_status(
 
     while True:
         if current_status == "completed":
-            # Get final conversation to show assistant's response
-            try:
-                conv_response = client.get_conversation(conversation_id)
-                conversation = safe_get(conv_response, "data", default=conv_response)
-                show_assistant_message(conversation, last_shown_message_index)
-            except Exception as e:
-                console.print(f"[yellow]⚠[/yellow] Could not retrieve final response: {str(e)}")
-            return "completed"
+            return handle_completed_status(client, conversation_id, last_shown_message_index)
 
         elif current_status == "failed":
             error_msg = initial_response.get("error", "Unknown error")
@@ -472,93 +604,19 @@ def handle_conversation_status(
             return "error"
 
         elif current_status == "waiting_for_tool":
-            # First, show the AI's thinking/reasoning
-            try:
-                conv_response = client.get_conversation(conversation_id)
-                conversation = safe_get(conv_response, "data", default=conv_response)
-                last_shown_message_index = show_thinking(conversation, last_shown_message_index)
-            except Exception:
-                pass  # Continue even if we can't show thinking
-
-            # Execute tool and submit result
-            tool_request = initial_response.get("tool_request")
-            if not tool_request:
-                console.print("[red]✗[/red] Missing tool request data")
-                return "error"
-
-            # Execute the tool
-            tool_name = tool_request.get("name")
-            tool_args = tool_request.get("arguments", {})
-            call_id = tool_request.get("call_id")
-
-            if not tool_name or not call_id:
-                console.print("[red]✗[/red] Invalid tool request")
-                return "error"
-
-            # Show tool request and ask for approval
-            console.print(f"\n[bold cyan]Tool Request:[/bold cyan] {tool_name}")
-            show_tool_args(tool_name, tool_args)
-
-            if tool_name in tools:
-                # Ask for user approval (unless auto_approve is on)
-                if not auto_approve:
-                    approval = ask_tool_approval(tool_name, tool_args)
-                    if approval == "no":
-                        # Skip this tool, submit rejection
-                        console.print("[yellow]⊘[/yellow] Tool execution skipped by user")
-                        try:
-                            response = client.submit_tool_result(
-                                conversation_id, call_id, False, None, "User declined to execute this tool"
-                            )
-                            current_status = response.get("status")
-                            initial_response = response
-                        except Exception:
-                            return "error"
-                        continue
-                    elif approval == "all":
-                        auto_approve = True
-
-                # Execute the tool
-                console.print(f"[dim]→ Executing {tool_name}...[/dim]")
+            result, auto_approve, last_shown_message_index = handle_tool_request_status(
+                client, conversation_id, initial_response, tools, auto_approve, last_shown_message_index
+            )
+            if result == "continue":
+                # Get updated status
                 try:
-                    success, output, error = tools[tool_name].execute(tool_args)
-
-                    # Show tool output
-                    if output:
-                        preview = output[:300] + ('...' if len(output) > 300 else '')
-                        console.print(f"[dim]  Output: {preview}[/dim]")
-                    if error:
-                        console.print(f"[red]  Error: {error[:200]}[/red]")
-
-                    # Submit result
-                    response = client.submit_tool_result(
-                        conversation_id, call_id, success, output, error
-                    )
-                    current_status = response.get("status")
-                    initial_response = response
-
-                except Exception as e:
-                    console.print(f"[red]✗[/red] Tool execution failed: {str(e)}")
-                    # Submit error result
-                    try:
-                        response = client.submit_tool_result(
-                            conversation_id, call_id, False, None, f"Tool execution failed: {str(e)}"
-                        )
-                        current_status = response.get("status")
-                        initial_response = response
-                    except Exception:
-                        return "error"
-            else:
-                console.print(f"[red]✗[/red] Unknown tool: {tool_name}")
-                # Submit error result
-                try:
-                    response = client.submit_tool_result(
-                        conversation_id, call_id, False, None, f"Unknown tool: {tool_name}"
-                    )
+                    response = client.get_status(conversation_id)
                     current_status = response.get("status")
                     initial_response = response
                 except Exception:
                     return "error"
+            else:
+                return result
 
         elif current_status == "processing":
             # Poll for status updates with spinner
@@ -584,6 +642,137 @@ def handle_conversation_status(
         else:
             console.print(f"[yellow]![/yellow] Unknown status: {current_status}")
             return current_status
+
+
+def handle_completed_status(
+    client: APIClient,
+    conversation_id: int,
+    last_shown_message_index: int,
+) -> str:
+    """Handle completed conversation status."""
+    try:
+        conv_response = client.get_conversation(conversation_id)
+        conversation = safe_get(conv_response, "data", default=conv_response)
+        show_assistant_message(conversation, last_shown_message_index)
+    except Exception as e:
+        console.print(f"[yellow]⚠[/yellow] Could not retrieve final response: {str(e)}")
+    return "completed"
+
+
+def handle_tool_request_status(
+    client: APIClient,
+    conversation_id: int,
+    response: Dict[str, Any],
+    tools: Dict[str, Any],
+    auto_approve: bool,
+    last_shown_message_index: int,
+) -> tuple:
+    """
+    Handle a tool request from the server.
+
+    Returns:
+        Tuple of (result_status, updated_auto_approve, updated_last_shown_index)
+        result_status is "continue" to keep looping, or a terminal status
+    """
+    # First, show the AI's thinking/reasoning
+    try:
+        conv_response = client.get_conversation(conversation_id)
+        conversation = safe_get(conv_response, "data", default=conv_response)
+        last_shown_message_index = show_thinking(conversation, last_shown_message_index)
+    except Exception:
+        pass  # Continue even if we can't show thinking
+
+    # Execute tool and submit result
+    tool_request = response.get("tool_request")
+    result, auto_approve, last_shown_message_index = execute_tool_request(
+        client, conversation_id, tool_request, tools, auto_approve, last_shown_message_index
+    )
+
+    return (result, auto_approve, last_shown_message_index)
+
+
+def execute_tool_request(
+    client: APIClient,
+    conversation_id: int,
+    tool_request: Optional[Dict[str, Any]],
+    tools: Dict[str, Any],
+    auto_approve: bool,
+    last_shown_message_index: int,
+) -> tuple:
+    """
+    Execute a tool request and submit the result.
+
+    Returns:
+        Tuple of (result_status, updated_auto_approve, updated_last_shown_index)
+    """
+    if not tool_request:
+        console.print("[red]✗[/red] Missing tool request data")
+        return ("error", auto_approve, last_shown_message_index)
+
+    tool_name = tool_request.get("name")
+    tool_args = tool_request.get("arguments", {})
+    call_id = tool_request.get("call_id")
+
+    if not tool_name or not call_id:
+        console.print("[red]✗[/red] Invalid tool request")
+        return ("error", auto_approve, last_shown_message_index)
+
+    # Show tool request and ask for approval
+    console.print(f"\n[bold cyan]Tool Request:[/bold cyan] {tool_name}")
+    show_tool_args(tool_name, tool_args)
+
+    if tool_name in tools:
+        # Ask for user approval (unless auto_approve is on)
+        if not auto_approve:
+            approval = ask_tool_approval(tool_name, tool_args)
+            if approval == "no":
+                # Skip this tool, submit rejection
+                console.print("[yellow]⊘[/yellow] Tool execution skipped by user")
+                try:
+                    client.submit_tool_result(
+                        conversation_id, call_id, False, None, "User declined to execute this tool"
+                    )
+                except Exception:
+                    return ("error", auto_approve, last_shown_message_index)
+                return ("continue", auto_approve, last_shown_message_index)
+            elif approval == "all":
+                auto_approve = True
+
+        # Execute the tool
+        console.print(f"[dim]→ Executing {tool_name}...[/dim]")
+        try:
+            success, output, error = tools[tool_name].execute(tool_args)
+
+            # Show tool output
+            if output:
+                preview = output[:300] + ('...' if len(output) > 300 else '')
+                console.print(f"[dim]  Output: {preview}[/dim]")
+            if error:
+                console.print(f"[red]  Error: {error[:200]}[/red]")
+
+            # Submit result
+            client.submit_tool_result(conversation_id, call_id, success, output, error)
+
+        except Exception as e:
+            console.print(f"[red]✗[/red] Tool execution failed: {str(e)}")
+            # Submit error result
+            try:
+                client.submit_tool_result(
+                    conversation_id, call_id, False, None, f"Tool execution failed: {str(e)}"
+                )
+            except Exception:
+                return ("error", auto_approve, last_shown_message_index)
+    else:
+        console.print(f"[red]✗[/red] Unknown tool: {tool_name}")
+        # Submit error result
+        try:
+            client.submit_tool_result(
+                conversation_id, call_id, False, None, f"Unknown tool: {tool_name}"
+            )
+        except Exception:
+            return ("error", auto_approve, last_shown_message_index)
+
+    return ("continue", auto_approve, last_shown_message_index)
 
 
 def show_thinking(conversation: Dict[str, Any], last_shown_index: int) -> int:

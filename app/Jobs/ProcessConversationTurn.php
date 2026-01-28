@@ -7,6 +7,7 @@ use App\DTOs\ToolCall;
 use App\DTOs\ToolResult;
 use App\Models\Conversation;
 use App\Services\AIBackendManager;
+use App\Services\ConversationEventBroadcaster;
 use App\Services\ToolService;
 use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -81,6 +82,7 @@ class ProcessConversationTurn implements ShouldQueue
             // If no tool calls, conversation turn is complete
             if (! $response->hasToolCalls()) {
                 $this->conversation->markAsCompleted();
+                app(ConversationEventBroadcaster::class)->completed($this->conversation);
                 Log::info('Conversation completed', ['conversation_id' => $this->conversation->id]);
 
                 return;
@@ -96,6 +98,7 @@ class ProcessConversationTurn implements ShouldQueue
             ]);
 
             $this->conversation->update(['status' => 'failed']);
+            app(ConversationEventBroadcaster::class)->failed($this->conversation, $e->getMessage());
         }
     }
 
@@ -109,11 +112,14 @@ class ProcessConversationTurn implements ShouldQueue
         foreach ($toolCalls as $toolCall) {
             if ($this->isBuiltinTool($toolCall->name)) {
                 // Pause conversation and request tool execution from CLI
+                $toolArray = $toolCall->toArray();
                 $this->conversation->update([
                     'status' => 'paused',
                     'waiting_for' => 'tool_result',
-                    'pending_tool_request' => $toolCall->toArray(),
+                    'pending_tool_request' => $toolArray,
                 ]);
+
+                app(ConversationEventBroadcaster::class)->toolRequest($this->conversation, $toolArray);
 
                 Log::info('Waiting for builtin tool', [
                     'conversation_id' => $this->conversation->id,

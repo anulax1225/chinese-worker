@@ -11,6 +11,8 @@ use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Redis;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * @group Conversation Management
@@ -241,6 +243,95 @@ class ConversationController extends Controller
             'status' => 'processing',
             'conversation_id' => $conversation->id,
         ]);
+    }
+
+    /**
+     * Stream Conversation Events
+     *
+     * Open a Server-Sent Events stream for real-time conversation updates.
+     *
+     * @urlParam conversation integer required The conversation ID. Example: 123
+     *
+     * @response 200 {
+     *   "event": "tool_request",
+     *   "data": {"status": "waiting_for_tool", "tool_request": {...}}
+     * }
+     */
+    public function stream(Conversation $conversation): StreamedResponse
+    {
+        $this->authorize('view', $conversation);
+
+        return response()->stream(
+            function () use ($conversation) {
+                // Disable output buffering for real-time streaming
+                if (ob_get_level()) {
+                    ob_end_clean();
+                }
+
+                // 2KB padding for nginx buffering
+                echo ':'.str_repeat(' ', 2048)."\n\n";
+                if (ob_get_level()) {
+                    ob_flush();
+                }
+                flush();
+
+                // Send initial connected event with current status
+                $this->sendSSEEvent('connected', [
+                    'conversation_id' => $conversation->id,
+                    'status' => 'connected',
+                ]);
+
+                // Subscribe to Redis channel for this conversation
+                $channel = "conversation:{$conversation->id}:events";
+
+                try {
+                    $redis = Redis::connection('default');
+
+                    // Use pub/sub - this blocks until events arrive
+                    $redis->subscribe([$channel], function ($message, $channel) {
+                        $payload = json_decode($message, true);
+
+                        if ($payload && isset($payload['event'], $payload['data'])) {
+                            $this->sendSSEEvent($payload['event'], $payload['data']);
+
+                            // Close connection after terminal events
+                            if (in_array($payload['event'], ['completed', 'failed'])) {
+                                return false; // Stop subscription
+                            }
+                        }
+
+                        return true; // Continue listening
+                    });
+                } catch (\Exception $e) {
+                    $this->sendSSEEvent('error', [
+                        'message' => 'Stream connection error',
+                        'conversation_id' => $conversation->id,
+                    ]);
+                }
+            },
+            200,
+            [
+                'Content-Type' => 'text/event-stream',
+                'Cache-Control' => 'no-cache',
+                'Connection' => 'keep-alive',
+                'X-Accel-Buffering' => 'no', // Disable nginx buffering
+            ]
+        );
+    }
+
+    /**
+     * Send an SSE event to the stream.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    protected function sendSSEEvent(string $event, array $data): void
+    {
+        echo "event: {$event}\n";
+        echo 'data: '.json_encode($data)."\n\n";
+        if (ob_get_level()) {
+            ob_flush();
+        }
+        flush();
     }
 
     /**

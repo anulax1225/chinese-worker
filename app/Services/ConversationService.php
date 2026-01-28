@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\Log;
 
 class ConversationService
 {
+    public function __construct(
+        protected ConversationEventBroadcaster $broadcaster
+    ) {}
+
     /**
      * Process a user message by dispatching a job.
      */
@@ -30,6 +34,9 @@ class ConversationService
             // Dispatch job to process the turn
             ProcessConversationTurn::dispatch($conversation);
 
+            // Broadcast processing status for SSE clients
+            $this->broadcaster->processing($conversation);
+
             // Return processing state - CLI will poll for updates
             return ConversationState::processing($conversation);
         } catch (Exception $e) {
@@ -40,6 +47,7 @@ class ConversationService
             ]);
 
             $conversation->update(['status' => 'failed']);
+            $this->broadcaster->failed($conversation, $e->getMessage());
 
             return ConversationState::failed($conversation, $e->getMessage());
         }
@@ -68,6 +76,9 @@ class ConversationService
             // Dispatch job to process the next turn
             ProcessConversationTurn::dispatch($conversation);
 
+            // Broadcast processing status for SSE clients
+            $this->broadcaster->processing($conversation);
+
             // Return processing state - CLI will poll for updates
             return ConversationState::processing($conversation);
         } catch (Exception $e) {
@@ -78,6 +89,7 @@ class ConversationService
             ]);
 
             $conversation->update(['status' => 'failed']);
+            $this->broadcaster->failed($conversation, $e->getMessage());
 
             return ConversationState::failed($conversation, $e->getMessage());
         }

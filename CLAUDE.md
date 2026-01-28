@@ -255,19 +255,31 @@ Wayfinder generates TypeScript functions for Laravel routes. Import from `@/acti
 - Query Merging: `show(1, { mergeQuery: { page: 2, sort: null } })` merges with current URL, `null` removes params.
 - Inertia: Use `.form()` with `<Form>` component or `form.submit(store())` with useForm.
 
+=== sail rules ===
+
+# Laravel Sail
+
+- Always run PHP, npm, and Composer commands through Sail.
+- Use `./vendor/bin/sail` prefix for all commands:
+  - `./vendor/bin/sail php artisan ...` instead of `php artisan ...`
+  - `./vendor/bin/sail composer ...` instead of `composer ...`
+  - `./vendor/bin/sail npm ...` instead of `npm ...`
+  - `./vendor/bin/sail pint ...` instead of `vendor/bin/pint ...`
+  - `./vendor/bin/sail test ...` instead of `php artisan test ...`
+
 === pint/core rules ===
 
 # Laravel Pint Code Formatter
 
-- You must run `vendor/bin/pint --dirty` before finalizing changes to ensure your code matches the project's expected style.
-- Do not run `vendor/bin/pint --test`, simply run `vendor/bin/pint` to fix any formatting issues.
+- You must run `./vendor/bin/sail pint --dirty` before finalizing changes to ensure your code matches the project's expected style.
+- Do not run `./vendor/bin/sail pint --test`, simply run `./vendor/bin/sail pint` to fix any formatting issues.
 
 === pest/core rules ===
 
 ## Pest
 
-- This project uses Pest for testing. Create tests: `php artisan make:test --pest {name}`.
-- Run tests: `php artisan test --compact` or filter: `php artisan test --compact --filter=testName`.
+- This project uses Pest for testing. Create tests: `./vendor/bin/sail artisan make:test --pest {name}`.
+- Run tests: `./vendor/bin/sail test --compact` or filter: `./vendor/bin/sail test --compact --filter=testName`.
 - Do NOT delete tests without approval.
 - CRITICAL: ALWAYS use `search-docs` tool for version-specific Pest documentation and updated code examples.
 - IMPORTANT: Activate `pest-testing` every time you're working with a Pest or testing-related task.
