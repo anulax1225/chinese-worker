@@ -37,7 +37,7 @@ class ToolCall
     public function toArray(): array
     {
         return [
-            'id' => $this->id,
+            'call_id' => $this->id,
             'name' => $this->name,
             'arguments' => $this->arguments,
         ];

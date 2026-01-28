@@ -397,12 +397,41 @@ def show_conversation_history(conversation: Dict[str, Any]) -> None:
     for message in messages:
         role = message.get("role", "unknown")
         content = message.get("content", "")
+        thinking = message.get("thinking", "")
+        tool_calls = message.get("tool_calls", [])
 
         if role == "user":
             console.print(f"[bold cyan]You:[/bold cyan] {content}")
         elif role == "assistant":
-            console.print(f"[bold green]Assistant:[/bold green]")
-            render_assistant_message(content)
+            # Show thinking if present (separate from content)
+            if thinking:
+                console.print(f"[dim italic]💭 {thinking}[/dim italic]")
+
+            # Show content (actual response) if present
+            if content:
+                console.print(f"[bold green]Assistant:[/bold green]")
+                render_assistant_message(content)
+
+            # Show tool calls if present
+            if tool_calls:
+                for tc in tool_calls:
+                    tool_name = tc.get("name", "unknown")
+                    tool_args = tc.get("arguments", {})
+                    console.print(f"[dim]  → Used tool: {tool_name}[/dim]")
+                    # Show brief args preview
+                    if tool_name == "bash":
+                        console.print(f"[dim]    $ {tool_args.get('command', '')[:60]}[/dim]")
+                    elif tool_name in ["read", "write", "edit"]:
+                        console.print(f"[dim]    file: {tool_args.get('file_path', '')}[/dim]")
+                    elif tool_name in ["glob", "grep"]:
+                        console.print(f"[dim]    pattern: {tool_args.get('pattern', '')}[/dim]")
+            elif not content and not thinking:
+                # No content, no thinking, and no tool calls - truly empty
+                console.print("[dim]  (processing...)[/dim]")
+        elif role == "tool":
+            # Show tool results briefly
+            tool_output = content[:100] + ('...' if len(content) > 100 else '') if content else "(no output)"
+            console.print(f"[dim]  ← Result: {tool_output}[/dim]")
 
         console.print()
 
@@ -423,6 +452,8 @@ def handle_conversation_status(
         Status: "completed", "error", or "active"
     """
     current_status = initial_response.get("status")
+    auto_approve = False  # Track "accept all" mode
+    last_shown_message_index = -1  # Track which messages we've shown
 
     while True:
         if current_status == "completed":
@@ -430,7 +461,7 @@ def handle_conversation_status(
             try:
                 conv_response = client.get_conversation(conversation_id)
                 conversation = safe_get(conv_response, "data", default=conv_response)
-                show_assistant_message(conversation)
+                show_assistant_message(conversation, last_shown_message_index)
             except Exception as e:
                 console.print(f"[yellow]⚠[/yellow] Could not retrieve final response: {str(e)}")
             return "completed"
@@ -441,6 +472,14 @@ def handle_conversation_status(
             return "error"
 
         elif current_status == "waiting_for_tool":
+            # First, show the AI's thinking/reasoning
+            try:
+                conv_response = client.get_conversation(conversation_id)
+                conversation = safe_get(conv_response, "data", default=conv_response)
+                last_shown_message_index = show_thinking(conversation, last_shown_message_index)
+            except Exception:
+                pass  # Continue even if we can't show thinking
+
             # Execute tool and submit result
             tool_request = initial_response.get("tool_request")
             if not tool_request:
@@ -456,17 +495,40 @@ def handle_conversation_status(
                 console.print("[red]✗[/red] Invalid tool request")
                 return "error"
 
-            console.print(f"[dim]→ Executing {tool_name}...[/dim]")
+            # Show tool request and ask for approval
+            console.print(f"\n[bold cyan]Tool Request:[/bold cyan] {tool_name}")
+            show_tool_args(tool_name, tool_args)
 
             if tool_name in tools:
+                # Ask for user approval (unless auto_approve is on)
+                if not auto_approve:
+                    approval = ask_tool_approval(tool_name, tool_args)
+                    if approval == "no":
+                        # Skip this tool, submit rejection
+                        console.print("[yellow]⊘[/yellow] Tool execution skipped by user")
+                        try:
+                            response = client.submit_tool_result(
+                                conversation_id, call_id, False, None, "User declined to execute this tool"
+                            )
+                            current_status = response.get("status")
+                            initial_response = response
+                        except Exception:
+                            return "error"
+                        continue
+                    elif approval == "all":
+                        auto_approve = True
+
+                # Execute the tool
+                console.print(f"[dim]→ Executing {tool_name}...[/dim]")
                 try:
                     success, output, error = tools[tool_name].execute(tool_args)
 
-                    # Show tool output if requested
-                    if output and len(output) < 500:
-                        console.print(f"[dim]  Output: {output[:200]}{'...' if len(output) > 200 else ''}[/dim]")
-                    elif error:
-                        console.print(f"[dim]  Error: {error[:200]}{'...' if len(error) > 200 else ''}[/dim]")
+                    # Show tool output
+                    if output:
+                        preview = output[:300] + ('...' if len(output) > 300 else '')
+                        console.print(f"[dim]  Output: {preview}[/dim]")
+                    if error:
+                        console.print(f"[red]  Error: {error[:200]}[/red]")
 
                     # Submit result
                     response = client.submit_tool_result(
@@ -499,41 +561,145 @@ def handle_conversation_status(
                     return "error"
 
         elif current_status == "processing":
-            # Poll for status updates
-            time.sleep(poll_interval)
+            # Poll for status updates with spinner
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=True,  # Remove spinner when done
+            ) as progress:
+                task = progress.add_task("Thinking...", total=None)
 
-            try:
-                response = client.get_status(conversation_id)
-                current_status = response.get("status")
-                initial_response = response
-            except Exception as e:
-                console.print(f"[yellow]⚠[/yellow] Polling error: {str(e)}")
-                return "error"
+                while current_status == "processing":
+                    time.sleep(poll_interval)
+
+                    try:
+                        response = client.get_status(conversation_id)
+                        current_status = response.get("status")
+                        initial_response = response
+                    except Exception as e:
+                        console.print(f"[yellow]⚠[/yellow] Polling error: {str(e)}")
+                        return "error"
 
         else:
             console.print(f"[yellow]![/yellow] Unknown status: {current_status}")
             return current_status
 
 
-def show_assistant_message(conversation: Dict[str, Any]) -> None:
-    """Display the last assistant message from the conversation."""
+def show_thinking(conversation: Dict[str, Any], last_shown_index: int) -> int:
+    """
+    Show the AI's thinking/reasoning from new assistant messages.
+    Returns the new last shown message index.
+    """
     messages = conversation.get("messages", [])
 
-    # Find the last assistant message
-    for message in reversed(messages):
+    for i, message in enumerate(messages):
+        if i <= last_shown_index:
+            continue
+
+        role = message.get("role", "")
+        content = message.get("content", "")
+        thinking = message.get("thinking", "")
+        tool_calls = message.get("tool_calls", [])
+
+        if role == "assistant":
+            # Show thinking in a subtle format (separate from content)
+            if thinking:
+                console.print(f"\n[dim italic]💭 {thinking}[/dim italic]")
+
+            # Show content if present (this is the actual response)
+            if content:
+                console.print(f"\n[bold green]Assistant:[/bold green]")
+                render_assistant_message(content)
+
+            # Show planned tool calls if there are multiple
+            if tool_calls and len(tool_calls) > 1:
+                console.print(f"[dim]   Planning to execute {len(tool_calls)} tools...[/dim]")
+
+    return len(messages) - 1
+
+
+def show_tool_args(tool_name: str, args: Dict[str, Any]) -> None:
+    """Display tool arguments in a readable format."""
+    if tool_name == "bash":
+        command = args.get("command", "")
+        console.print(f"[yellow]  $ {command}[/yellow]")
+    elif tool_name == "read":
+        console.print(f"[dim]  file: {args.get('file_path', '')}[/dim]")
+    elif tool_name == "write":
+        console.print(f"[dim]  file: {args.get('file_path', '')}[/dim]")
+        content = args.get("content", "")
+        preview = content[:100] + ('...' if len(content) > 100 else '')
+        console.print(f"[dim]  content: {preview}[/dim]")
+    elif tool_name == "edit":
+        console.print(f"[dim]  file: {args.get('file_path', '')}[/dim]")
+        console.print(f"[dim]  old: {args.get('old_string', '')[:50]}...[/dim]")
+        console.print(f"[dim]  new: {args.get('new_string', '')[:50]}...[/dim]")
+    elif tool_name == "glob":
+        console.print(f"[dim]  pattern: {args.get('pattern', '')}[/dim]")
+    elif tool_name == "grep":
+        console.print(f"[dim]  pattern: {args.get('pattern', '')}[/dim]")
+        if args.get("path"):
+            console.print(f"[dim]  path: {args.get('path')}[/dim]")
+    else:
+        # Generic display for other tools
+        for key, value in args.items():
+            console.print(f"[dim]  {key}: {str(value)[:100]}[/dim]")
+
+
+def ask_tool_approval(tool_name: str, args: Dict[str, Any]) -> str:
+    """
+    Ask user for approval before executing a tool.
+
+    Returns:
+        "yes" - execute this tool
+        "no" - skip this tool
+        "all" - execute all tools without asking
+    """
+    choice = Prompt.ask(
+        "\n[bold]Execute this tool?[/bold]",
+        choices=["y", "n", "a"],
+        default="y"
+    )
+
+    if choice == "y":
+        return "yes"
+    elif choice == "n":
+        return "no"
+    elif choice == "a":
+        console.print("[green]✓[/green] Auto-approving all future tool executions")
+        return "all"
+    return "yes"
+
+
+def show_assistant_message(conversation: Dict[str, Any], last_shown_index: int = -1) -> None:
+    """Display new assistant messages from the conversation."""
+    messages = conversation.get("messages", [])
+
+    # Show any new assistant messages we haven't displayed yet
+    for i, message in enumerate(messages):
+        if i <= last_shown_index:
+            continue
+
         if message.get("role") == "assistant":
             content = message.get("content", "")
+            thinking = message.get("thinking", "")
+            tool_calls = message.get("tool_calls", [])
 
-            console.print("[bold green]Assistant:[/bold green]")
-            render_assistant_message(content)
-            break
+            # Show thinking first if present
+            if thinking:
+                console.print(f"\n[dim italic]💭 {thinking}[/dim italic]")
+
+            # Show content if present
+            if content:
+                console.print("\n[bold green]Assistant:[/bold green]")
+                render_assistant_message(content)
 
 
 def render_assistant_message(content: str) -> None:
     """Render assistant message with markdown support."""
     if not content:
-        console.print("[dim]<empty response>[/dim]")
-        return
+        return  # Don't print anything for empty content
 
     # Try to render as markdown if it looks like markdown
     if any(marker in content for marker in ["```", "##", "**", "*", "`", "- ", "1. "]):

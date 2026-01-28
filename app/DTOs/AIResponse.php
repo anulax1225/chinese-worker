@@ -16,7 +16,8 @@ class AIResponse
         public readonly int $tokensUsed,
         public readonly string $finishReason,
         public readonly array $toolCalls = [],
-        public readonly array $metadata = []
+        public readonly array $metadata = [],
+        public readonly ?string $thinking = null
     ) {}
 
     /**
@@ -41,6 +42,7 @@ class AIResponse
             'finish_reason' => $this->finishReason,
             'tool_calls' => array_map(fn (ToolCall $tc) => $tc->toArray(), $this->toolCalls),
             'metadata' => $this->metadata,
+            'thinking' => $this->thinking,
         ];
     }
 }

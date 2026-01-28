@@ -190,7 +190,7 @@ describe('Conversation Management', function () {
                     ],
                 ]);
 
-            expect($response->json('status'))->toBe('active');
+            expect($response->json('status'))->toBe('processing'); // 'active' maps to 'processing' for CLI
             expect($response->json('stats.turns'))->toBe(2);
             expect($response->json('stats.tokens'))->toBe(150);
         });

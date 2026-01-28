@@ -22,7 +22,8 @@ class ChatMessage
         public readonly string $content,
         public readonly ?array $toolCalls = null,
         public readonly ?string $toolCallId = null,
-        public readonly ?array $images = null
+        public readonly ?array $images = null,
+        public readonly ?string $thinking = null
     ) {}
 
     /**
@@ -48,9 +49,9 @@ class ChatMessage
      *
      * @param  array<string, mixed>|null  $toolCalls
      */
-    public static function assistant(string $content, ?array $toolCalls = null): self
+    public static function assistant(string $content, ?array $toolCalls = null, ?string $thinking = null): self
     {
-        return new self(self::ROLE_ASSISTANT, $content, toolCalls: $toolCalls);
+        return new self(self::ROLE_ASSISTANT, $content, toolCalls: $toolCalls, thinking: $thinking);
     }
 
     /**
@@ -86,6 +87,11 @@ class ChatMessage
             $message['tool_call_id'] = $this->toolCallId;
         }
 
+        // Include thinking for assistant messages (some models use this)
+        if ($this->thinking !== null) {
+            $message['thinking'] = $this->thinking;
+        }
+
         return $message;
     }
 
@@ -102,6 +108,7 @@ class ChatMessage
             'tool_calls' => $this->toolCalls,
             'tool_call_id' => $this->toolCallId,
             'images' => $this->images,
+            'thinking' => $this->thinking,
         ];
     }
 
@@ -117,7 +124,8 @@ class ChatMessage
             content: $data['content'] ?? '',
             toolCalls: $data['tool_calls'] ?? null,
             toolCallId: $data['tool_call_id'] ?? null,
-            images: $data['images'] ?? null
+            images: $data['images'] ?? null,
+            thinking: $data['thinking'] ?? null
         );
     }
 }

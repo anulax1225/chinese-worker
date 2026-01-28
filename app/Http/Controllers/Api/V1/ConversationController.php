@@ -146,8 +146,16 @@ class ConversationController extends Controller
 
         $conversation->refresh();
 
+        // Map database status to CLI-expected status
+        $cliStatus = match (true) {
+            $conversation->isWaitingForTool() => 'waiting_for_tool',
+            $conversation->status === 'active' => 'processing',
+            $conversation->status === 'paused' => 'processing', // Job still processing
+            default => $conversation->status, // completed, failed, cancelled
+        };
+
         $response = [
-            'status' => $conversation->status,
+            'status' => $cliStatus,
             'conversation_id' => $conversation->id,
         ];
 

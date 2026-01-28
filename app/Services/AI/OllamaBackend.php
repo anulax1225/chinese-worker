@@ -51,8 +51,10 @@ class OllamaBackend implements AIBackendInterface
     {
         try {
             $messages = $this->buildMessages($agent, $context);
-            // Use tools from context if provided (from AgentLoopService), otherwise build from agent
+            // Use tools from context if provided (from ConversationService), otherwise build from agent
             $tools = $context['tools'] ?? $this->buildTools($agent);
+            // Convert to Ollama format
+            $tools = $this->convertToolsToOllamaFormat($tools);
 
             $payload = [
                 'model' => $this->model,
@@ -87,8 +89,10 @@ class OllamaBackend implements AIBackendInterface
     {
         try {
             $messages = $this->buildMessages($agent, $context);
-            // Use tools from context if provided (from AgentLoopService), otherwise build from agent
+            // Use tools from context if provided (from ConversationService), otherwise build from agent
             $tools = $context['tools'] ?? $this->buildTools($agent);
+            // Convert to Ollama format
+            $tools = $this->convertToolsToOllamaFormat($tools);
 
             $payload = [
                 'model' => $this->model,
@@ -108,6 +112,7 @@ class OllamaBackend implements AIBackendInterface
 
             $body = $response->getBody();
             $fullContent = '';
+            $fullThinking = '';
             $lastData = [];
             $toolCalls = [];
 
@@ -131,6 +136,11 @@ class OllamaBackend implements AIBackendInterface
                     $callback($content);
                 }
 
+                // Handle thinking streaming
+                if (isset($data['message']['thinking'])) {
+                    $fullThinking .= $data['message']['thinking'];
+                }
+
                 // Collect tool calls
                 if (isset($data['message']['tool_calls'])) {
                     $toolCalls = array_merge($toolCalls, $data['message']['tool_calls']);
@@ -142,7 +152,7 @@ class OllamaBackend implements AIBackendInterface
                 }
             }
 
-            return $this->buildAIResponse($fullContent, $lastData, $toolCalls);
+            return $this->buildAIResponse($fullContent, $lastData, $toolCalls, $fullThinking ?: null);
         } catch (GuzzleException $e) {
             throw new RuntimeException(
                 "Ollama streaming request failed: {$e->getMessage()}",
@@ -232,6 +242,9 @@ class OllamaBackend implements AIBackendInterface
     {
         $parts = [];
 
+        // Add thinking instructions
+        $parts[] = 'IMPORTANT: Before using any tool, you MUST first explain your reasoning and what you plan to do. Write your thinking process in your response, then call the appropriate tool. Never call a tool without first explaining why.';
+
         if (! empty($agent->description)) {
             $parts[] = $agent->description;
         }
@@ -269,6 +282,43 @@ class OllamaBackend implements AIBackendInterface
         return $tools->map(function (Tool $tool) {
             return $this->convertToolToOllamaFormat($tool);
         })->filter()->values()->all();
+    }
+
+    /**
+     * Convert an array of tool schemas to Ollama format.
+     *
+     * @param  array<array<string, mixed>>  $tools
+     * @return array<array<string, mixed>>
+     */
+    protected function convertToolsToOllamaFormat(array $tools): array
+    {
+        return array_map(function (array $tool) {
+            // Skip if already in Ollama format
+            if (isset($tool['type']) && $tool['type'] === 'function') {
+                return $tool;
+            }
+
+            $parameters = $tool['parameters'] ?? [
+                'type' => 'object',
+                'properties' => new \stdClass,
+                'required' => [],
+            ];
+
+            // Ensure properties is an object, not an empty array
+            // (empty array [] becomes [] in JSON, but Ollama expects {})
+            if (isset($parameters['properties']) && is_array($parameters['properties']) && empty($parameters['properties'])) {
+                $parameters['properties'] = new \stdClass;
+            }
+
+            return [
+                'type' => 'function',
+                'function' => [
+                    'name' => $this->sanitizeToolName($tool['name']),
+                    'description' => $tool['description'] ?? '',
+                    'parameters' => $parameters,
+                ],
+            ];
+        }, $tools);
     }
 
     /**
@@ -365,9 +415,10 @@ class OllamaBackend implements AIBackendInterface
     {
         $message = $data['message'] ?? [];
         $content = $message['content'] ?? '';
+        $thinking = $message['thinking'] ?? null;
         $toolCalls = $message['tool_calls'] ?? [];
 
-        return $this->buildAIResponse($content, $data, $toolCalls);
+        return $this->buildAIResponse($content, $data, $toolCalls, $thinking);
     }
 
     /**
@@ -376,7 +427,7 @@ class OllamaBackend implements AIBackendInterface
      * @param  array<string, mixed>  $data
      * @param  array<array<string, mixed>>  $toolCallsData
      */
-    protected function buildAIResponse(string $content, array $data, array $toolCallsData): AIResponse
+    protected function buildAIResponse(string $content, array $data, array $toolCallsData, ?string $thinking = null): AIResponse
     {
         $toolCalls = array_map(
             fn ($tc) => ToolCall::fromOllama($tc),
@@ -402,7 +453,8 @@ class OllamaBackend implements AIBackendInterface
                 'load_duration' => $data['load_duration'] ?? null,
                 'prompt_eval_count' => $data['prompt_eval_count'] ?? 0,
                 'eval_count' => $data['eval_count'] ?? 0,
-            ]
+            ],
+            thinking: $thinking
         );
     }
 

@@ -7,7 +7,7 @@ Copy and paste this prompt into a new conversation with Claude to start Phase 3.
 # Continue Chinese Worker Development - Phase 3
 
 I'm working on **Chinese Worker**, an AI agent execution platform. I need you to continue development on **Phase 3: User Tools & Advanced Features**.
-
+Go read docs/context/*.md for more informations
 ## Project Context
 
 **Project**: Chinese Worker - AI agent execution platform
@@ -279,9 +279,6 @@ Let's build Phase 3! 🚀
 ## Additional Commands
 
 ```bash
-# Start Laravel backend
-./vendor/bin/sail up -d
-
 # Run migrations
 ./vendor/bin/sail artisan migrate
 
@@ -295,5 +292,6 @@ Let's build Phase 3! 🚀
 ./vendor/bin/sail exec laravel.test vendor/bin/pint
 
 # CLI testing
-cd cli && python test_tools.py
+cd cli && source .venv/bin/activate
+python test_tools.py
 ```
