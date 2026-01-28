@@ -1,0 +1,319 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\DTOs\ToolResult;
+use App\Http\Controllers\Controller;
+use App\Http\Resources\ConversationResource;
+use App\Models\Agent;
+use App\Models\Conversation;
+use App\Services\ConversationService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+
+/**
+ * @group Conversation Management
+ *
+ * APIs for managing AI agent conversations
+ */
+class ConversationController extends Controller
+{
+    public function __construct(protected ConversationService $conversationService) {}
+
+    /**
+     * Create Conversation
+     *
+     * Create a new conversation with an agent.
+     *
+     * @urlParam agent integer required The agent ID. Example: 1
+     *
+     * @bodyParam title string Optional title for the conversation. Example: Debug authentication issue
+     * @bodyParam metadata object Optional metadata. Example: {}
+     *
+     * @response 201 {
+     *   "conversation": {
+     *     "id": 123,
+     *     "agent_id": 1,
+     *     "user_id": 1,
+     *     "status": "active",
+     *     "messages": [],
+     *     "turn_count": 0,
+     *     "total_tokens": 0,
+     *     "created_at": "2026-01-27T10:00:00.000000Z"
+     *   }
+     * }
+     */
+    public function store(Request $request, Agent $agent): JsonResponse
+    {
+        $this->authorize('view', $agent);
+
+        $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'metadata' => ['nullable', 'array'],
+        ]);
+
+        $conversation = Conversation::create([
+            'agent_id' => $agent->id,
+            'user_id' => $request->user()->id,
+            'status' => 'active',
+            'messages' => [],
+            'metadata' => $request->input('metadata', []),
+            'turn_count' => 0,
+            'total_tokens' => 0,
+        ]);
+
+        return (new ConversationResource($conversation))
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /**
+     * Send Message
+     *
+     * Send a message to a conversation. Server processes through agentic loop.
+     *
+     * @urlParam conversation integer required The conversation ID. Example: 123
+     *
+     * @bodyParam content string required The message content. Example: What files are in /tmp?
+     * @bodyParam images array Optional base64-encoded images for vision. Example: []
+     *
+     * @response 202 {
+     *   "status": "processing",
+     *   "conversation_id": 123,
+     *   "check_url": "/api/v1/conversations/123/status"
+     * }
+     */
+    public function sendMessage(Request $request, Conversation $conversation): JsonResponse
+    {
+        $this->authorize('view', $conversation);
+
+        $request->validate([
+            'content' => ['required', 'string'],
+            'images' => ['nullable', 'array'],
+        ]);
+
+        // Process message asynchronously (could use a queue job here)
+        $state = $this->conversationService->processMessage(
+            $conversation,
+            $request->input('content'),
+            $request->input('images')
+        );
+
+        // Return appropriate response based on state
+        if ($state->status === 'waiting_for_tool') {
+            return response()->json($state->toPollingResponse());
+        }
+
+        if ($state->status === 'completed') {
+            return response()->json($state->toPollingResponse());
+        }
+
+        if ($state->status === 'failed') {
+            return response()->json($state->toPollingResponse(), 500);
+        }
+
+        // Processing
+        return response()->json([
+            'status' => 'processing',
+            'conversation_id' => $conversation->id,
+            'check_url' => "/api/v1/conversations/{$conversation->id}/status",
+        ], 202);
+    }
+
+    /**
+     * Get Conversation Status
+     *
+     * Poll for conversation status (used with polling mode).
+     *
+     * @urlParam conversation integer required The conversation ID. Example: 123
+     *
+     * @response 200 {
+     *   "status": "completed",
+     *   "conversation_id": 123,
+     *   "messages": [
+     *     {"role": "assistant", "content": "I found 2 files in /tmp..."}
+     *   ],
+     *   "stats": {
+     *     "turns": 5,
+     *     "tokens": 450
+     *   }
+     * }
+     */
+    public function status(Conversation $conversation): JsonResponse
+    {
+        $this->authorize('view', $conversation);
+
+        $conversation->refresh();
+
+        $response = [
+            'status' => $conversation->status,
+            'conversation_id' => $conversation->id,
+        ];
+
+        if ($conversation->isWaitingForTool()) {
+            $response['tool_request'] = $conversation->pending_tool_request;
+            $response['submit_url'] = "/api/v1/conversations/{$conversation->id}/tool-results";
+        }
+
+        $response['stats'] = [
+            'turns' => $conversation->turn_count,
+            'tokens' => $conversation->total_tokens,
+        ];
+
+        // Include last assistant message if conversation is completed
+        if ($conversation->status === 'completed') {
+            $messages = $conversation->getMessages();
+            $lastMessage = end($messages);
+
+            if ($lastMessage && $lastMessage['role'] === 'assistant') {
+                $response['messages'] = [$lastMessage];
+            }
+        }
+
+        return response()->json($response);
+    }
+
+    /**
+     * Submit Tool Result
+     *
+     * Submit the result of a builtin tool execution from CLI.
+     *
+     * @urlParam conversation integer required The conversation ID. Example: 123
+     *
+     * @bodyParam call_id string required The tool call ID. Example: call_abc123
+     * @bodyParam success boolean required Whether tool execution succeeded. Example: true
+     * @bodyParam output string The tool output (if successful). Example: file1.txt\nfile2.txt
+     * @bodyParam error string The error message (if failed). Example: File not found
+     *
+     * @response 200 {
+     *   "status": "processing",
+     *   "conversation_id": 123
+     * }
+     */
+    public function submitToolResult(Request $request, Conversation $conversation): JsonResponse
+    {
+        $this->authorize('view', $conversation);
+
+        $request->validate([
+            'call_id' => ['required', 'string'],
+            'success' => ['required', 'boolean'],
+            'output' => ['nullable', 'string'],
+            'error' => ['nullable', 'string'],
+        ]);
+
+        $result = new ToolResult(
+            success: $request->boolean('success'),
+            output: $request->input('output'),
+            error: $request->input('error')
+        );
+
+        // Resume conversation with tool result
+        $state = $this->conversationService->submitToolResult(
+            $conversation,
+            $request->input('call_id'),
+            $result
+        );
+
+        // Return appropriate response based on state
+        if ($state->status === 'waiting_for_tool') {
+            return response()->json($state->toPollingResponse());
+        }
+
+        if ($state->status === 'completed') {
+            return response()->json($state->toPollingResponse());
+        }
+
+        if ($state->status === 'failed') {
+            return response()->json($state->toPollingResponse(), 500);
+        }
+
+        // Still processing
+        return response()->json([
+            'status' => 'processing',
+            'conversation_id' => $conversation->id,
+        ]);
+    }
+
+    /**
+     * Show Conversation
+     *
+     * Get full conversation details and history.
+     *
+     * @urlParam conversation integer required The conversation ID. Example: 123
+     *
+     * @response 200 {
+     *   "conversation": {
+     *     "id": 123,
+     *     "agent": {"id": 1, "name": "Code Assistant"},
+     *     "status": "active",
+     *     "messages": [...],
+     *     "turn_count": 5,
+     *     "total_tokens": 1250,
+     *     "started_at": "2026-01-27T10:00:00.000000Z",
+     *     "last_activity_at": "2026-01-27T10:30:00.000000Z"
+     *   }
+     * }
+     */
+    public function show(Conversation $conversation): ConversationResource
+    {
+        $this->authorize('view', $conversation);
+
+        $conversation->load('agent');
+
+        return new ConversationResource($conversation);
+    }
+
+    /**
+     * List Conversations
+     *
+     * Get paginated list of user's conversations.
+     *
+     * @queryParam agent_id integer Filter by agent ID. Example: 1
+     * @queryParam status string Filter by status. Example: active
+     * @queryParam per_page integer Items per page. Example: 15
+     *
+     * @response 200 {
+     *   "data": [...],
+     *   "links": {...},
+     *   "meta": {...}
+     * }
+     */
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $query = $request->user()
+            ->conversations()
+            ->with('agent')
+            ->latest('last_activity_at');
+
+        if ($request->has('agent_id')) {
+            $query->where('agent_id', $request->input('agent_id'));
+        }
+
+        if ($request->has('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        $conversations = $query->paginate($request->input('per_page', 15));
+
+        return ConversationResource::collection($conversations);
+    }
+
+    /**
+     * Delete Conversation
+     *
+     * Delete a conversation permanently.
+     *
+     * @urlParam conversation integer required The conversation ID. Example: 123
+     *
+     * @response 204
+     */
+    public function destroy(Conversation $conversation): JsonResponse
+    {
+        $this->authorize('delete', $conversation);
+
+        $conversation->delete();
+
+        return response()->json(null, 204);
+    }
+}

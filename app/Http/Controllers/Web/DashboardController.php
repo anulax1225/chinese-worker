@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
-use App\Models\Execution;
+use App\Models\Conversation;
 use App\Models\Tool;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -24,23 +24,19 @@ class DashboardController extends Controller
         $activeAgents = Agent::where('user_id', $user->id)->where('status', 'active')->count();
         $totalTools = Tool::where('user_id', $user->id)->count();
 
-        $totalExecutions = Execution::whereHas('task.agent', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->count();
+        $totalConversations = Conversation::where('user_id', $user->id)->count();
 
-        $completedExecutions = Execution::whereHas('task.agent', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->where('status', 'completed')->count();
+        $completedConversations = Conversation::where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->count();
 
-        $successRate = $totalExecutions > 0
-            ? round(($completedExecutions / $totalExecutions) * 100, 1)
+        $successRate = $totalConversations > 0
+            ? round(($completedConversations / $totalConversations) * 100, 1)
             : 0;
 
-        // Get recent executions
-        $recentExecutions = Execution::whereHas('task.agent', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })
-            ->with(['task.agent'])
+        // Get recent conversations
+        $recentConversations = Conversation::where('user_id', $user->id)
+            ->with(['agent'])
             ->latest()
             ->take(5)
             ->get();
@@ -50,10 +46,10 @@ class DashboardController extends Controller
                 'totalAgents' => $totalAgents,
                 'activeAgents' => $activeAgents,
                 'totalTools' => $totalTools,
-                'totalExecutions' => $totalExecutions,
+                'totalConversations' => $totalConversations,
                 'successRate' => $successRate,
             ],
-            'recentExecutions' => $recentExecutions,
+            'recentConversations' => $recentConversations,
         ]);
     }
 }

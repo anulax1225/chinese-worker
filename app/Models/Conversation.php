@@ -1,0 +1,143 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class Conversation extends Model
+{
+    use HasFactory;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'agent_id',
+        'user_id',
+        'status',
+        'messages',
+        'metadata',
+        'turn_count',
+        'total_tokens',
+        'started_at',
+        'last_activity_at',
+        'completed_at',
+        'cli_session_id',
+        'waiting_for',
+        'pending_tool_request',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'messages' => 'array',
+            'metadata' => 'array',
+            'pending_tool_request' => 'array',
+            'started_at' => 'datetime',
+            'last_activity_at' => 'datetime',
+            'completed_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * Get the agent that owns the conversation.
+     */
+    public function agent(): BelongsTo
+    {
+        return $this->belongsTo(Agent::class);
+    }
+
+    /**
+     * Get the user that owns the conversation.
+     */
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Add a message to the conversation.
+     */
+    public function addMessage(array $message): void
+    {
+        $messages = $this->messages ?? [];
+        $messages[] = $message;
+
+        $this->messages = $messages;
+        $this->last_activity_at = now();
+        $this->save();
+    }
+
+    /**
+     * Get all messages in the conversation.
+     */
+    public function getMessages(): array
+    {
+        return $this->messages ?? [];
+    }
+
+    /**
+     * Increment turn count.
+     */
+    public function incrementTurn(): void
+    {
+        $this->increment('turn_count');
+        $this->touch('last_activity_at');
+    }
+
+    /**
+     * Add tokens to the total count.
+     */
+    public function addTokens(int $tokens): void
+    {
+        $this->increment('total_tokens', $tokens);
+    }
+
+    /**
+     * Mark conversation as started.
+     */
+    public function markAsStarted(): void
+    {
+        $this->update([
+            'started_at' => now(),
+            'last_activity_at' => now(),
+        ]);
+    }
+
+    /**
+     * Mark conversation as completed.
+     */
+    public function markAsCompleted(): void
+    {
+        $this->update([
+            'status' => 'completed',
+            'completed_at' => now(),
+            'last_activity_at' => now(),
+        ]);
+    }
+
+    /**
+     * Check if conversation is waiting for tool result.
+     */
+    public function isWaitingForTool(): bool
+    {
+        return $this->waiting_for === 'tool_result';
+    }
+
+    /**
+     * Check if conversation is active.
+     */
+    public function isActive(): bool
+    {
+        return $this->status === 'active';
+    }
+}

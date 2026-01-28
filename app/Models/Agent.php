@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Agent extends Model
 {
@@ -26,6 +25,7 @@ class Agent extends Model
         'config',
         'status',
         'ai_backend',
+        'metadata',
     ];
 
     /**
@@ -37,6 +37,7 @@ class Agent extends Model
     {
         return [
             'config' => 'array',
+            'metadata' => 'array',
         ];
     }
 
@@ -49,14 +50,6 @@ class Agent extends Model
     }
 
     /**
-     * Get the tasks for the agent.
-     */
-    public function tasks(): HasMany
-    {
-        return $this->hasMany(Task::class);
-    }
-
-    /**
      * Get the tools assigned to the agent.
      */
     public function tools(): BelongsToMany
@@ -65,10 +58,10 @@ class Agent extends Model
     }
 
     /**
-     * Get the executions for the agent through tasks.
+     * Get the conversations for the agent.
      */
-    public function executions(): HasManyThrough
+    public function conversations(): HasMany
     {
-        return $this->hasManyThrough(Execution::class, Task::class);
+        return $this->hasMany(Conversation::class);
     }
 }

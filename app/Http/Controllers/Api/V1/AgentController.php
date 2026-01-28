@@ -113,15 +113,14 @@ class AgentController extends Controller
      *   "ai_backend": "ollama",
      *   "created_at": "2026-01-26T10:00:00.000000Z",
      *   "updated_at": "2026-01-26T10:00:00.000000Z",
-     *   "tools": [],
-     *   "tasks": []
+     *   "tools": []
      * }
      */
     public function show(Agent $agent): JsonResponse
     {
         $this->authorize('view', $agent);
 
-        $agent->load(['tools', 'tasks']);
+        $agent->load(['tools']);
 
         return (new AgentResource($agent))->response();
     }
@@ -180,34 +179,6 @@ class AgentController extends Controller
         $this->agentService->delete($agent);
 
         return response()->json(null, 204);
-    }
-
-    /**
-     * Agent Executions
-     *
-     * Get a paginated list of all executions for a specific agent.
-     *
-     * @urlParam agent integer required The agent ID. Example: 1
-     *
-     * @queryParam page integer Page number for pagination. Example: 1
-     * @queryParam per_page integer Number of items per page. Example: 15
-     * @queryParam status string Filter by execution status (pending, running, completed, failed, cancelled). Example: completed
-     *
-     * @response 200 {"data": [{"id": 1, "task_id": 1, "status": "completed", ...}]}
-     */
-    public function executions(Request $request, Agent $agent): JsonResponse
-    {
-        $this->authorize('view', $agent);
-
-        $query = $agent->executions()->with('task')->latest();
-
-        if ($request->has('status')) {
-            $query->where('status', $request->input('status'));
-        }
-
-        return response()->json(
-            $query->paginate($request->input('per_page', 15))
-        );
     }
 
     /**

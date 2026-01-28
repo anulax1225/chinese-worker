@@ -34,7 +34,7 @@ class OllamaBackend implements AIBackendInterface
 
         $this->baseUrl = $config['base_url'];
         $this->model = $config['model'];
-        $this->timeout = $config['timeout'] ?? 120;
+        $this->timeout = $config['timeout'] ?? 5 * 60 * 60 * 60;
         $this->options = $config['options'] ?? [];
 
         $this->client = new Client([
@@ -67,6 +67,7 @@ class OllamaBackend implements AIBackendInterface
             Log::info('Ollama request payload'."\n".json_encode($payload, JSON_PRETTY_PRINT));
             $response = $this->client->post('/api/chat', [
                 'json' => $payload,
+                'timeout' => $this->timeout,
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);

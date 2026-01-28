@@ -5,7 +5,7 @@ use App\Http\Controllers\Api\V1\AIBackendController;
 use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
-use App\Http\Controllers\Api\V1\ExecutionController;
+use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\FileController;
 use App\Http\Controllers\Api\V1\ToolController;
 use Illuminate\Support\Facades\Route;
@@ -23,7 +23,6 @@ Route::prefix('v1')->group(function (): void {
 
         // Agents
         Route::apiResource('agents', AgentController::class);
-        Route::get('agents/{agent}/executions', [AgentController::class, 'executions']);
         Route::post('agents/{agent}/tools', [AgentController::class, 'attachTools']);
         Route::delete('agents/{agent}/tools/{toolId}', [AgentController::class, 'detachTool']);
 
@@ -34,14 +33,14 @@ Route::prefix('v1')->group(function (): void {
         Route::apiResource('files', FileController::class)->except(['update']);
         Route::get('files/{file}/download', [FileController::class, 'download']);
 
-        // Execution
-        Route::post('agents/{agent}/execute', [ExecutionController::class, 'execute']);
-        Route::post('agents/{agent}/stream', [ExecutionController::class, 'stream']);
-        Route::get('executions', [ExecutionController::class, 'index']);
-        Route::get('executions/{execution}', [ExecutionController::class, 'show']);
-        Route::get('executions/{execution}/logs', [ExecutionController::class, 'logs']);
-        Route::get('executions/{execution}/outputs', [ExecutionController::class, 'outputs']);
-        Route::post('executions/{execution}/cancel', [ExecutionController::class, 'cancel']);
+        // Conversations
+        Route::post('agents/{agent}/conversations', [ConversationController::class, 'store']);
+        Route::get('conversations', [ConversationController::class, 'index']);
+        Route::get('conversations/{conversation}', [ConversationController::class, 'show']);
+        Route::post('conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
+        Route::get('conversations/{conversation}/status', [ConversationController::class, 'status']);
+        Route::post('conversations/{conversation}/tool-results', [ConversationController::class, 'submitToolResult']);
+        Route::delete('conversations/{conversation}', [ConversationController::class, 'destroy']);
 
         // AI Backends
         Route::get('ai-backends', [AIBackendController::class, 'index']);

@@ -1,23 +1,23 @@
-name: 'Execution Management'
+name: 'Conversation Management'
 description: |-
 
-  APIs for executing agents and monitoring executions
+  APIs for managing AI agent conversations
 endpoints:
   -
     custom: []
     httpMethods:
       - POST
-    uri: 'api/v1/agents/{agent_id}/execute'
+    uri: 'api/v1/agents/{agent_id}/conversations'
     metadata:
       custom: []
-      groupName: 'Execution Management'
+      groupName: 'Conversation Management'
       groupDescription: |-
 
-        APIs for executing agents and monitoring executions
+        APIs for managing AI agent conversations
       subgroup: ''
       subgroupDescription: ''
-      title: 'Execute Agent'
-      description: 'Execute an agent with the given payload.'
+      title: 'Create Conversation'
+      description: 'Create a new conversation with an agent.'
       authenticated: false
       deprecated: false
     headers:
@@ -52,188 +52,49 @@ endpoints:
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters:
-      payload:
+      title:
         custom: []
-        name: payload
-        description: 'The execution payload/input data.'
-        required: true
-        example:
-          task: 'Generate code'
-          context: 'User authentication'
-        type: object
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      file_ids:
-        custom: []
-        name: file_ids
-        description: 'List of file IDs to use as input.'
+        name: title
+        description: 'Optional title for the conversation.'
         required: false
-        example:
-          - 1
-          - 2
-        type: 'string[]'
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      priority:
-        custom: []
-        name: priority
-        description: 'Execution priority (0-10).'
-        required: false
-        example: 5
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: true
-        deprecated: false
-      scheduled_at:
-        custom: []
-        name: scheduled_at
-        description: 'Schedule execution for future time.'
-        required: false
-        example: '2026-01-27T10:00:00Z'
+        example: 'Debug authentication issue'
         type: string
         enumValues: []
         exampleWasSpecified: true
         nullable: true
         deprecated: false
+      metadata:
+        custom: []
+        name: metadata
+        description: 'Optional metadata.'
+        required: false
+        example: []
+        type: object
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
     cleanBodyParameters:
-      payload:
-        task: 'Generate code'
-        context: 'User authentication'
-      file_ids:
-        - 1
-        - 2
-      priority: 5
-      scheduled_at: '2026-01-27T10:00:00Z'
+      title: 'Debug authentication issue'
+      metadata: []
     fileParameters: []
     responses:
       -
         custom: []
         status: 201
-        content: '{"id": 1, "task_id": 1, "status": "pending", "started_at": null, "completed_at": null, "result": null, "logs": null, "error": null, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z", "files": []}'
-        headers: []
-        description: ''
-    responseFields: []
-    auth: []
-    controller: null
-    method: null
-    route: null
-  -
-    custom: []
-    httpMethods:
-      - POST
-    uri: 'api/v1/agents/{agent_id}/stream'
-    metadata:
-      custom: []
-      groupName: 'Execution Management'
-      groupDescription: |-
-
-        APIs for executing agents and monitoring executions
-      subgroup: ''
-      subgroupDescription: ''
-      title: 'Stream Agent Execution'
-      description: 'Execute an agent with real-time streaming response using Server-Sent Events (SSE).'
-      authenticated: false
-      deprecated: false
-    headers:
-      Content-Type: application/json
-      Accept: application/json
-    urlParameters:
-      agent_id:
-        custom: []
-        name: agent_id
-        description: 'The ID of the agent.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: false
-        nullable: false
-        deprecated: false
-      agent:
-        custom: []
-        name: agent
-        description: 'The agent ID.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-    cleanUrlParameters:
-      agent_id: 1
-      agent: 1
-    queryParameters: []
-    cleanQueryParameters: []
-    bodyParameters:
-      payload:
-        custom: []
-        name: payload
-        description: 'The execution payload/input data.'
-        required: true
-        example:
-          task: 'Generate code'
-          context: 'User authentication'
-        type: object
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      file_ids:
-        custom: []
-        name: file_ids
-        description: 'List of file IDs to use as input.'
-        required: false
-        example:
-          - 1
-          - 2
-        type: 'string[]'
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      priority:
-        custom: []
-        name: priority
-        description: 'Must be at least 0. Must not be greater than 10.'
-        required: false
-        example: 2
-        type: integer
-        enumValues: []
-        exampleWasSpecified: false
-        nullable: true
-        deprecated: false
-      scheduled_at:
-        custom: []
-        name: scheduled_at
-        description: 'Must be a valid date. Must be a date after <code>now</code>.'
-        required: false
-        example: '2052-02-21'
-        type: string
-        enumValues: []
-        exampleWasSpecified: false
-        nullable: true
-        deprecated: false
-    cleanBodyParameters:
-      payload:
-        task: 'Generate code'
-        context: 'User authentication'
-      file_ids:
-        - 1
-        - 2
-      priority: 2
-      scheduled_at: '2052-02-21'
-    fileParameters: []
-    responses:
-      -
-        custom: []
-        status: 200
-        content: 'stream:data: {"type": "chunk", "content": "Hello"}\ndata: {"type": "chunk", "content": " World"}\ndata: {"type": "done", "execution_id": 1}\n'
+        content: |-
+          {
+            "conversation": {
+              "id": 123,
+              "agent_id": 1,
+              "user_id": 1,
+              "status": "active",
+              "messages": [],
+              "turn_count": 0,
+              "total_tokens": 0,
+              "created_at": "2026-01-27T10:00:00.000000Z"
+            }
+          }
         headers: []
         description: ''
     responseFields: []
@@ -245,17 +106,17 @@ endpoints:
     custom: []
     httpMethods:
       - GET
-    uri: api/v1/executions
+    uri: api/v1/conversations
     metadata:
       custom: []
-      groupName: 'Execution Management'
+      groupName: 'Conversation Management'
       groupDescription: |-
 
-        APIs for executing agents and monitoring executions
+        APIs for managing AI agent conversations
       subgroup: ''
       subgroupDescription: ''
-      title: 'List Executions'
-      description: 'Get a paginated list of all executions for the authenticated user.'
+      title: 'List Conversations'
+      description: "Get paginated list of user's conversations."
       authenticated: false
       deprecated: false
     headers:
@@ -264,23 +125,12 @@ endpoints:
     urlParameters: []
     cleanUrlParameters: []
     queryParameters:
-      page:
+      agent_id:
         custom: []
-        name: page
-        description: 'Page number for pagination.'
+        name: agent_id
+        description: 'Filter by agent ID.'
         required: false
         example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      per_page:
-        custom: []
-        name: per_page
-        description: 'Number of items per page.'
-        required: false
-        example: 15
         type: integer
         enumValues: []
         exampleWasSpecified: true
@@ -289,18 +139,29 @@ endpoints:
       status:
         custom: []
         name: status
-        description: 'Filter by execution status.'
+        description: 'Filter by status.'
         required: false
-        example: completed
+        example: active
         type: string
         enumValues: []
         exampleWasSpecified: true
         nullable: false
         deprecated: false
+      per_page:
+        custom: []
+        name: per_page
+        description: 'Items per page.'
+        required: false
+        example: 15
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
     cleanQueryParameters:
-      page: 1
+      agent_id: 1
+      status: active
       per_page: 15
-      status: completed
     bodyParameters: []
     cleanBodyParameters: []
     fileParameters: []
@@ -308,7 +169,12 @@ endpoints:
       -
         custom: []
         status: 200
-        content: '{"data": [{"id": 1, "task_id": 1, "status": "completed", "started_at": "2026-01-26T10:00:00.000000Z", "completed_at": "2026-01-26T10:05:00.000000Z", "result": {"output": "Success"}, "logs": "Execution logs...", "error": null, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:05:00.000000Z"}]}'
+        content: |-
+          {
+            "data": [...],
+            "links": {...},
+            "meta": {...}
+          }
         headers: []
         description: ''
     responseFields: []
@@ -320,48 +186,48 @@ endpoints:
     custom: []
     httpMethods:
       - GET
-    uri: 'api/v1/executions/{execution_id}'
+    uri: 'api/v1/conversations/{conversation_id}'
     metadata:
       custom: []
-      groupName: 'Execution Management'
+      groupName: 'Conversation Management'
       groupDescription: |-
 
-        APIs for executing agents and monitoring executions
+        APIs for managing AI agent conversations
       subgroup: ''
       subgroupDescription: ''
-      title: 'Show Execution'
-      description: 'Get details of a specific execution.'
+      title: 'Show Conversation'
+      description: 'Get full conversation details and history.'
       authenticated: false
       deprecated: false
     headers:
       Content-Type: application/json
       Accept: application/json
     urlParameters:
-      execution_id:
+      conversation_id:
         custom: []
-        name: execution_id
-        description: 'The ID of the execution.'
+        name: conversation_id
+        description: 'The ID of the conversation.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         deprecated: false
-      execution:
+      conversation:
         custom: []
-        name: execution
-        description: 'The execution ID.'
+        name: conversation
+        description: 'The conversation ID.'
         required: true
-        example: 1
+        example: 123
         type: integer
         enumValues: []
         exampleWasSpecified: true
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      execution_id: 1
-      execution: 1
+      conversation_id: 16
+      conversation: 123
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -371,133 +237,19 @@ endpoints:
       -
         custom: []
         status: 200
-        content: '{"id": 1, "task_id": 1, "status": "completed", "started_at": "2026-01-26T10:00:00.000000Z", "completed_at": "2026-01-26T10:05:00.000000Z", "result": {"output": "Success"}, "logs": "Execution logs...", "error": null, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:05:00.000000Z", "task": {}, "files": []}'
-        headers: []
-        description: ''
-    responseFields: []
-    auth: []
-    controller: null
-    method: null
-    route: null
-  -
-    custom: []
-    httpMethods:
-      - GET
-    uri: 'api/v1/executions/{execution_id}/logs'
-    metadata:
-      custom: []
-      groupName: 'Execution Management'
-      groupDescription: |-
-
-        APIs for executing agents and monitoring executions
-      subgroup: ''
-      subgroupDescription: ''
-      title: 'Get Execution Logs'
-      description: 'Get the logs for a specific execution.'
-      authenticated: false
-      deprecated: false
-    headers:
-      Content-Type: application/json
-      Accept: application/json
-    urlParameters:
-      execution_id:
-        custom: []
-        name: execution_id
-        description: 'The ID of the execution.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: false
-        nullable: false
-        deprecated: false
-      execution:
-        custom: []
-        name: execution
-        description: 'The execution ID.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-    cleanUrlParameters:
-      execution_id: 1
-      execution: 1
-    queryParameters: []
-    cleanQueryParameters: []
-    bodyParameters: []
-    cleanBodyParameters: []
-    fileParameters: []
-    responses:
-      -
-        custom: []
-        status: 200
-        content: '{"logs": "Execution started at 2026-01-26 10:00:00\nProcessing...\nExecution completed successfully"}'
-        headers: []
-        description: ''
-    responseFields: []
-    auth: []
-    controller: null
-    method: null
-    route: null
-  -
-    custom: []
-    httpMethods:
-      - GET
-    uri: 'api/v1/executions/{execution_id}/outputs'
-    metadata:
-      custom: []
-      groupName: 'Execution Management'
-      groupDescription: |-
-
-        APIs for executing agents and monitoring executions
-      subgroup: ''
-      subgroupDescription: ''
-      title: 'Get Execution Outputs'
-      description: 'Get the output files for a specific execution.'
-      authenticated: false
-      deprecated: false
-    headers:
-      Content-Type: application/json
-      Accept: application/json
-    urlParameters:
-      execution_id:
-        custom: []
-        name: execution_id
-        description: 'The ID of the execution.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: false
-        nullable: false
-        deprecated: false
-      execution:
-        custom: []
-        name: execution
-        description: 'The execution ID.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-    cleanUrlParameters:
-      execution_id: 1
-      execution: 1
-    queryParameters: []
-    cleanQueryParameters: []
-    bodyParameters: []
-    cleanBodyParameters: []
-    fileParameters: []
-    responses:
-      -
-        custom: []
-        status: 200
-        content: '{"outputs": [{"id": 3, "user_id": 1, "path": "files/output/result.txt", "type": "output", "size": 512, "mime_type": "text/plain", "created_at": "2026-01-26T10:05:00.000000Z", "updated_at": "2026-01-26T10:05:00.000000Z"}]}'
+        content: |-
+          {
+            "conversation": {
+              "id": 123,
+              "agent": {"id": 1, "name": "Code Assistant"},
+              "status": "active",
+              "messages": [...],
+              "turn_count": 5,
+              "total_tokens": 1250,
+              "started_at": "2026-01-27T10:00:00.000000Z",
+              "last_activity_at": "2026-01-27T10:30:00.000000Z"
+            }
+          }
         headers: []
         description: ''
     responseFields: []
@@ -509,48 +261,140 @@ endpoints:
     custom: []
     httpMethods:
       - POST
-    uri: 'api/v1/executions/{execution_id}/cancel'
+    uri: 'api/v1/conversations/{conversation_id}/messages'
     metadata:
       custom: []
-      groupName: 'Execution Management'
+      groupName: 'Conversation Management'
       groupDescription: |-
 
-        APIs for executing agents and monitoring executions
+        APIs for managing AI agent conversations
       subgroup: ''
       subgroupDescription: ''
-      title: 'Cancel Execution'
-      description: 'Cancel a pending or running execution.'
+      title: 'Send Message'
+      description: 'Send a message to a conversation. Server processes through agentic loop.'
       authenticated: false
       deprecated: false
     headers:
       Content-Type: application/json
       Accept: application/json
     urlParameters:
-      execution_id:
+      conversation_id:
         custom: []
-        name: execution_id
-        description: 'The ID of the execution.'
+        name: conversation_id
+        description: 'The ID of the conversation.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         deprecated: false
-      execution:
+      conversation:
         custom: []
-        name: execution
-        description: 'The execution ID.'
+        name: conversation
+        description: 'The conversation ID.'
         required: true
-        example: 1
+        example: 123
         type: integer
         enumValues: []
         exampleWasSpecified: true
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      execution_id: 1
-      execution: 1
+      conversation_id: 16
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      content:
+        custom: []
+        name: content
+        description: 'The message content.'
+        required: true
+        example: 'What files are in /tmp?'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      images:
+        custom: []
+        name: images
+        description: 'Optional base64-encoded images for vision.'
+        required: false
+        example: []
+        type: 'string[]'
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      content: 'What files are in /tmp?'
+      images: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 202
+        content: |-
+          {
+            "status": "processing",
+            "conversation_id": 123,
+            "check_url": "/api/v1/conversations/123/status"
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/conversations/{conversation_id}/status'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Get Conversation Status'
+      description: 'Poll for conversation status (used with polling mode).'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 16
+      conversation: 123
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -560,13 +404,196 @@ endpoints:
       -
         custom: []
         status: 200
-        content: '{"message": "Execution cancelled", "execution": {"id": 1, "status": "cancelled", ...}}'
+        content: |-
+          {
+            "status": "completed",
+            "conversation_id": 123,
+            "messages": [
+              {"role": "assistant", "content": "I found 2 files in /tmp..."}
+            ],
+            "stats": {
+              "turns": 5,
+              "tokens": 450
+            }
+          }
         headers: []
         description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/conversations/{conversation_id}/tool-results'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Submit Tool Result'
+      description: 'Submit the result of a builtin tool execution from CLI.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 16
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      call_id:
+        custom: []
+        name: call_id
+        description: 'The tool call ID.'
+        required: true
+        example: call_abc123
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      success:
+        custom: []
+        name: success
+        description: 'Whether tool execution succeeded.'
+        required: true
+        example: true
+        type: boolean
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      output:
+        custom: []
+        name: output
+        description: 'The tool output (if successful).'
+        required: false
+        example: file1.txt\nfile2.txt
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      error:
+        custom: []
+        name: error
+        description: 'The error message (if failed).'
+        required: false
+        example: 'File not found'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      call_id: call_abc123
+      success: true
+      output: file1.txt\nfile2.txt
+      error: 'File not found'
+    fileParameters: []
+    responses:
       -
         custom: []
-        status: 422
-        content: '{"error": "Cannot cancel execution with status: completed"}'
+        status: 200
+        content: |-
+          {
+            "status": "processing",
+            "conversation_id": 123
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - DELETE
+    uri: 'api/v1/conversations/{conversation_id}'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Delete Conversation'
+      description: 'Delete a conversation permanently.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 16
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 16
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 204
+        content: '{}'
         headers: []
         description: ''
     responseFields: []

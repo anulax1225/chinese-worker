@@ -41,25 +41,31 @@ endpoints:
                 "name": "ollama",
                 "driver": "ollama",
                 "is_default": true,
+                "model": "llama3.1:latest",
+                "status": "connected",
                 "capabilities": {
                   "streaming": true,
                   "function_calling": false,
                   "vision": false,
                   "max_context": 4096
-                }
+                },
+                "models": []
               },
               {
                 "name": "claude",
                 "driver": "anthropic",
                 "is_default": false,
+                "status": "connected",
                 "capabilities": {
                   "streaming": true,
                   "function_calling": true,
                   "vision": true,
                   "max_context": 200000
-                }
+                },
+                "models": []
               }
-            ]
+            ],
+            "default_backend": "ollama"
           }
         headers: []
         description: ''

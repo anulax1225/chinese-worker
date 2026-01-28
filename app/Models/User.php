@@ -71,4 +71,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(File::class);
     }
+
+    /**
+     * Get the conversations for the user.
+     */
+    public function conversations(): HasMany
+    {
+        return $this->hasMany(Conversation::class);
+    }
 }

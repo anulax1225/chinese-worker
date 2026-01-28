@@ -33,59 +33,48 @@ describe('Database Schema', function () {
         expect($foreignKeys)->not()->toBeEmpty();
     });
 
-    test('tasks table has correct structure', function () {
-        expect(Schema::hasTable('tasks'))->toBeTrue();
+    test('conversations table has correct structure', function () {
+        expect(Schema::hasTable('conversations'))->toBeTrue();
 
-        expect(Schema::hasColumns('tasks', [
+        expect(Schema::hasColumns('conversations', [
             'id',
             'agent_id',
-            'payload',
-            'priority',
-            'scheduled_at',
+            'user_id',
+            'status',
+            'messages',
+            'metadata',
+            'turn_count',
+            'total_tokens',
+            'started_at',
+            'last_activity_at',
+            'completed_at',
+            'cli_session_id',
+            'waiting_for',
+            'pending_tool_request',
             'created_at',
             'updated_at',
         ]))->toBeTrue();
     });
 
-    test('tasks table has foreign key to agents', function () {
-        $foreignKeys = DB::select("
+    test('conversations table has foreign keys', function () {
+        $agentForeignKey = DB::select("
             SELECT CONSTRAINT_NAME
             FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'tasks'
+            WHERE TABLE_NAME = 'conversations'
             AND COLUMN_NAME = 'agent_id'
             AND REFERENCED_TABLE_NAME = 'agents'
         ");
 
-        expect($foreignKeys)->not()->toBeEmpty();
-    });
-
-    test('executions table has correct structure', function () {
-        expect(Schema::hasTable('executions'))->toBeTrue();
-
-        expect(Schema::hasColumns('executions', [
-            'id',
-            'task_id',
-            'status',
-            'started_at',
-            'completed_at',
-            'result',
-            'logs',
-            'error',
-            'created_at',
-            'updated_at',
-        ]))->toBeTrue();
-    });
-
-    test('executions table has foreign key to tasks', function () {
-        $foreignKeys = DB::select("
+        $userForeignKey = DB::select("
             SELECT CONSTRAINT_NAME
             FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'executions'
-            AND COLUMN_NAME = 'task_id'
-            AND REFERENCED_TABLE_NAME = 'tasks'
+            WHERE TABLE_NAME = 'conversations'
+            AND COLUMN_NAME = 'user_id'
+            AND REFERENCED_TABLE_NAME = 'users'
         ");
 
-        expect($foreignKeys)->not()->toBeEmpty();
+        expect($agentForeignKey)->not()->toBeEmpty();
+        expect($userForeignKey)->not()->toBeEmpty();
     });
 
     test('tools table has correct structure', function () {
@@ -169,36 +158,5 @@ describe('Database Schema', function () {
         ");
 
         expect($foreignKeys)->not()->toBeEmpty();
-    });
-
-    test('execution_files pivot table has correct structure', function () {
-        expect(Schema::hasTable('execution_files'))->toBeTrue();
-
-        expect(Schema::hasColumns('execution_files', [
-            'execution_id',
-            'file_id',
-            'role',
-        ]))->toBeTrue();
-    });
-
-    test('execution_files table has foreign keys', function () {
-        $executionForeignKey = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'execution_files'
-            AND COLUMN_NAME = 'execution_id'
-            AND REFERENCED_TABLE_NAME = 'executions'
-        ");
-
-        $fileForeignKey = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'execution_files'
-            AND COLUMN_NAME = 'file_id'
-            AND REFERENCED_TABLE_NAME = 'files'
-        ");
-
-        expect($executionForeignKey)->not()->toBeEmpty();
-        expect($fileForeignKey)->not()->toBeEmpty();
     });
 });

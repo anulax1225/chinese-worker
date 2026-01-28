@@ -295,8 +295,7 @@ endpoints:
             "ai_backend": "ollama",
             "created_at": "2026-01-26T10:00:00.000000Z",
             "updated_at": "2026-01-26T10:00:00.000000Z",
-            "tools": [],
-            "tasks": []
+            "tools": []
           }
         headers: []
         description: ''
@@ -528,105 +527,6 @@ endpoints:
         custom: []
         status: 204
         content: '{}'
-        headers: []
-        description: ''
-    responseFields: []
-    auth: []
-    controller: null
-    method: null
-    route: null
-  -
-    custom: []
-    httpMethods:
-      - GET
-    uri: 'api/v1/agents/{agent_id}/executions'
-    metadata:
-      custom: []
-      groupName: 'Agent Management'
-      groupDescription: |-
-
-        APIs for managing AI agents
-      subgroup: ''
-      subgroupDescription: ''
-      title: 'Agent Executions'
-      description: 'Get a paginated list of all executions for a specific agent.'
-      authenticated: false
-      deprecated: false
-    headers:
-      Content-Type: application/json
-      Accept: application/json
-    urlParameters:
-      agent_id:
-        custom: []
-        name: agent_id
-        description: 'The ID of the agent.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: false
-        nullable: false
-        deprecated: false
-      agent:
-        custom: []
-        name: agent
-        description: 'The agent ID.'
-        required: true
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-    cleanUrlParameters:
-      agent_id: 1
-      agent: 1
-    queryParameters:
-      page:
-        custom: []
-        name: page
-        description: 'Page number for pagination.'
-        required: false
-        example: 1
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      per_page:
-        custom: []
-        name: per_page
-        description: 'Number of items per page.'
-        required: false
-        example: 15
-        type: integer
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-      status:
-        custom: []
-        name: status
-        description: 'Filter by execution status (pending, running, completed, failed, cancelled).'
-        required: false
-        example: completed
-        type: string
-        enumValues: []
-        exampleWasSpecified: true
-        nullable: false
-        deprecated: false
-    cleanQueryParameters:
-      page: 1
-      per_page: 15
-      status: completed
-    bodyParameters: []
-    cleanBodyParameters: []
-    fileParameters: []
-    responses:
-      -
-        custom: []
-        status: 200
-        content: '{"data": [{"id": 1, "task_id": 1, "status": "completed", ...}]}'
         headers: []
         description: ''
     responseFields: []
