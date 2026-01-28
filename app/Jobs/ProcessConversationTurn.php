@@ -18,6 +18,23 @@ class ProcessConversationTurn implements ShouldQueue
 {
     use Queueable;
 
+    /**
+     * The number of seconds the job can run before timing out.
+     * Set high to allow for long AI responses.
+     */
+    public int $timeout = 300;
+
+    /**
+     * The number of times the job may be attempted.
+     * AI calls should not be retried automatically.
+     */
+    public int $tries = 1;
+
+    /**
+     * Indicate if the job should be marked as failed on timeout.
+     */
+    public bool $failOnTimeout = true;
+
     // Builtin tools that must be executed on the CLI
     protected const BUILTIN_TOOLS = [
         'bash',
@@ -45,42 +62,61 @@ class ProcessConversationTurn implements ShouldQueue
     public function handle(AIBackendManager $aiBackendManager, ToolService $toolService): void
     {
         try {
-            // Check if max turns reached
-            if ($this->conversation->turn_count >= 25) {
+            $maxTurns = $this->conversation->getMaxTurns();
+
+            // Check if max turns for this request reached
+            if ($this->conversation->getRequestTurnCount() >= $maxTurns) {
                 $this->conversation->markAsCompleted();
-                Log::info('Conversation reached max turns', ['conversation_id' => $this->conversation->id]);
+                Log::info('Conversation reached max turns for request', [
+                    'conversation_id' => $this->conversation->id,
+                    'request_turns' => $this->conversation->getRequestTurnCount(),
+                    'max_turns' => $maxTurns,
+                ]);
 
                 return;
             }
 
-            // Increment turn
+            // Increment both turn counts
             $this->conversation->incrementTurn();
+            $this->conversation->incrementRequestTurn();
 
-            // Get AI backend
+            // Get AI backend and broadcaster
             $backend = $aiBackendManager->driver($this->conversation->agent->ai_backend);
+            $broadcaster = app(ConversationEventBroadcaster::class);
 
-            // Prepare context
+            // Prepare context with turn info
             $context = [
                 'messages' => $this->conversation->getMessages(),
                 'tools' => $this->getAllToolSchemas(),
+                'request_turn' => $this->conversation->getRequestTurnCount(),
+                'max_turns' => $this->conversation->getMaxTurns(),
             ];
 
-            // Call AI backend
-            $response = $backend->execute($this->conversation->agent, $context);
+            // Call AI backend with streaming - broadcast chunks via SSE
+            $response = $backend->streamExecute(
+                $this->conversation->agent,
+                $context,
+                function (string $chunk, string $type = 'content') use ($broadcaster) {
+                    $broadcaster->textChunk($this->conversation, $chunk, $type);
+                }
+            );
 
             // Track tokens
             $this->conversation->addTokens($response->tokensUsed);
 
-            // Add AI response to conversation
+            // Filter to only valid, known tool calls
+            $validToolCalls = $this->filterValidToolCalls($response->toolCalls);
+
+            // Add AI response to conversation (complete message for DB storage and polling)
             $assistantMessage = ChatMessage::assistant(
                 $response->content,
-                array_map(fn (ToolCall $tc) => $tc->toArray(), $response->toolCalls),
+                array_map(fn (ToolCall $tc) => $tc->toArray(), $validToolCalls),
                 $response->thinking
             );
             $this->conversation->addMessage($assistantMessage->toArray());
 
-            // If no tool calls, conversation turn is complete
-            if (! $response->hasToolCalls()) {
+            // If no valid tool calls, conversation turn is complete
+            if (empty($validToolCalls)) {
                 $this->conversation->markAsCompleted();
                 app(ConversationEventBroadcaster::class)->completed($this->conversation);
                 Log::info('Conversation completed', ['conversation_id' => $this->conversation->id]);
@@ -89,7 +125,7 @@ class ProcessConversationTurn implements ShouldQueue
             }
 
             // Process tool calls
-            $this->processToolCalls($response->toolCalls, $toolService);
+            $this->processToolCalls($validToolCalls, $toolService);
         } catch (Exception $e) {
             Log::error('Conversation turn failed', [
                 'conversation_id' => $this->conversation->id,
@@ -158,6 +194,55 @@ class ProcessConversationTurn implements ShouldQueue
     protected function isSystemTool(string $toolName): bool
     {
         return in_array($toolName, self::SYSTEM_TOOLS, true);
+    }
+
+    /**
+     * Check if a tool name is a known user tool for this agent.
+     */
+    protected function isUserTool(string $toolName): bool
+    {
+        return $this->conversation->agent->tools()
+            ->where('name', $toolName)
+            ->exists();
+    }
+
+    /**
+     * Check if a tool name is known (builtin, system, or user).
+     */
+    protected function isKnownTool(string $toolName): bool
+    {
+        if (empty($toolName)) {
+            return false;
+        }
+
+        return $this->isBuiltinTool($toolName)
+            || $this->isSystemTool($toolName)
+            || $this->isUserTool($toolName);
+    }
+
+    /**
+     * Filter tool calls to only include valid, known tools.
+     *
+     * @param  array<ToolCall>  $toolCalls
+     * @return array<ToolCall>
+     */
+    protected function filterValidToolCalls(array $toolCalls): array
+    {
+        $validCalls = [];
+
+        foreach ($toolCalls as $toolCall) {
+            if ($this->isKnownTool($toolCall->name)) {
+                $validCalls[] = $toolCall;
+            } else {
+                Log::warning('Filtered out invalid/unknown tool call', [
+                    'conversation_id' => $this->conversation->id,
+                    'tool_name' => $toolCall->name,
+                    'tool_id' => $toolCall->id,
+                ]);
+            }
+        }
+
+        return $validCalls;
     }
 
     protected function executeSystemTool(ToolCall $toolCall): ToolResult

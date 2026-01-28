@@ -214,7 +214,7 @@ class ConversationController extends Controller
 
         $result = new ToolResult(
             success: $request->boolean('success'),
-            output: $request->input('output'),
+            output: $request->input('output') ?? '',
             error: $request->input('error')
         );
 
@@ -275,11 +275,63 @@ class ConversationController extends Controller
                 }
                 flush();
 
-                // Send initial connected event with current status
+                // Send initial connected event
                 $this->sendSSEEvent('connected', [
                     'conversation_id' => $conversation->id,
                     'status' => 'connected',
                 ]);
+
+                // Check current conversation state and send if already terminal
+                // This handles the race condition where job finishes before SSE connects
+                $conversation->refresh();
+
+                if ($conversation->isWaitingForTool()) {
+                    $this->sendSSEEvent('tool_request', [
+                        'status' => 'waiting_for_tool',
+                        'conversation_id' => $conversation->id,
+                        'tool_request' => $conversation->pending_tool_request,
+                        'submit_url' => "/api/v1/conversations/{$conversation->id}/tool-results",
+                        'stats' => [
+                            'turns' => $conversation->turn_count,
+                            'tokens' => $conversation->total_tokens,
+                        ],
+                    ]);
+
+                    return; // Don't subscribe, already have result
+                }
+
+                if ($conversation->status === 'completed') {
+                    $messages = $conversation->getMessages();
+                    $lastMessage = end($messages);
+                    $data = [
+                        'status' => 'completed',
+                        'conversation_id' => $conversation->id,
+                        'stats' => [
+                            'turns' => $conversation->turn_count,
+                            'tokens' => $conversation->total_tokens,
+                        ],
+                    ];
+                    if ($lastMessage && $lastMessage['role'] === 'assistant') {
+                        $data['messages'] = [$lastMessage];
+                    }
+                    $this->sendSSEEvent('completed', $data);
+
+                    return; // Don't subscribe, already completed
+                }
+
+                if ($conversation->status === 'failed') {
+                    $this->sendSSEEvent('failed', [
+                        'status' => 'failed',
+                        'conversation_id' => $conversation->id,
+                        'error' => 'Conversation failed',
+                        'stats' => [
+                            'turns' => $conversation->turn_count,
+                            'tokens' => $conversation->total_tokens,
+                        ],
+                    ]);
+
+                    return; // Don't subscribe, already failed
+                }
 
                 // Subscribe to Redis channel for this conversation
                 $channel = "conversation:{$conversation->id}:events";
@@ -294,8 +346,9 @@ class ConversationController extends Controller
                         if ($payload && isset($payload['event'], $payload['data'])) {
                             $this->sendSSEEvent($payload['event'], $payload['data']);
 
-                            // Close connection after terminal events
-                            if (in_array($payload['event'], ['completed', 'failed'])) {
+                            // Close connection after terminal events or tool requests
+                            // Tool requests close so CLI can handle tool and reconnect
+                            if (in_array($payload['event'], ['completed', 'failed', 'tool_request'])) {
                                 return false; // Stop subscription
                             }
                         }

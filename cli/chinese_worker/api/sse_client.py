@@ -55,16 +55,12 @@ class SSEClient:
             data_buffer: str = ""
 
             for line in response.iter_lines():
-                # Skip empty lines and comments (padding)
-                if not line or line.startswith(":"):
+                # Skip comments (padding)
+                if line.startswith(":"):
                     continue
 
-                if line.startswith("event:"):
-                    event_type = line[6:].strip()
-                elif line.startswith("data:"):
-                    data_buffer += line[5:].strip()
-                elif line == "":
-                    # Empty line signals end of event
+                # Empty line signals end of event
+                if line == "":
                     if event_type and data_buffer:
                         try:
                             data = json.loads(data_buffer)
@@ -78,6 +74,12 @@ class SSEClient:
 
                     event_type = None
                     data_buffer = ""
+                    continue
+
+                if line.startswith("event:"):
+                    event_type = line[6:].strip()
+                elif line.startswith("data:"):
+                    data_buffer += line[5:].strip()
 
     def connect(
         self,

@@ -31,6 +31,9 @@ class ConversationService
             $conversation->update(['status' => 'active']);
             $conversation->markAsStarted();
 
+            // Reset request turn count for new user message
+            $conversation->resetRequestTurnCount();
+
             // Dispatch job to process the turn
             ProcessConversationTurn::dispatch($conversation);
 
@@ -63,8 +66,25 @@ class ConversationService
     ): ConversationState {
         try {
             // Add tool result to conversation
-            $toolMessage = ChatMessage::tool($result->output ?? $result->error ?? '', $callId);
+            // Use error as content when output is empty (refusal/failure cases)
+            $content = $result->output !== '' ? $result->output : ($result->error ?? '');
+            $toolMessage = ChatMessage::tool($content, $callId);
             $conversation->addMessage($toolMessage->toArray());
+
+            // Check if user refused tool execution or tool failed - stop the loop and wait for new input
+            if ($this->isToolRefused($result) || $this->isToolFailed($result)) {
+                // Mark conversation as completed to stop the agentic loop
+                $conversation->update([
+                    'status' => 'completed',
+                    'waiting_for' => 'none',
+                    'pending_tool_request' => null,
+                ]);
+
+                // Broadcast completion so CLI returns to prompt
+                $this->broadcaster->completed($conversation);
+
+                return ConversationState::completed($conversation);
+            }
 
             // Update conversation state
             $conversation->update([
@@ -93,5 +113,33 @@ class ConversationService
 
             return ConversationState::failed($conversation, $e->getMessage());
         }
+    }
+
+    /**
+     * Check if the tool result indicates user refused execution.
+     */
+    protected function isToolRefused(ToolResult $result): bool
+    {
+        if ($result->success) {
+            return false;
+        }
+
+        $error = $result->error ?? '';
+
+        return str_contains($error, '[User refused tool execution]');
+    }
+
+    /**
+     * Check if the tool result indicates tool failed.
+     */
+    protected function isToolFailed(ToolResult $result): bool
+    {
+        if ($result->success) {
+            return false;
+        }
+
+        $error = $result->error ?? '';
+
+        return str_contains($error, '[Tool failed:');
     }
 }

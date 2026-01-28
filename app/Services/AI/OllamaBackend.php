@@ -129,16 +129,18 @@ class OllamaBackend implements AIBackendInterface
                     continue;
                 }
 
-                // Handle content streaming
-                if (isset($data['message']['content'])) {
-                    $content = $data['message']['content'];
-                    $fullContent .= $content;
-                    $callback($content);
+                // Handle thinking streaming (before content)
+                if (isset($data['message']['thinking']) && $data['message']['thinking'] !== '') {
+                    $thinking = $data['message']['thinking'];
+                    $fullThinking .= $thinking;
+                    $callback($thinking, 'thinking');
                 }
 
-                // Handle thinking streaming
-                if (isset($data['message']['thinking'])) {
-                    $fullThinking .= $data['message']['thinking'];
+                // Handle content streaming
+                if (isset($data['message']['content']) && $data['message']['content'] !== '') {
+                    $content = $data['message']['content'];
+                    $fullContent .= $content;
+                    $callback($content, 'content');
                 }
 
                 // Collect tool calls
@@ -214,7 +216,7 @@ class OllamaBackend implements AIBackendInterface
         $messages = [];
 
         // System message with agent instructions
-        $systemPrompt = $this->buildSystemPrompt($agent);
+        $systemPrompt = $this->buildSystemPrompt($agent, $context);
         if (! empty($systemPrompt)) {
             $messages[] = ChatMessage::system($systemPrompt);
         }
@@ -237,13 +239,15 @@ class OllamaBackend implements AIBackendInterface
 
     /**
      * Build the system prompt from agent configuration.
+     *
+     * @param  array<string, mixed>  $context
      */
-    protected function buildSystemPrompt(Agent $agent): string
+    protected function buildSystemPrompt(Agent $agent, array $context = []): string
     {
         $parts = [];
 
         // Add thinking instructions
-        $parts[] = 'IMPORTANT: Before using any tool, you MUST first explain your reasoning and what you plan to do. Write your thinking process in your response, then call the appropriate tool. Never call a tool without first explaining why.';
+        // $parts[] = 'IMPORTANT: Before using any tool, you MUST first explain your reasoning and what you plan to do. Write your thinking process in your response, then call the appropriate tool. Never call a tool without first explaining why.';
 
         if (! empty($agent->description)) {
             $parts[] = $agent->description;
@@ -261,6 +265,13 @@ class OllamaBackend implements AIBackendInterface
             })->join("\n");
 
             $parts[] = "Available tools:\n{$toolDescriptions}";
+        }
+
+        // Add turn information
+        $requestTurn = $context['request_turn'] ?? null;
+        $maxTurns = $context['max_turns'] ?? null;
+        if ($requestTurn !== null && $maxTurns !== null) {
+            $parts[] = "Turn: {$requestTurn}/{$maxTurns}";
         }
 
         return implode("\n\n", $parts);

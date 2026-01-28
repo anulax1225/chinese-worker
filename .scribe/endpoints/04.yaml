@@ -208,7 +208,7 @@ endpoints:
         name: conversation_id
         description: 'The ID of the conversation.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -226,7 +226,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      conversation_id: 16
+      conversation_id: 1
       conversation: 123
     queryParameters: []
     cleanQueryParameters: []
@@ -283,7 +283,7 @@ endpoints:
         name: conversation_id
         description: 'The ID of the conversation.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -301,7 +301,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      conversation_id: 16
+      conversation_id: 1
       conversation: 123
     queryParameters: []
     cleanQueryParameters: []
@@ -375,7 +375,7 @@ endpoints:
         name: conversation_id
         description: 'The ID of the conversation.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -393,7 +393,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      conversation_id: 16
+      conversation_id: 1
       conversation: 123
     queryParameters: []
     cleanQueryParameters: []
@@ -415,6 +415,73 @@ endpoints:
               "turns": 5,
               "tokens": 450
             }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/conversations/{conversation_id}/stream'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Stream Conversation Events'
+      description: 'Open a Server-Sent Events stream for real-time conversation updates.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "event": "tool_request",
+            "data": {"status": "waiting_for_tool", "tool_request": {...}}
           }
         headers: []
         description: ''
@@ -449,7 +516,7 @@ endpoints:
         name: conversation_id
         description: 'The ID of the conversation.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -467,7 +534,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      conversation_id: 16
+      conversation_id: 1
       conversation: 123
     queryParameters: []
     cleanQueryParameters: []
@@ -564,7 +631,7 @@ endpoints:
         name: conversation_id
         description: 'The ID of the conversation.'
         required: true
-        example: 16
+        example: 1
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -582,7 +649,7 @@ endpoints:
         nullable: false
         deprecated: false
     cleanUrlParameters:
-      conversation_id: 16
+      conversation_id: 1
       conversation: 123
     queryParameters: []
     cleanQueryParameters: []

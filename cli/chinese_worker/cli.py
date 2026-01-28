@@ -3,18 +3,25 @@
 import click
 import time
 import os
-from rich.console import Console
+from rich.console import Console, Group
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.live import Live
+from rich.text import Text
 from typing import Optional, Dict, Any, List
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
 
 from .api import APIClient, AuthManager, SSEClient, SSEEventHandler
 from .tools import BashTool, ReadTool, WriteTool, EditTool, GlobTool, GrepTool
 
 console = Console()
+
+# Input history file path
+HISTORY_FILE = os.path.expanduser("~/.cw_history")
 
 
 def get_default_api_url() -> str:
@@ -208,7 +215,8 @@ def conversations(api_url: str, agent_id: Optional[int], status: Optional[str]):
 @click.option("--api-url", default=get_default_api_url(), help="API base URL")
 @click.option("--poll-interval", default=2, help="Polling interval in seconds")
 @click.option("--conversation-id", type=int, help="Resume existing conversation")
-def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optional[int]):
+@click.option("--polling", is_flag=True, help="Force polling mode instead of SSE")
+def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optional[int], polling: bool):
     """Start a chat session with an agent."""
     if not AuthManager.is_authenticated():
         console.print("[yellow]![/yellow] You are not logged in")
@@ -260,13 +268,21 @@ def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optio
 
         conversation_id = conversation["id"]
 
+        # Check if conversation has a pending tool request
+        pending_result = handle_pending_tool_request(client, conversation_id, conversation, tools, poll_interval, polling)
+        if pending_result == "error":
+            console.print("[yellow]⚠[/yellow] Error handling pending tool request")
+
         # Chat loop - continues until user exits
         console.print("[dim]Type 'exit', 'quit', or 'bye' to end the chat[/dim]\n")
 
+        # Initialize prompt session with history
+        session = PromptSession(history=FileHistory(HISTORY_FILE))
+
         while True:
             try:
-                # Get user input
-                user_message = console.input("[bold cyan]You:[/bold cyan] ")
+                # Get user input with history (UP/DOWN) and cursor movement (LEFT/RIGHT)
+                user_message = session.prompt("You: ")
 
                 if not user_message.strip():
                     continue
@@ -279,9 +295,9 @@ def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optio
                 console.print()  # Add spacing
                 response = client.send_message(conversation_id, user_message)
 
-                # Handle response with polling
+                # Handle response
                 result = handle_conversation_status(
-                    client, conversation_id, response, tools, poll_interval
+                    client, conversation_id, response, tools, poll_interval, polling
                 )
 
                 if result == "error":
@@ -292,6 +308,10 @@ def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optio
             except KeyboardInterrupt:
                 console.print("\n\n[yellow]Chat interrupted. Type 'exit' to end or continue chatting[/yellow]\n")
                 continue
+            except EOFError:
+                # Ctrl+D pressed
+                console.print("\n[yellow]Ending conversation...[/yellow]")
+                break
             except Exception as e:
                 console.print(f"\n[red]✗[/red] Error: {str(e)}")
                 console.print("[yellow]You can try sending another message or type 'exit' to quit[/yellow]\n")
@@ -438,12 +458,82 @@ def show_conversation_history(conversation: Dict[str, Any]) -> None:
     console.print("[dim]" + "─" * 60 + "[/dim]\n")
 
 
+def handle_pending_tool_request(
+    client: APIClient,
+    conversation_id: int,
+    conversation: Dict[str, Any],
+    tools: Dict[str, Any],
+    poll_interval: int,
+    force_polling: bool = False,
+) -> str:
+    """
+    Check if conversation has a pending tool request and handle it.
+
+    Returns:
+        Status: "completed", "continue", or "error"
+    """
+    # Check if conversation is waiting for a tool (server-side state)
+    status = conversation.get("status")
+    waiting_for = conversation.get("waiting_for")
+    pending_tool = conversation.get("pending_tool_request")
+
+    if status == "paused" and waiting_for == "tool_result" and pending_tool:
+        console.print("[yellow]![/yellow] Found pending tool request from previous session\n")
+
+        # Create a response dict that matches what handle_conversation_status expects
+        response = {
+            "status": "waiting_for_tool",
+            "tool_request": pending_tool,
+            "conversation_id": conversation_id,
+        }
+
+        return handle_conversation_status(client, conversation_id, response, tools, poll_interval, force_polling)
+
+    # Also check message history for unanswered tool calls
+    messages = conversation.get("messages", [])
+    if messages:
+        last_msg = messages[-1]
+        if last_msg.get("role") == "assistant":
+            tool_calls = last_msg.get("tool_calls", [])
+            if tool_calls:
+                # Check if there's a tool result for each tool call
+                # Look for tool messages after the assistant message
+                answered_call_ids = set()
+                for msg in messages:
+                    if msg.get("role") == "tool" and msg.get("tool_call_id"):
+                        answered_call_ids.add(msg["tool_call_id"])
+
+                # Find unanswered tool calls
+                for tc in tool_calls:
+                    call_id = tc.get("call_id") or tc.get("id")
+                    if call_id and call_id not in answered_call_ids:
+                        console.print("[yellow]![/yellow] Found unanswered tool call from previous session\n")
+
+                        # Create tool request from tool call
+                        tool_request = {
+                            "call_id": call_id,
+                            "name": tc.get("name"),
+                            "arguments": tc.get("arguments", {}),
+                        }
+
+                        response = {
+                            "status": "waiting_for_tool",
+                            "tool_request": tool_request,
+                            "conversation_id": conversation_id,
+                        }
+
+                        return handle_conversation_status(client, conversation_id, response, tools, poll_interval, force_polling)
+
+    return "continue"
+
+
 def handle_conversation_status(
     client: APIClient,
     conversation_id: int,
     initial_response: Dict[str, Any],
     tools: Dict[str, Any],
     poll_interval: int,
+    force_polling: bool = False,
 ) -> str:
     """
     Handle conversation status with SSE (preferred) or polling fallback.
@@ -451,6 +541,10 @@ def handle_conversation_status(
     Returns:
         Status: "completed", "error", or "active"
     """
+    # Use polling if forced
+    if force_polling:
+        return handle_polling_status(client, conversation_id, initial_response, tools, poll_interval)
+
     # Try SSE first for real-time updates
     try:
         return handle_sse_events(client, conversation_id, initial_response, tools)
@@ -493,88 +587,134 @@ def handle_sse_events(
         else:
             return result
 
-    # Create SSE client
-    sse_client = SSEClient(
-        base_url=client.base_url,
-        conversation_id=conversation_id,
-        headers=client._get_headers(),
-        timeout=120,  # 2 minute read timeout
-    )
+    # SSE loop - reconnect after tool requests since server closes connection
+    while True:
+        # Create SSE client
+        sse_client = SSEClient(
+            base_url=client.base_url,
+            conversation_id=conversation_id,
+            headers=client._get_headers(),
+            timeout=120,  # 2 minute read timeout
+        )
 
-    console.print("[dim]Connected via SSE[/dim]")
-    accumulated_content = ""
-    accumulated_thinking = ""
+        accumulated_content = ""
+        accumulated_thinking = ""
+        pending_tool_request = None
+        final_event = None
+        error_msg = None
 
-    for event_type, data in sse_client.events():
-        if event_type == "connected":
-            continue
+        # PHASE 1: Live display for streaming ONLY - no user interaction here
+        with Live(console=console, refresh_per_second=10, transient=True) as live:
+            for event_type, data in sse_client.events():
+                if event_type == "connected":
+                    continue
 
-        elif event_type == "text_chunk":
-            # Progressive text rendering
-            chunk = data.get("chunk", "")
-            chunk_type = data.get("type", "content")
-            if chunk_type == "thinking":
-                if not accumulated_thinking:
-                    console.print("[dim italic]💭 ", end="")
-                accumulated_thinking += chunk
-                console.print(f"[dim italic]{chunk}[/dim italic]", end="")
-            else:
-                if accumulated_thinking and not accumulated_content:
-                    console.print("[/dim italic]")  # Close thinking
-                if not accumulated_content:
-                    console.print("\n[bold green]Assistant:[/bold green]")
-                accumulated_content += chunk
-                console.print(chunk, end="")
+                elif event_type == "text_chunk":
+                    # Progressive text rendering with markdown
+                    chunk = data.get("chunk", "")
+                    chunk_type = data.get("type", "content")
+                    if chunk_type == "thinking":
+                        accumulated_thinking += chunk
+                    else:
+                        accumulated_content += chunk
 
-        elif event_type == "status_changed":
-            # Status update (e.g., processing)
-            pass
+                    # Build and update the live display
+                    live.update(build_streaming_display(accumulated_thinking, accumulated_content))
 
-        elif event_type == "tool_request":
-            # Clear any streaming output
-            if accumulated_content or accumulated_thinking:
-                console.print()  # Newline after streamed content
+                elif event_type == "status_changed":
+                    # Status update (e.g., processing)
+                    pass
 
-            # Get latest conversation state for thinking
-            try:
-                conv_response = client.get_conversation(conversation_id)
-                conversation = safe_get(conv_response, "data", default=conv_response)
-                last_shown_message_index = show_thinking(conversation, last_shown_message_index)
-            except Exception:
-                pass
+                elif event_type == "tool_request":
+                    # Store tool request, handle AFTER Live context exits
+                    pending_tool_request = data.get("tool_request")
+                    final_event = "tool_request"
+                    break  # Exit Live context first!
 
-            # Handle the tool request
-            tool_request = data.get("tool_request")
+                elif event_type == "completed":
+                    final_event = "completed"
+                    break
+
+                elif event_type == "failed":
+                    final_event = "failed"
+                    error_msg = data.get("error", "Unknown error")
+                    break
+
+        # PHASE 2: After Live context exits - print final content ONCE
+        if accumulated_content or accumulated_thinking:
+            print_final_streaming_content(accumulated_thinking, accumulated_content)
+
+        # PHASE 3: Handle events with clean terminal (prompts work now!)
+        if final_event == "tool_request" and pending_tool_request:
+            # Handle the tool request - prompts will work correctly now
             result, auto_approve, last_shown_message_index = execute_tool_request(
-                client, conversation_id, tool_request, tools, auto_approve, last_shown_message_index
+                client, conversation_id, pending_tool_request, tools, auto_approve, last_shown_message_index
             )
 
             if result == "error":
                 return "error"
+            elif result == "completed":
+                return "completed"
 
-            # Reset accumulated content for next response
-            accumulated_content = ""
-            accumulated_thinking = ""
+            # Small delay to let server process tool result before reconnecting
+            time.sleep(0.3)
 
-            # Continue listening for more events after tool submission
+            # Continue loop to reconnect SSE
+            continue
 
-        elif event_type == "completed":
-            # Clear any streaming output
-            if accumulated_content or accumulated_thinking:
-                console.print()  # Newline after streamed content
-            else:
-                # No streaming happened, fetch and show final message
-                return handle_completed_status(client, conversation_id, last_shown_message_index)
+        elif final_event == "completed":
             return "completed"
 
-        elif event_type == "failed":
-            if accumulated_content or accumulated_thinking:
-                console.print()
-            error_msg = data.get("error", "Unknown error")
+        elif final_event == "failed":
             console.print(f"\n[red]Error:[/red] {error_msg}")
             return "error"
 
+        # No event received (connection closed without event), break
+        break
+
     return "completed"
+
+
+def build_streaming_display(thinking: str, content: str) -> Group:
+    """Build a Rich renderable for streaming display."""
+    parts = []
+
+    if thinking:
+        thinking_text = Text("💭 ", style="dim italic")
+        thinking_text.append(thinking, style="dim italic")
+        parts.append(thinking_text)
+
+    if content:
+        header = Text("Assistant:", style="bold green")
+        parts.append(header)
+        # Only render markdown if blocks are complete (avoid partial rendering issues)
+        if has_complete_markdown(content):
+            parts.append(Markdown(content))
+        else:
+            parts.append(Text(content))
+
+    if not parts:
+        return Group(Text("..."))
+
+    return Group(*parts)
+
+
+def has_complete_markdown(content: str) -> bool:
+    """Check if markdown code blocks are complete."""
+    # Don't render partial code blocks - wait for closing ```
+    if "```" in content:
+        return content.count("```") % 2 == 0
+    return True
+
+
+def print_final_streaming_content(thinking: str, content: str) -> None:
+    """Print the final streamed content with proper formatting."""
+    if thinking:
+        console.print(f"[dim italic]💭 {thinking}[/dim italic]")
+
+    if content:
+        console.print("[bold green]Assistant:[/bold green]")
+        console.print(Markdown(content))
 
 
 def handle_polling_status(
@@ -730,7 +870,7 @@ def execute_tool_request(
                 console.print("[yellow]⊘[/yellow] Tool execution skipped by user")
                 try:
                     client.submit_tool_result(
-                        conversation_id, call_id, False, None, "User declined to execute this tool"
+                        conversation_id, call_id, False, None, "[User refused tool execution]"
                     )
                 except Exception:
                     return ("error", auto_approve, last_shown_message_index)
@@ -750,15 +890,16 @@ def execute_tool_request(
             if error:
                 console.print(f"[red]  Error: {error[:200]}[/red]")
 
-            # Submit result
-            client.submit_tool_result(conversation_id, call_id, success, output, error)
+            # Submit result - wrap error in [Tool failed: ...] format if failed
+            formatted_error = f"[Tool failed: {error}]" if not success and error else error
+            client.submit_tool_result(conversation_id, call_id, success, output, formatted_error)
 
         except Exception as e:
             console.print(f"[red]✗[/red] Tool execution failed: {str(e)}")
             # Submit error result
             try:
                 client.submit_tool_result(
-                    conversation_id, call_id, False, None, f"Tool execution failed: {str(e)}"
+                    conversation_id, call_id, False, None, f"[Tool failed: {str(e)}]"
                 )
             except Exception:
                 return ("error", auto_approve, last_shown_message_index)
@@ -767,7 +908,7 @@ def execute_tool_request(
         # Submit error result
         try:
             client.submit_tool_result(
-                conversation_id, call_id, False, None, f"Unknown tool: {tool_name}"
+                conversation_id, call_id, False, None, f"[Tool failed: Unknown tool '{tool_name}']"
             )
         except Exception:
             return ("error", auto_approve, last_shown_message_index)

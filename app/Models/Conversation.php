@@ -140,4 +140,42 @@ class Conversation extends Model
     {
         return $this->status === 'active';
     }
+
+    /**
+     * Get the current request turn count.
+     */
+    public function getRequestTurnCount(): int
+    {
+        return $this->metadata['request_turn_count'] ?? 0;
+    }
+
+    /**
+     * Increment the request turn count.
+     */
+    public function incrementRequestTurn(): void
+    {
+        $metadata = $this->metadata ?? [];
+        $metadata['request_turn_count'] = ($metadata['request_turn_count'] ?? 0) + 1;
+        $this->metadata = $metadata;
+        $this->save();
+    }
+
+    /**
+     * Reset the request turn count (called when user sends a new message).
+     */
+    public function resetRequestTurnCount(): void
+    {
+        $metadata = $this->metadata ?? [];
+        $metadata['request_turn_count'] = 0;
+        $this->metadata = $metadata;
+        $this->save();
+    }
+
+    /**
+     * Get the max turns limit for this conversation.
+     */
+    public function getMaxTurns(): int
+    {
+        return $this->metadata['max_turns'] ?? config('agent.max_turns', 25);
+    }
 }
