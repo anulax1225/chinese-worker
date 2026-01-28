@@ -33,7 +33,7 @@ Login to your Chinese Worker account:
 cw login
 ```
 
-You'll be prompted for your email and password. Credentials are stored securely in your system keyring.
+You'll be prompted for your email and password. The authentication token is stored in `~/.chinese-worker-cli-token.json`.
 
 Check current user:
 
@@ -55,24 +55,46 @@ List your agents:
 cw agents
 ```
 
+List your conversations:
+
+```bash
+# List all conversations
+cw conversations
+
+# Filter by agent
+cw conversations --agent-id 1
+
+# Filter by status
+cw conversations --status active
+```
+
 Start a chat session with an agent:
 
 ```bash
 cw chat <agent_id>
 ```
 
+When you start a chat, you'll be able to:
+- **Select an existing conversation** to resume
+- **Create a new conversation** to start fresh
+
 Example:
 
 ```bash
+# Start chat and select/create conversation interactively
 cw chat 1
+
+# Resume specific conversation
+cw chat 1 --conversation-id 123
 ```
 
 During the chat:
 - Type your messages and press Enter
 - The agent will process your request and may execute tools locally
 - Builtin tools (bash, read, write, edit, glob, grep) run on your machine
+- **Conversations continue indefinitely** - the loop only stops when you exit
 - Type `exit`, `quit`, or `bye` to end the conversation
-- Press Ctrl+C to interrupt
+- Press Ctrl+C to interrupt (you can continue after interruption)
 
 ### Configuration
 
@@ -161,6 +183,17 @@ cli/
 ├── requirements.txt
 └── README.md
 ```
+
+### Testing Builtin Tools
+
+Test that all builtin tools work correctly:
+
+```bash
+cd cli
+python test_tools.py
+```
+
+This will run quick tests on all 6 builtin tools (bash, read, write, edit, glob, grep).
 
 ### Running Tests
 
