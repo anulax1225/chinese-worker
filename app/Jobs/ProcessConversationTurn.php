@@ -62,6 +62,12 @@ class ProcessConversationTurn implements ShouldQueue
 
     public function handle(AIBackendManager $aiBackendManager, ToolService $toolService): void
     {
+        $startTime = microtime(true);
+        Log::info('[JOB] ProcessConversationTurn STARTED', [
+            'conversation_id' => $this->conversation->id,
+            'timestamp' => now()->toISOString(),
+        ]);
+
         // Eager load relationships to prevent N+1 queries
         $this->conversation->load(['agent.tools']);
 
@@ -97,6 +103,7 @@ class ProcessConversationTurn implements ShouldQueue
             ];
 
             // Call AI backend with streaming - broadcast chunks via SSE
+            Log::info('[JOB] Calling AI backend', ['conversation_id' => $this->conversation->id]);
             $response = $backend->streamExecute(
                 $this->conversation->agent,
                 $context,
@@ -104,6 +111,7 @@ class ProcessConversationTurn implements ShouldQueue
                     $broadcaster->textChunk($this->conversation, $chunk, $type);
                 }
             );
+            Log::info('[JOB] AI backend finished', ['conversation_id' => $this->conversation->id]);
 
             // Track tokens
             $this->conversation->addTokens($response->tokensUsed);
@@ -123,12 +131,20 @@ class ProcessConversationTurn implements ShouldQueue
             if (empty($validToolCalls)) {
                 $this->conversation->markAsCompleted();
                 app(ConversationEventBroadcaster::class)->completed($this->conversation);
-                Log::info('Conversation completed', ['conversation_id' => $this->conversation->id]);
+                Log::info('[JOB] Conversation completed (no tool calls)', [
+                    'conversation_id' => $this->conversation->id,
+                    'timestamp' => now()->toISOString(),
+                ]);
 
                 return;
             }
 
             // Process tool calls
+            Log::info('[JOB] Processing tool calls', [
+                'conversation_id' => $this->conversation->id,
+                'tool_count' => count($validToolCalls),
+                'tools' => array_map(fn ($tc) => $tc->name, $validToolCalls),
+            ]);
             $this->processToolCalls($validToolCalls, $toolService);
         } catch (Exception $e) {
             Log::error('Conversation turn failed', [
@@ -140,9 +156,17 @@ class ProcessConversationTurn implements ShouldQueue
             $this->conversation->update(['status' => 'failed']);
             app(ConversationEventBroadcaster::class)->failed($this->conversation, $e->getMessage());
         } finally {
+            $elapsed = round((microtime(true) - $startTime) * 1000);
+            Log::info('[JOB] ProcessConversationTurn ENDING (entering finally)', [
+                'conversation_id' => $this->conversation->id,
+                'elapsed_ms' => $elapsed,
+                'timestamp' => now()->toISOString(),
+            ]);
+
             // Disconnect with separate error handling - don't let cleanup errors break job completion
             try {
                 $backend->disconnect();
+                Log::info('[JOB] Backend disconnected', ['conversation_id' => $this->conversation->id]);
             } catch (\Throwable $e) {
                 Log::warning('Backend disconnect failed', [
                     'conversation_id' => $this->conversation->id,
@@ -152,6 +176,7 @@ class ProcessConversationTurn implements ShouldQueue
 
             try {
                 $broadcaster->disconnect();
+                Log::info('[JOB] Broadcaster disconnected', ['conversation_id' => $this->conversation->id]);
             } catch (\Throwable $e) {
                 Log::warning('Broadcaster disconnect failed', [
                     'conversation_id' => $this->conversation->id,
@@ -163,6 +188,11 @@ class ProcessConversationTurn implements ShouldQueue
             // This prevents the 60-second delay caused by held connections
             DB::disconnect();
             gc_collect_cycles();
+
+            Log::info('[JOB] ProcessConversationTurn FINISHED', [
+                'conversation_id' => $this->conversation->id,
+                'timestamp' => now()->toISOString(),
+            ]);
         }
     }
 
@@ -183,11 +213,15 @@ class ProcessConversationTurn implements ShouldQueue
                     'pending_tool_request' => $toolArray,
                 ]);
 
-                app(ConversationEventBroadcaster::class)->toolRequest($this->conversation, $toolArray);
-
-                Log::info('Waiting for builtin tool', [
+                Log::info('[JOB] Broadcasting tool_request event', [
                     'conversation_id' => $this->conversation->id,
                     'tool' => $toolCall->name,
+                    'timestamp' => now()->toISOString(),
+                ]);
+                app(ConversationEventBroadcaster::class)->toolRequest($this->conversation, $toolArray);
+                Log::info('[JOB] tool_request event broadcasted, returning from job', [
+                    'conversation_id' => $this->conversation->id,
+                    'timestamp' => now()->toISOString(),
                 ]);
 
                 return; // Exit - CLI will submit result and trigger next job

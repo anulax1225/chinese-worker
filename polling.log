@@ -1,0 +1,40 @@
+[2026-02-02 16:17:18] local.INFO: [ConversationService] processMessage called {"conversation_id":42,"message_length":48,"has_images":false,"timestamp":"2026-02-02T16:17:18+00:00"}
+[2026-02-02 16:17:18] local.INFO: [ConversationService] Dispatching ProcessConversationTurn job {"conversation_id":42,"timestamp":"2026-02-02T16:17:18+00:00"}
+[2026-02-02 16:17:18] local.INFO: [ConversationService] Job dispatched, broadcasting processing status {"conversation_id":42,"timestamp":"2026-02-02T16:17:18+00:00"}
+[2026-02-02 16:17:18] local.INFO: [ConversationService] processMessage completed {"conversation_id":42,"timestamp":"2026-02-02T16:17:18+00:00"}
+[2026-02-02 16:17:19] local.INFO: [JOB] ProcessConversationTurn STARTED {"conversation_id":42,"timestamp":"2026-02-02T16:17:19.610430Z"}
+[2026-02-02 16:17:19] local.INFO: [JOB] Calling AI backend {"conversation_id":42}
+[2026-02-02 16:17:39] local.INFO: [JOB] AI backend finished {"conversation_id":42}
+[2026-02-02 16:17:39] local.INFO: [JOB] Processing tool calls {"conversation_id":42,"tool_count":1,"tools":["glob"]}
+[2026-02-02 16:17:39] local.INFO: [JOB] Broadcasting tool_request event {"conversation_id":42,"tool":"glob","timestamp":"2026-02-02T16:17:39.707459Z"}
+[2026-02-02 16:17:39] local.INFO: [JOB] tool_request event broadcasted, returning from job {"conversation_id":42,"timestamp":"2026-02-02T16:17:39.708461Z"}
+[2026-02-02 16:17:39] local.INFO: [JOB] ProcessConversationTurn ENDING (entering finally) {"conversation_id":42,"elapsed_ms":20099.0,"timestamp":"2026-02-02T16:17:39.708856Z"}
+[2026-02-02 16:17:39] local.INFO: [JOB] Backend disconnected {"conversation_id":42}
+[2026-02-02 16:17:39] local.INFO: [JOB] Broadcaster disconnected {"conversation_id":42}
+[2026-02-02 16:17:39] local.INFO: [JOB] ProcessConversationTurn FINISHED {"conversation_id":42,"timestamp":"2026-02-02T16:17:39.710587Z"}
+[2026-02-02 16:17:43] local.INFO: [ConversationService] submitToolResult called {"conversation_id":42,"call_id":"call_ycavgeux","success":true,"output_length":53,"has_error":false,"timestamp":"2026-02-02T16:17:43+00:00"}
+[2026-02-02 16:17:43] local.INFO: [ConversationService] Dispatching next ProcessConversationTurn job after tool result {"conversation_id":42,"timestamp":"2026-02-02T16:17:43+00:00"}
+[2026-02-02 16:17:43] local.INFO: [ConversationService] Job dispatched after tool result, broadcasting processing {"conversation_id":42,"timestamp":"2026-02-02T16:17:43+00:00"}
+[2026-02-02 16:17:43] local.INFO: [ConversationService] submitToolResult completed {"conversation_id":42,"timestamp":"2026-02-02T16:17:43+00:00"}
+[2026-02-02 16:17:45] local.INFO: [JOB] ProcessConversationTurn STARTED {"conversation_id":42,"timestamp":"2026-02-02T16:17:45.763622Z"}
+[2026-02-02 16:17:45] local.INFO: [JOB] Calling AI backend {"conversation_id":42}
+[2026-02-02 16:17:52] local.INFO: [JOB] AI backend finished {"conversation_id":42}
+[2026-02-02 16:17:52] local.INFO: [JOB] Processing tool calls {"conversation_id":42,"tool_count":1,"tools":["read"]}
+[2026-02-02 16:17:52] local.INFO: [JOB] Broadcasting tool_request event {"conversation_id":42,"tool":"read","timestamp":"2026-02-02T16:17:52.843510Z"}
+[2026-02-02 16:17:52] local.INFO: [JOB] tool_request event broadcasted, returning from job {"conversation_id":42,"timestamp":"2026-02-02T16:17:52.844410Z"}
+[2026-02-02 16:17:52] local.INFO: [JOB] ProcessConversationTurn ENDING (entering finally) {"conversation_id":42,"elapsed_ms":7081.0,"timestamp":"2026-02-02T16:17:52.844717Z"}
+[2026-02-02 16:17:52] local.INFO: [JOB] Backend disconnected {"conversation_id":42}
+[2026-02-02 16:17:52] local.INFO: [JOB] Broadcaster disconnected {"conversation_id":42}
+[2026-02-02 16:17:52] local.INFO: [JOB] ProcessConversationTurn FINISHED {"conversation_id":42,"timestamp":"2026-02-02T16:17:52.846228Z"}
+[2026-02-02 16:18:16] local.INFO: [ConversationService] submitToolResult called {"conversation_id":42,"call_id":"call_9frs1tlk","success":true,"output_length":112,"has_error":false,"timestamp":"2026-02-02T16:18:16+00:00"}
+[2026-02-02 16:18:16] local.INFO: [ConversationService] Dispatching next ProcessConversationTurn job after tool result {"conversation_id":42,"timestamp":"2026-02-02T16:18:16+00:00"}
+[2026-02-02 16:18:16] local.INFO: [ConversationService] Job dispatched after tool result, broadcasting processing {"conversation_id":42,"timestamp":"2026-02-02T16:18:16+00:00"}
+[2026-02-02 16:18:16] local.INFO: [ConversationService] submitToolResult completed {"conversation_id":42,"timestamp":"2026-02-02T16:18:16+00:00"}
+[2026-02-02 16:18:18] local.INFO: [JOB] ProcessConversationTurn STARTED {"conversation_id":42,"timestamp":"2026-02-02T16:18:18.581274Z"}
+[2026-02-02 16:18:18] local.INFO: [JOB] Calling AI backend {"conversation_id":42}
+[2026-02-02 16:18:50] local.INFO: [JOB] AI backend finished {"conversation_id":42}
+[2026-02-02 16:18:50] local.INFO: [JOB] Conversation completed (no tool calls) {"conversation_id":42,"timestamp":"2026-02-02T16:18:50.667945Z"}
+[2026-02-02 16:18:50] local.INFO: [JOB] ProcessConversationTurn ENDING (entering finally) {"conversation_id":42,"elapsed_ms":32087.0,"timestamp":"2026-02-02T16:18:50.668325Z"}
+[2026-02-02 16:18:50] local.INFO: [JOB] Backend disconnected {"conversation_id":42}
+[2026-02-02 16:18:50] local.INFO: [JOB] Broadcaster disconnected {"conversation_id":42}
+[2026-02-02 16:18:50] local.INFO: [JOB] ProcessConversationTurn FINISHED {"conversation_id":42,"timestamp":"2026-02-02T16:18:50.669634Z"}

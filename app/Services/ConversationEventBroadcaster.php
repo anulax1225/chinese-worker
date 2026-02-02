@@ -18,6 +18,13 @@ class ConversationEventBroadcaster
         try {
             $channel = "conversation:{$conversation->id}:events";
 
+            // Log::info('[Broadcaster] Publishing event to Redis', [
+            //     'conversation_id' => $conversation->id,
+            //     'event' => $event,
+            //     'channel' => $channel,
+            //     'timestamp' => now()->toIso8601String(),
+            // ]);
+
             $payload = [
                 'event' => $event,
                 'conversation_id' => $conversation->id,
@@ -27,14 +34,15 @@ class ConversationEventBroadcaster
 
             Redis::publish($channel, json_encode($payload));
 
-            Log::debug('Broadcasted conversation event', [
-                'conversation_id' => $conversation->id,
-                'event' => $event,
-                'channel' => $channel,
-            ]);
+            // Log::info('[Broadcaster] Event published successfully', [
+            //     'conversation_id' => $conversation->id,
+            //     'event' => $event,
+            //     'channel' => $channel,
+            //     'timestamp' => now()->toIso8601String(),
+            // ]);
         } catch (\Exception $e) {
             // Don't fail job if broadcasting fails - SSE is best-effort
-            Log::warning('Failed to broadcast conversation event', [
+            Log::warning('[Broadcaster] Failed to broadcast conversation event', [
                 'conversation_id' => $conversation->id,
                 'event' => $event,
                 'error' => $e->getMessage(),
