@@ -21,7 +21,7 @@ from .tools import BashTool, ReadTool, WriteTool, EditTool, GlobTool, GrepTool
 console = Console()
 
 # Input history file path
-HISTORY_FILE = os.path.expanduser("~/.cw_history")
+HISTORY_FILE = os.path.expanduser("~/.cw/history")
 
 
 def get_default_api_url() -> str:
@@ -603,42 +603,46 @@ def handle_sse_events(
         final_event = None
         error_msg = None
 
-        # PHASE 1: Live display for streaming ONLY - no user interaction here
-        with Live(console=console, refresh_per_second=10, transient=True) as live:
-            for event_type, data in sse_client.events():
-                if event_type == "connected":
-                    continue
+        try:
+            # PHASE 1: Live display for streaming ONLY - no user interaction here
+            with Live(console=console, refresh_per_second=10, transient=True) as live:
+                for event_type, data in sse_client.events():
+                    if event_type == "connected":
+                        continue
 
-                elif event_type == "text_chunk":
-                    # Progressive text rendering with markdown
-                    chunk = data.get("chunk", "")
-                    chunk_type = data.get("type", "content")
-                    if chunk_type == "thinking":
-                        accumulated_thinking += chunk
-                    else:
-                        accumulated_content += chunk
+                    elif event_type == "text_chunk":
+                        # Progressive text rendering with markdown
+                        chunk = data.get("chunk", "")
+                        chunk_type = data.get("type", "content")
+                        if chunk_type == "thinking":
+                            accumulated_thinking += chunk
+                        else:
+                            accumulated_content += chunk
 
-                    # Build and update the live display
-                    live.update(build_streaming_display(accumulated_thinking, accumulated_content))
+                        # Build and update the live display
+                        live.update(build_streaming_display(accumulated_thinking, accumulated_content))
 
-                elif event_type == "status_changed":
-                    # Status update (e.g., processing)
-                    pass
+                    elif event_type == "status_changed":
+                        # Status update (e.g., processing)
+                        pass
 
-                elif event_type == "tool_request":
-                    # Store tool request, handle AFTER Live context exits
-                    pending_tool_request = data.get("tool_request")
-                    final_event = "tool_request"
-                    break  # Exit Live context first!
+                    elif event_type == "tool_request":
+                        # Store tool request, handle AFTER Live context exits
+                        pending_tool_request = data.get("tool_request")
+                        final_event = "tool_request"
+                        break  # Exit Live context first!
 
-                elif event_type == "completed":
-                    final_event = "completed"
-                    break
+                    elif event_type == "completed":
+                        final_event = "completed"
+                        break
 
-                elif event_type == "failed":
-                    final_event = "failed"
-                    error_msg = data.get("error", "Unknown error")
-                    break
+                    elif event_type == "failed":
+                        final_event = "failed"
+                        error_msg = data.get("error", "Unknown error")
+                        break
+        finally:
+            # Always close SSE connection to release resources
+            sse_client.close()
 
         # PHASE 2: After Live context exits - print final content ONCE
         if accumulated_content or accumulated_thinking:

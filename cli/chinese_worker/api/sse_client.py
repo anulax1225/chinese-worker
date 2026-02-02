@@ -31,6 +31,7 @@ class SSEClient:
             "Cache-Control": "no-cache",
         }
         self.timeout = timeout
+        self._response: Optional[httpx.Response] = None
 
     def events(self) -> Iterator[Tuple[str, Dict[str, Any]]]:
         """
@@ -49,37 +50,50 @@ class SSEClient:
             headers=self.headers,
             timeout=httpx.Timeout(connect=5.0, read=self.timeout, write=5.0, pool=5.0),
         ) as response:
+            self._response = response
             response.raise_for_status()
 
             event_type: Optional[str] = None
             data_buffer: str = ""
 
-            for line in response.iter_lines():
-                # Skip comments (padding)
-                if line.startswith(":"):
-                    continue
+            try:
+                for line in response.iter_lines():
+                    # Skip comments (padding)
+                    if line.startswith(":"):
+                        continue
 
-                # Empty line signals end of event
-                if line == "":
-                    if event_type and data_buffer:
-                        try:
-                            data = json.loads(data_buffer)
-                            yield (event_type, data)
-                        except json.JSONDecodeError:
-                            pass  # Skip malformed data
+                    # Empty line signals end of event
+                    if line == "":
+                        if event_type and data_buffer:
+                            try:
+                                data = json.loads(data_buffer)
+                                yield (event_type, data)
+                            except json.JSONDecodeError:
+                                pass  # Skip malformed data
 
-                        # Check for terminal events
-                        if event_type in ("completed", "failed"):
-                            return
+                            # Check for terminal events
+                            if event_type in ("completed", "failed"):
+                                return
 
-                    event_type = None
-                    data_buffer = ""
-                    continue
+                        event_type = None
+                        data_buffer = ""
+                        continue
 
-                if line.startswith("event:"):
-                    event_type = line[6:].strip()
-                elif line.startswith("data:"):
-                    data_buffer += line[5:].strip()
+                    if line.startswith("event:"):
+                        event_type = line[6:].strip()
+                    elif line.startswith("data:"):
+                        data_buffer += line[5:].strip()
+            finally:
+                self._response = None
+
+    def close(self) -> None:
+        """Close the SSE connection explicitly."""
+        if self._response:
+            try:
+                self._response.close()
+            except Exception:
+                pass  # Ignore close errors
+            self._response = None
 
     def connect(
         self,

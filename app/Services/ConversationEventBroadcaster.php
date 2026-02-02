@@ -127,4 +127,15 @@ class ConversationEventBroadcaster
             ],
         ]);
     }
+
+    /**
+     * Disconnect and reset Redis connection.
+     *
+     * No-op: Redis connections are managed by Laravel's connection pool.
+     * Manually closing breaks SSE subscribers that share the pool.
+     */
+    public function disconnect(): void
+    {
+        // Intentionally empty - Laravel manages Redis connection pool
+    }
 }

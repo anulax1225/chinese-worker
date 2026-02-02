@@ -116,45 +116,49 @@ class OllamaBackend implements AIBackendInterface
             $lastData = [];
             $toolCalls = [];
 
-            while (! $body->eof()) {
-                $line = $this->readLine($body);
+            try {
+                while (! $body->eof()) {
+                    $line = $this->readLine($body);
 
-                if (empty($line)) {
-                    continue;
+                    if (empty($line)) {
+                        continue;
+                    }
+
+                    $data = json_decode($line, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        continue;
+                    }
+
+                    // Handle thinking streaming (before content)
+                    if (isset($data['message']['thinking']) && $data['message']['thinking'] !== '') {
+                        $thinking = $data['message']['thinking'];
+                        $fullThinking .= $thinking;
+                        $callback($thinking, 'thinking');
+                    }
+
+                    // Handle content streaming
+                    if (isset($data['message']['content']) && $data['message']['content'] !== '') {
+                        $content = $data['message']['content'];
+                        $fullContent .= $content;
+                        $callback($content, 'content');
+                    }
+
+                    // Collect tool calls
+                    if (isset($data['message']['tool_calls'])) {
+                        $toolCalls = array_merge($toolCalls, $data['message']['tool_calls']);
+                    }
+
+                    if (! empty($data['done'])) {
+                        $lastData = $data;
+                        break;
+                    }
                 }
 
-                $data = json_decode($line, true);
-
-                if (json_last_error() !== JSON_ERROR_NONE) {
-                    continue;
-                }
-
-                // Handle thinking streaming (before content)
-                if (isset($data['message']['thinking']) && $data['message']['thinking'] !== '') {
-                    $thinking = $data['message']['thinking'];
-                    $fullThinking .= $thinking;
-                    $callback($thinking, 'thinking');
-                }
-
-                // Handle content streaming
-                if (isset($data['message']['content']) && $data['message']['content'] !== '') {
-                    $content = $data['message']['content'];
-                    $fullContent .= $content;
-                    $callback($content, 'content');
-                }
-
-                // Collect tool calls
-                if (isset($data['message']['tool_calls'])) {
-                    $toolCalls = array_merge($toolCalls, $data['message']['tool_calls']);
-                }
-
-                if (! empty($data['done'])) {
-                    $lastData = $data;
-                    break;
-                }
+                return $this->buildAIResponse($fullContent, $lastData, $toolCalls, $fullThinking ?: null);
+            } finally {
+                $body->close();
             }
-
-            return $this->buildAIResponse($fullContent, $lastData, $toolCalls, $fullThinking ?: null);
         } catch (GuzzleException $e) {
             throw new RuntimeException(
                 "Ollama streaming request failed: {$e->getMessage()}",
@@ -489,5 +493,22 @@ class OllamaBackend implements AIBackendInterface
         }
 
         return trim($line);
+    }
+
+    public function disconnect(): void
+    {
+        // Dereference old client to allow garbage collection of cURL handles
+        unset($this->client);
+
+        // Create fresh client with Connection: close to prevent HTTP keep-alive issues
+        $this->client = new Client([
+            'base_uri' => $this->baseUrl,
+            'timeout' => $this->timeout,
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+                'Connection' => 'close',
+            ],
+        ]);
     }
 }

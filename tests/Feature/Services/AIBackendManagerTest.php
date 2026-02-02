@@ -71,6 +71,11 @@ describe('AIBackendManager', function () {
             {
                 return [];
             }
+
+            public function disconnect(): void
+            {
+                // No-op for test
+            }
         };
 
         $manager = app(AIBackendManager::class);

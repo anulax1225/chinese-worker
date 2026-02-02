@@ -11,6 +11,7 @@ use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -335,6 +336,10 @@ class ConversationController extends Controller
 
                 // Subscribe to Redis channel for this conversation
                 $channel = "conversation:{$conversation->id}:events";
+
+                // Release database connection before blocking - we only need Redis from here
+                // This prevents the SSE endpoint from holding DB connections while waiting for events
+                DB::disconnect();
 
                 try {
                     $redis = Redis::connection('default');

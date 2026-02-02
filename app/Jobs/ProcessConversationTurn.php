@@ -12,6 +12,7 @@ use App\Services\ToolService;
 use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class ProcessConversationTurn implements ShouldQueue
@@ -61,6 +62,13 @@ class ProcessConversationTurn implements ShouldQueue
 
     public function handle(AIBackendManager $aiBackendManager, ToolService $toolService): void
     {
+        // Eager load relationships to prevent N+1 queries
+        $this->conversation->load(['agent.tools']);
+
+        // Get AI backend and broadcaster early so we can disconnect in finally
+        $backend = $aiBackendManager->driver($this->conversation->agent->ai_backend);
+        $broadcaster = app(ConversationEventBroadcaster::class);
+
         try {
             $maxTurns = $this->conversation->getMaxTurns();
 
@@ -79,10 +87,6 @@ class ProcessConversationTurn implements ShouldQueue
             // Increment both turn counts
             $this->conversation->incrementTurn();
             $this->conversation->incrementRequestTurn();
-
-            // Get AI backend and broadcaster
-            $backend = $aiBackendManager->driver($this->conversation->agent->ai_backend);
-            $broadcaster = app(ConversationEventBroadcaster::class);
 
             // Prepare context with turn info
             $context = [
@@ -135,6 +139,30 @@ class ProcessConversationTurn implements ShouldQueue
 
             $this->conversation->update(['status' => 'failed']);
             app(ConversationEventBroadcaster::class)->failed($this->conversation, $e->getMessage());
+        } finally {
+            // Disconnect with separate error handling - don't let cleanup errors break job completion
+            try {
+                $backend->disconnect();
+            } catch (\Throwable $e) {
+                Log::warning('Backend disconnect failed', [
+                    'conversation_id' => $this->conversation->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            try {
+                $broadcaster->disconnect();
+            } catch (\Throwable $e) {
+                Log::warning('Broadcaster disconnect failed', [
+                    'conversation_id' => $this->conversation->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            // Release database connection and force garbage collection
+            // This prevents the 60-second delay caused by held connections
+            DB::disconnect();
+            gc_collect_cycles();
         }
     }
 

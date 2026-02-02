@@ -26,15 +26,6 @@ To continue with **Phase 3** in a new conversation:
 | [**PHASE_3_START_PROMPT.md**](docs/context/PHASE_3_START_PROMPT.md) | Ready-to-use prompt for Phase 3 | Starting Phase 3 in new conversation |
 | [**README.md**](docs/context/README.md) | Guide to the context folder | Understanding how to use context docs |
 
-### In Project Root:
-
-| File | Purpose |
-|------|---------|
-| [QUICKSTART.md](QUICKSTART.md) | 5-minute getting started guide |
-| [PHASE_2.5_SUMMARY.md](PHASE_2.5_SUMMARY.md) | Phase 2.5 improvements summary |
-| [cli/README.md](cli/README.md) | CLI documentation |
-| [TODO.md](TODO.md) | Original project notes |
-
 ## 📊 Current Status
 
 - ✅ **Phase 1**: Backend with Polling - COMPLETE

@@ -35,4 +35,9 @@ interface AIBackendInterface
      * @return array<int, array<string, mixed>>
      */
     public function listModels(): array;
+
+    /**
+     * Disconnect and cleanup any open connections.
+     */
+    public function disconnect(): void;
 }
