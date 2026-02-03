@@ -1,6 +1,7 @@
 """Main CLI entry point."""
 
 import click
+import platform
 import time
 import os
 from rich.console import Console, Group
@@ -17,6 +18,7 @@ from prompt_toolkit.history import FileHistory
 
 from .api import APIClient, AuthManager, SSEClient, SSEEventHandler
 from .tools import BashTool, ReadTool, WriteTool, EditTool, GlobTool, GrepTool
+from .tools.base import BaseTool
 
 console = Console()
 
@@ -27,6 +29,24 @@ HISTORY_FILE = os.path.expanduser("~/.cw/history")
 def get_default_api_url() -> str:
     """Get default API URL from environment or use localhost."""
     return os.getenv("CW_API_URL", "http://localhost")
+
+
+def get_client_type() -> str:
+    """Get the client type based on the operating system."""
+    system = platform.system().lower()
+    if system == "linux":
+        return "cli_linux"
+    elif system == "darwin":
+        return "cli_macos"
+    elif system == "windows":
+        return "cli_windows"
+    else:
+        return f"cli_{system}"
+
+
+def get_tool_schemas(tools: Dict[str, BaseTool]) -> List[Dict[str, Any]]:
+    """Get schemas for all tools to send to server."""
+    return [tool.get_schema() for tool in tools.values()]
 
 
 def safe_get(data: Any, *keys, default=None) -> Any:
@@ -262,7 +282,7 @@ def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optio
                 return
         else:
             # List existing conversations and let user choose
-            conversation = select_or_create_conversation(client, agent_id, agent['name'])
+            conversation = select_or_create_conversation(client, agent_id, agent['name'], tools)
             if not conversation:
                 return
 
@@ -322,7 +342,12 @@ def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optio
         raise click.Abort()
 
 
-def select_or_create_conversation(client: APIClient, agent_id: int, agent_name: str) -> Optional[Dict[str, Any]]:
+def select_or_create_conversation(
+    client: APIClient,
+    agent_id: int,
+    agent_name: str,
+    tools: Optional[Dict[str, BaseTool]] = None,
+) -> Optional[Dict[str, Any]]:
     """
     Let user select an existing conversation or create a new one.
 
@@ -366,7 +391,7 @@ def select_or_create_conversation(client: APIClient, agent_id: int, agent_name: 
             )
 
             if choice == "new":
-                return create_new_conversation(client, agent_id)
+                return create_new_conversation(client, agent_id, tools)
             else:
                 idx = int(choice) - 1
                 selected = conversations[idx]
@@ -382,23 +407,33 @@ def select_or_create_conversation(client: APIClient, agent_id: int, agent_name: 
         else:
             # No existing conversations, create new
             console.print(f"\n[dim]No existing conversations found[/dim]\n")
-            return create_new_conversation(client, agent_id)
+            return create_new_conversation(client, agent_id, tools)
 
     except Exception as e:
         console.print(f"[yellow]⚠[/yellow] Could not list conversations: {str(e)}")
         console.print("[dim]Creating new conversation...[/dim]\n")
-        return create_new_conversation(client, agent_id)
+        return create_new_conversation(client, agent_id, tools)
 
 
-def create_new_conversation(client: APIClient, agent_id: int) -> Dict[str, Any]:
-    """Create a new conversation."""
+def create_new_conversation(
+    client: APIClient, agent_id: int, tools: Optional[Dict[str, BaseTool]] = None
+) -> Dict[str, Any]:
+    """Create a new conversation with client tool schemas."""
+    # Get client info
+    client_type = get_client_type()
+    client_tool_schemas = get_tool_schemas(tools) if tools else None
+
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         console=console,
     ) as progress:
         progress.add_task("Creating new conversation...", total=None)
-        conv_response = client.create_conversation(agent_id)
+        conv_response = client.create_conversation(
+            agent_id,
+            client_type=client_type,
+            client_tool_schemas=client_tool_schemas,
+        )
         conversation = safe_get(conv_response, "data", default=conv_response)
 
     console.print(f"[green]✓[/green] New conversation created (ID: {conversation['id']})\n")

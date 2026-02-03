@@ -14,6 +14,56 @@ class GrepTool(BaseTool):
     def name(self) -> str:
         return "grep"
 
+    @property
+    def description(self) -> str:
+        return "Search for a pattern in files using regex"
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Regex pattern to search for",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Path to search in (default: current directory)",
+                },
+                "glob": {
+                    "type": "string",
+                    "description": "Glob pattern to filter files (e.g., '*.py')",
+                },
+                "type": {
+                    "type": "string",
+                    "description": "File type filter (e.g., 'py', 'js', 'php')",
+                },
+                "output_mode": {
+                    "type": "string",
+                    "description": "Output mode: 'content', 'files_with_matches', or 'count'",
+                    "enum": ["content", "files_with_matches", "count"],
+                },
+                "case_insensitive": {
+                    "type": "boolean",
+                    "description": "Case insensitive search (default: false)",
+                },
+                "head_limit": {
+                    "type": "integer",
+                    "description": "Limit output to N results",
+                },
+                "context_before": {
+                    "type": "integer",
+                    "description": "Number of lines to show before each match",
+                },
+                "context_after": {
+                    "type": "integer",
+                    "description": "Number of lines to show after each match",
+                },
+            },
+            "required": ["pattern"],
+        }
+
     def execute(self, args: Dict[str, Any]) -> Tuple[bool, str, str]:
         """
         Search for a pattern in files.

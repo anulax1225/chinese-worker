@@ -13,6 +13,27 @@ class BashTool(BaseTool):
     def name(self) -> str:
         return "bash"
 
+    @property
+    def description(self) -> str:
+        return "Execute a bash command on the client system"
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The bash command to execute",
+                },
+                "timeout": {
+                    "type": "integer",
+                    "description": "Timeout in seconds (default: 120)",
+                },
+            },
+            "required": ["command"],
+        }
+
     def execute(self, args: Dict[str, Any]) -> Tuple[bool, str, str]:
         """
         Execute a bash command.

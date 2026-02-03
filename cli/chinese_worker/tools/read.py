@@ -12,6 +12,31 @@ class ReadTool(BaseTool):
     def name(self) -> str:
         return "read"
 
+    @property
+    def description(self) -> str:
+        return "Read the contents of a file"
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to read",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Line number to start reading from (0-indexed)",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of lines to read",
+                },
+            },
+            "required": ["file_path"],
+        }
+
     def execute(self, args: Dict[str, Any]) -> Tuple[bool, str, str]:
         """
         Read a file.

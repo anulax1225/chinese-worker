@@ -13,6 +13,18 @@ class BaseTool(ABC):
         """Tool name."""
         pass
 
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """Tool description."""
+        pass
+
+    @property
+    @abstractmethod
+    def parameters(self) -> Dict[str, Any]:
+        """Tool parameters schema (JSON Schema format)."""
+        pass
+
     @abstractmethod
     def execute(self, args: Dict[str, Any]) -> Tuple[bool, str, str]:
         """
@@ -25,3 +37,11 @@ class BaseTool(ABC):
             Tuple of (success, output, error)
         """
         pass
+
+    def get_schema(self) -> Dict[str, Any]:
+        """Get the full tool schema for API registration."""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.parameters,
+        }

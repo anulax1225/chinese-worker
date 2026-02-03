@@ -12,6 +12,35 @@ class EditTool(BaseTool):
     def name(self) -> str:
         return "edit"
 
+    @property
+    def description(self) -> str:
+        return "Edit a file by replacing old text with new text"
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to edit",
+                },
+                "old_string": {
+                    "type": "string",
+                    "description": "The text to find and replace",
+                },
+                "new_string": {
+                    "type": "string",
+                    "description": "The text to replace with",
+                },
+                "replace_all": {
+                    "type": "boolean",
+                    "description": "Replace all occurrences (default: false)",
+                },
+            },
+            "required": ["file_path", "old_string", "new_string"],
+        }
+
     def execute(self, args: Dict[str, Any]) -> Tuple[bool, str, str]:
         """
         Edit a file by replacing old_string with new_string.

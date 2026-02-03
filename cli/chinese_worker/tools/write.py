@@ -12,6 +12,27 @@ class WriteTool(BaseTool):
     def name(self) -> str:
         return "write"
 
+    @property
+    def description(self) -> str:
+        return "Write content to a file"
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the file to write",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Content to write to the file",
+                },
+            },
+            "required": ["file_path", "content"],
+        }
+
     def execute(self, args: Dict[str, Any]) -> Tuple[bool, str, str]:
         """
         Write content to a file.

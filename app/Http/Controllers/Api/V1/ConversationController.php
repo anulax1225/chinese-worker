@@ -55,6 +55,11 @@ class ConversationController extends Controller
         $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
+            'client_type' => ['nullable', 'string'],
+            'client_tool_schemas' => ['nullable', 'array'],
+            'client_tool_schemas.*.name' => ['required_with:client_tool_schemas', 'string'],
+            'client_tool_schemas.*.description' => ['required_with:client_tool_schemas', 'string'],
+            'client_tool_schemas.*.parameters' => ['required_with:client_tool_schemas', 'array'],
         ]);
 
         $conversation = Conversation::create([
@@ -65,6 +70,8 @@ class ConversationController extends Controller
             'metadata' => $request->input('metadata', []),
             'turn_count' => 0,
             'total_tokens' => 0,
+            'client_type' => $request->input('client_type'),
+            'client_tool_schemas' => $request->input('client_tool_schemas', []),
         ]);
 
         return (new ConversationResource($conversation))

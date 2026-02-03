@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Tool;
 use GuzzleHttp\Client;
-use Illuminate\Support\Facades\Process;
 
 class ToolService
 {
@@ -42,7 +41,6 @@ class ToolService
         return match ($tool->type) {
             'api' => $this->executeApiTool($tool, $params),
             'function' => $this->executeFunctionTool($tool, $params),
-            'command' => $this->executeCommandTool($tool, $params),
             default => throw new \InvalidArgumentException("Unsupported tool type: {$tool->type}"),
         };
     }
@@ -82,28 +80,6 @@ class ToolService
             'status' => 'executed',
             'params' => $params,
             'config' => $config,
-        ];
-    }
-
-    /**
-     * Execute a command tool.
-     */
-    protected function executeCommandTool(Tool $tool, array $params): mixed
-    {
-        $config = $tool->config;
-        $command = $config['command'];
-
-        // Replace placeholders with params
-        foreach ($params as $key => $value) {
-            $command = str_replace("{{$key}}", escapeshellarg($value), $command);
-        }
-
-        $result = Process::run($command);
-
-        return [
-            'output' => $result->output(),
-            'error' => $result->errorOutput(),
-            'exit_code' => $result->exitCode(),
         ];
     }
 }

@@ -14,6 +14,27 @@ class GlobTool(BaseTool):
     def name(self) -> str:
         return "glob"
 
+    @property
+    def description(self) -> str:
+        return "Find files matching a glob pattern"
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Glob pattern to match files (e.g., '**/*.py')",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Directory to search in (default: current directory)",
+                },
+            },
+            "required": ["pattern"],
+        }
+
     def execute(self, args: Dict[str, Any]) -> Tuple[bool, str, str]:
         """
         Find files matching a glob pattern.

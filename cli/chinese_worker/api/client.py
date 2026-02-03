@@ -132,7 +132,11 @@ class APIClient:
         return response.json()
 
     def create_conversation(
-        self, agent_id: int, metadata: Optional[Dict[str, Any]] = None
+        self,
+        agent_id: int,
+        metadata: Optional[Dict[str, Any]] = None,
+        client_type: Optional[str] = None,
+        client_tool_schemas: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Create a new conversation with an agent.
@@ -140,6 +144,8 @@ class APIClient:
         Args:
             agent_id: Agent ID
             metadata: Optional metadata
+            client_type: Type of client (e.g., 'cli_linux', 'cli_windows', 'web')
+            client_tool_schemas: List of tool schemas the client supports
 
         Returns:
             Conversation data
@@ -150,6 +156,10 @@ class APIClient:
         payload = {}
         if metadata:
             payload["metadata"] = metadata
+        if client_type:
+            payload["client_type"] = client_type
+        if client_tool_schemas:
+            payload["client_tool_schemas"] = client_tool_schemas
 
         response = httpx.post(
             f"{self.base_url}/api/v1/agents/{agent_id}/conversations",

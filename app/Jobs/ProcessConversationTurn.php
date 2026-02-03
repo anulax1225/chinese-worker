@@ -6,10 +6,14 @@ use App\DTOs\ChatMessage;
 use App\DTOs\ToolCall;
 use App\DTOs\ToolResult;
 use App\Models\Conversation;
+use App\Models\Todo;
 use App\Services\AIBackendManager;
+use App\Services\ClientToolRegistry;
 use App\Services\ConversationEventBroadcaster;
+use App\Services\ToolSchemaRegistry;
 use App\Services\ToolService;
 use Exception;
+use GuzzleHttp\Client;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -36,16 +40,6 @@ class ProcessConversationTurn implements ShouldQueue
      */
     public bool $failOnTimeout = true;
 
-    // Builtin tools that must be executed on the CLI
-    protected const BUILTIN_TOOLS = [
-        'bash',
-        'read',
-        'write',
-        'edit',
-        'glob',
-        'grep',
-    ];
-
     // System tools that are executed on the server
     protected const SYSTEM_TOOLS = [
         'todo_add',
@@ -54,6 +48,7 @@ class ProcessConversationTurn implements ShouldQueue
         'todo_update',
         'todo_delete',
         'todo_clear',
+        'web_search',
     ];
 
     public function __construct(
@@ -204,7 +199,7 @@ class ProcessConversationTurn implements ShouldQueue
 
     protected function isBuiltinTool(string $toolName): bool
     {
-        return in_array($toolName, self::BUILTIN_TOOLS, true);
+        return app(ClientToolRegistry::class)->clientSupports($this->conversation, $toolName);
     }
 
     protected function isSystemTool(string $toolName): bool
@@ -271,6 +266,7 @@ class ProcessConversationTurn implements ShouldQueue
                 'todo_update' => $this->todoUpdate($toolCall->arguments),
                 'todo_delete' => $this->todoDelete($toolCall->arguments),
                 'todo_clear' => $this->todoClear(),
+                'web_search' => $this->webSearch($toolCall->arguments),
                 default => new ToolResult(
                     success: false,
                     output: '',
@@ -312,266 +308,41 @@ class ProcessConversationTurn implements ShouldQueue
     }
 
     /**
-     * Get all tool schemas (builtin + system + user).
+     * Get all tool schemas (client + system + user).
      *
      * @return array<int, array<string, mixed>>
      */
     protected function getAllToolSchemas(): array
     {
-        $tools = [];
-
-        // Builtin tool schemas
-        $tools = array_merge($tools, $this->getBuiltinToolSchemas());
-
-        // System tool schemas
-        $tools = array_merge($tools, $this->getSystemToolSchemas());
-
-        // User tool schemas
-        foreach ($this->conversation->agent->tools as $tool) {
-            $tools[] = [
-                'name' => $tool->name,
-                'description' => $tool->config['description'] ?? '',
-                'parameters' => $tool->config['parameters'] ?? [],
-            ];
-        }
-
-        return $tools;
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    protected function getBuiltinToolSchemas(): array
-    {
-        return [
-            [
-                'name' => 'bash',
-                'description' => 'Execute a bash command on the client system',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'command' => [
-                            'type' => 'string',
-                            'description' => 'The bash command to execute',
-                        ],
-                    ],
-                    'required' => ['command'],
-                ],
-            ],
-            [
-                'name' => 'read',
-                'description' => 'Read the contents of a file',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'file_path' => [
-                            'type' => 'string',
-                            'description' => 'Path to the file to read',
-                        ],
-                    ],
-                    'required' => ['file_path'],
-                ],
-            ],
-            [
-                'name' => 'write',
-                'description' => 'Write content to a file',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'file_path' => [
-                            'type' => 'string',
-                            'description' => 'Path to the file to write',
-                        ],
-                        'content' => [
-                            'type' => 'string',
-                            'description' => 'Content to write to the file',
-                        ],
-                    ],
-                    'required' => ['file_path', 'content'],
-                ],
-            ],
-            [
-                'name' => 'edit',
-                'description' => 'Edit a file by replacing old text with new text',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'file_path' => [
-                            'type' => 'string',
-                            'description' => 'Path to the file to edit',
-                        ],
-                        'old_string' => [
-                            'type' => 'string',
-                            'description' => 'The text to find and replace',
-                        ],
-                        'new_string' => [
-                            'type' => 'string',
-                            'description' => 'The text to replace with',
-                        ],
-                    ],
-                    'required' => ['file_path', 'old_string', 'new_string'],
-                ],
-            ],
-            [
-                'name' => 'glob',
-                'description' => 'Find files matching a pattern',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'pattern' => [
-                            'type' => 'string',
-                            'description' => 'Glob pattern to match files',
-                        ],
-                    ],
-                    'required' => ['pattern'],
-                ],
-            ],
-            [
-                'name' => 'grep',
-                'description' => 'Search for a pattern in files',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'pattern' => [
-                            'type' => 'string',
-                            'description' => 'Pattern to search for',
-                        ],
-                        'path' => [
-                            'type' => 'string',
-                            'description' => 'Path to search in',
-                        ],
-                    ],
-                    'required' => ['pattern'],
-                ],
-            ],
-        ];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    protected function getSystemToolSchemas(): array
-    {
-        return [
-            [
-                'name' => 'todo_add',
-                'description' => 'Add a new todo item for this agent',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'item' => [
-                            'type' => 'string',
-                            'description' => 'The todo item description',
-                        ],
-                        'priority' => [
-                            'type' => 'string',
-                            'description' => 'Priority level: low, medium, high',
-                            'enum' => ['low', 'medium', 'high'],
-                        ],
-                    ],
-                    'required' => ['item'],
-                ],
-            ],
-            [
-                'name' => 'todo_list',
-                'description' => 'List all todo items for this agent',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [],
-                ],
-            ],
-            [
-                'name' => 'todo_complete',
-                'description' => 'Mark a todo item as complete',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'id' => [
-                            'type' => 'string',
-                            'description' => 'The todo item ID',
-                        ],
-                    ],
-                    'required' => ['id'],
-                ],
-            ],
-            [
-                'name' => 'todo_update',
-                'description' => 'Update a todo item',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'id' => [
-                            'type' => 'string',
-                            'description' => 'The todo item ID',
-                        ],
-                        'item' => [
-                            'type' => 'string',
-                            'description' => 'Updated todo description',
-                        ],
-                    ],
-                    'required' => ['id', 'item'],
-                ],
-            ],
-            [
-                'name' => 'todo_delete',
-                'description' => 'Delete a todo item',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'id' => [
-                            'type' => 'string',
-                            'description' => 'The todo item ID to delete',
-                        ],
-                    ],
-                    'required' => ['id'],
-                ],
-            ],
-            [
-                'name' => 'todo_clear',
-                'description' => 'Clear all todo items for this agent',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [],
-                ],
-            ],
-        ];
+        return app(ToolSchemaRegistry::class)->getToolsForConversation($this->conversation);
     }
 
     // Todo system tool implementations
 
     protected function todoAdd(array $args): ToolResult
     {
-        $agent = $this->conversation->agent;
-        $metadata = $agent->metadata ?? [];
-        $todos = $metadata['todos'] ?? [];
-
-        $todo = [
-            'id' => uniqid('todo_'),
-            'item' => $args['item'],
+        $todo = Todo::create([
+            'agent_id' => $this->conversation->agent_id,
+            'conversation_id' => $this->conversation->id,
+            'content' => $args['item'],
             'priority' => $args['priority'] ?? 'medium',
-            'completed' => false,
-            'created_at' => now()->toISOString(),
-        ];
-
-        $todos[] = $todo;
-        $metadata['todos'] = $todos;
-
-        $agent->update(['metadata' => $metadata]);
+        ]);
 
         return new ToolResult(
             success: true,
-            output: "Added todo: {$args['item']} (priority: {$todo['priority']})",
+            output: "Added todo #{$todo->id}: {$args['item']} (priority: {$todo->priority})",
             error: null
         );
     }
 
     protected function todoList(): ToolResult
     {
-        $agent = $this->conversation->agent;
-        $metadata = $agent->metadata ?? [];
-        $todos = $metadata['todos'] ?? [];
+        $todos = Todo::where('agent_id', $this->conversation->agent_id)
+            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
+            ->orderBy('created_at')
+            ->get();
 
-        if (empty($todos)) {
+        if ($todos->isEmpty()) {
             return new ToolResult(
                 success: true,
                 output: 'No todos found.',
@@ -581,8 +352,12 @@ class ProcessConversationTurn implements ShouldQueue
 
         $output = "Todos:\n";
         foreach ($todos as $todo) {
-            $status = $todo['completed'] ? '[✓]' : '[ ]';
-            $output .= "{$status} {$todo['id']}: {$todo['item']} ({$todo['priority']})\n";
+            $status = match ($todo->status) {
+                'completed' => '[✓]',
+                'in_progress' => '[~]',
+                default => '[ ]',
+            };
+            $output .= "{$status} #{$todo->id}: {$todo->content} ({$todo->priority})\n";
         }
 
         return new ToolResult(
@@ -594,21 +369,13 @@ class ProcessConversationTurn implements ShouldQueue
 
     protected function todoComplete(array $args): ToolResult
     {
-        $agent = $this->conversation->agent;
-        $metadata = $agent->metadata ?? [];
-        $todos = $metadata['todos'] ?? [];
+        $id = is_numeric($args['id']) ? (int) $args['id'] : $args['id'];
 
-        $found = false;
-        foreach ($todos as &$todo) {
-            if ($todo['id'] === $args['id']) {
-                $todo['completed'] = true;
-                $todo['completed_at'] = now()->toISOString();
-                $found = true;
-                break;
-            }
-        }
+        $todo = Todo::where('agent_id', $this->conversation->agent_id)
+            ->where('id', $id)
+            ->first();
 
-        if (! $found) {
+        if (! $todo) {
             return new ToolResult(
                 success: false,
                 output: '',
@@ -616,33 +383,24 @@ class ProcessConversationTurn implements ShouldQueue
             );
         }
 
-        $metadata['todos'] = $todos;
-        $agent->update(['metadata' => $metadata]);
+        $todo->markAsCompleted();
 
         return new ToolResult(
             success: true,
-            output: "Marked todo {$args['id']} as complete",
+            output: "Marked todo #{$todo->id} as complete",
             error: null
         );
     }
 
     protected function todoUpdate(array $args): ToolResult
     {
-        $agent = $this->conversation->agent;
-        $metadata = $agent->metadata ?? [];
-        $todos = $metadata['todos'] ?? [];
+        $id = is_numeric($args['id']) ? (int) $args['id'] : $args['id'];
 
-        $found = false;
-        foreach ($todos as &$todo) {
-            if ($todo['id'] === $args['id']) {
-                $todo['item'] = $args['item'];
-                $todo['updated_at'] = now()->toISOString();
-                $found = true;
-                break;
-            }
-        }
+        $todo = Todo::where('agent_id', $this->conversation->agent_id)
+            ->where('id', $id)
+            ->first();
 
-        if (! $found) {
+        if (! $todo) {
             return new ToolResult(
                 success: false,
                 output: '',
@@ -650,25 +408,24 @@ class ProcessConversationTurn implements ShouldQueue
             );
         }
 
-        $metadata['todos'] = $todos;
-        $agent->update(['metadata' => $metadata]);
+        $todo->update(['content' => $args['item']]);
 
         return new ToolResult(
             success: true,
-            output: "Updated todo {$args['id']}",
+            output: "Updated todo #{$todo->id}",
             error: null
         );
     }
 
     protected function todoDelete(array $args): ToolResult
     {
-        $agent = $this->conversation->agent;
-        $metadata = $agent->metadata ?? [];
-        $todos = $metadata['todos'] ?? [];
+        $id = is_numeric($args['id']) ? (int) $args['id'] : $args['id'];
 
-        $filtered = array_filter($todos, fn ($todo) => $todo['id'] !== $args['id']);
+        $todo = Todo::where('agent_id', $this->conversation->agent_id)
+            ->where('id', $id)
+            ->first();
 
-        if (count($filtered) === count($todos)) {
+        if (! $todo) {
             return new ToolResult(
                 success: false,
                 output: '',
@@ -676,30 +433,97 @@ class ProcessConversationTurn implements ShouldQueue
             );
         }
 
-        $metadata['todos'] = array_values($filtered);
-        $agent->update(['metadata' => $metadata]);
+        $todo->delete();
 
         return new ToolResult(
             success: true,
-            output: "Deleted todo {$args['id']}",
+            output: "Deleted todo #{$args['id']}",
             error: null
         );
     }
 
     protected function todoClear(): ToolResult
     {
-        $agent = $this->conversation->agent;
-        $metadata = $agent->metadata ?? [];
+        $count = Todo::where('agent_id', $this->conversation->agent_id)->count();
 
-        $count = count($metadata['todos'] ?? []);
-        $metadata['todos'] = [];
-
-        $agent->update(['metadata' => $metadata]);
+        Todo::where('agent_id', $this->conversation->agent_id)->delete();
 
         return new ToolResult(
             success: true,
             output: "Cleared {$count} todos",
             error: null
         );
+    }
+
+    // Web search system tool
+
+    protected function webSearch(array $args): ToolResult
+    {
+        $query = $args['query'] ?? '';
+        $maxResults = $args['max_results'] ?? 5;
+
+        if (empty($query)) {
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: 'Query is required'
+            );
+        }
+
+        try {
+            $client = new Client;
+            $response = $client->get('https://api.duckduckgo.com/', [
+                'query' => [
+                    'q' => $query,
+                    'format' => 'json',
+                    'no_html' => 1,
+                ],
+                'timeout' => 10,
+            ]);
+
+            $data = json_decode($response->getBody(), true);
+
+            $results = [];
+
+            // Add abstract if available
+            if (! empty($data['AbstractText'])) {
+                $results[] = [
+                    'title' => $data['Heading'] ?? 'Result',
+                    'snippet' => $data['AbstractText'],
+                    'url' => $data['AbstractURL'] ?? '',
+                ];
+            }
+
+            // Add related topics
+            foreach ($data['RelatedTopics'] ?? [] as $topic) {
+                if (isset($topic['Text']) && count($results) < $maxResults) {
+                    $results[] = [
+                        'title' => $topic['FirstURL'] ?? '',
+                        'snippet' => $topic['Text'],
+                        'url' => $topic['FirstURL'] ?? '',
+                    ];
+                }
+            }
+
+            if (empty($results)) {
+                return new ToolResult(
+                    success: true,
+                    output: 'No results found for: '.$query,
+                    error: null
+                );
+            }
+
+            return new ToolResult(
+                success: true,
+                output: json_encode($results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+                error: null
+            );
+        } catch (Exception $e) {
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: 'Web search failed: '.$e->getMessage()
+            );
+        }
     }
 }

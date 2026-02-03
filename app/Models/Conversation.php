@@ -29,6 +29,8 @@ class Conversation extends Model
         'cli_session_id',
         'waiting_for',
         'pending_tool_request',
+        'client_type',
+        'client_tool_schemas',
     ];
 
     /**
@@ -42,6 +44,7 @@ class Conversation extends Model
             'messages' => 'array',
             'metadata' => 'array',
             'pending_tool_request' => 'array',
+            'client_tool_schemas' => 'array',
             'started_at' => 'datetime',
             'last_activity_at' => 'datetime',
             'completed_at' => 'datetime',
