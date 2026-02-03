@@ -74,9 +74,69 @@ endpoints:
         exampleWasSpecified: true
         nullable: true
         deprecated: false
+      client_type:
+        custom: []
+        name: client_type
+        description: ''
+        required: false
+        example: architecto
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+      client_tool_schemas:
+        custom: []
+        name: client_tool_schemas
+        description: ''
+        required: false
+        example: null
+        type: 'object[]'
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+      'client_tool_schemas[].name':
+        custom: []
+        name: 'client_tool_schemas[].name'
+        description: 'This field is required when <code>client_tool_schemas</code> is present.'
+        required: false
+        example: architecto
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      'client_tool_schemas[].description':
+        custom: []
+        name: 'client_tool_schemas[].description'
+        description: 'This field is required when <code>client_tool_schemas</code> is present.'
+        required: false
+        example: 'Eius et animi quos velit et.'
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      'client_tool_schemas[].parameters':
+        custom: []
+        name: 'client_tool_schemas[].parameters'
+        description: 'This field is required when <code>client_tool_schemas</code> is present.'
+        required: false
+        example: null
+        type: object
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
     cleanBodyParameters:
       title: 'Debug authentication issue'
       metadata: []
+      client_type: architecto
+      client_tool_schemas:
+        -
+          name: architecto
+          description: 'Eius et animi quos velit et.'
     fileParameters: []
     responses:
       -

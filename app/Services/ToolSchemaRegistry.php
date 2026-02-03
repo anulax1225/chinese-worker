@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Conversation;
+use Illuminate\Support\Facades\Log;
 
 class ToolSchemaRegistry
 {
@@ -129,6 +130,14 @@ class ToolSchemaRegistry
 
         // Add client tools (schemas sent by client, stored in conversation)
         $clientToolSchemas = $conversation->client_tool_schemas ?? [];
+
+        Log::info('ToolSchemaRegistry: aggregating tools', [
+            'conversation_id' => $conversation->id,
+            'client_tools_count' => count($clientToolSchemas),
+            'client_tool_names' => array_column($clientToolSchemas, 'name'),
+            'system_tools_count' => count($this->getSystemToolSchemas()),
+        ]);
+
         $tools = array_merge($tools, $clientToolSchemas);
 
         // Add all system tools (always available, executed on server)

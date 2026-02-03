@@ -1,9 +1,9 @@
 """Glob tool for file pattern matching."""
 
 import os
-import glob as glob_module
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Any, Dict, Tuple
+
 from .base import BaseTool
 
 
@@ -51,39 +51,40 @@ class GlobTool(BaseTool):
 
         search_path = args.get("path", os.getcwd())
 
-        # Make path absolute if relative
-        if not os.path.isabs(search_path):
-            search_path = os.path.join(os.getcwd(), search_path)
+        # Use pathlib for cross-platform path handling
+        search_dir = Path(search_path)
+        if not search_dir.is_absolute():
+            search_dir = Path.cwd() / search_dir
 
         try:
-            if not os.path.exists(search_path):
-                return False, "", f"Directory not found: {search_path}"
+            # Resolve to handle any symlinks and normalize
+            search_dir = search_dir.resolve()
 
-            if not os.path.isdir(search_path):
-                return False, "", f"Path is not a directory: {search_path}"
+            if not search_dir.exists():
+                return False, "", f"Directory not found: {search_dir}"
 
-            # Change to search directory and perform glob
-            original_cwd = os.getcwd()
-            try:
-                os.chdir(search_path)
-                matches = glob_module.glob(pattern, recursive=True)
+            if not search_dir.is_dir():
+                return False, "", f"Path is not a directory: {search_dir}"
 
-                # Convert to absolute paths and sort by modification time (newest first)
-                abs_matches = [os.path.abspath(m) for m in matches if os.path.isfile(m)]
-                abs_matches.sort(
-                    key=lambda x: os.path.getmtime(x) if os.path.exists(x) else 0,
-                    reverse=True,
-                )
+            # Use pathlib.glob instead of os.chdir + glob module
+            # This is thread-safe and works with Windows UNC paths
+            matches = list(search_dir.glob(pattern))
 
-                if not abs_matches:
-                    output = f"No files found matching pattern: {pattern}"
-                else:
-                    output = "\n".join(abs_matches)
+            # Filter to files only and get absolute paths
+            abs_matches = [str(m.resolve()) for m in matches if m.is_file()]
 
-                return True, output, None
+            # Sort by modification time (newest first)
+            abs_matches.sort(
+                key=lambda x: Path(x).stat().st_mtime if Path(x).exists() else 0,
+                reverse=True,
+            )
 
-            finally:
-                os.chdir(original_cwd)
+            if not abs_matches:
+                output = f"No files found matching pattern: {pattern}"
+            else:
+                output = "\n".join(abs_matches)
+
+            return True, output, None
 
         except Exception as e:
             return False, "", f"Failed to glob files: {str(e)}"

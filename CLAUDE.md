@@ -12,9 +12,11 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - php - 8.5.2
 - inertiajs/inertia-laravel (INERTIA) - v2
 - laravel/framework (LARAVEL) - v12
+- laravel/horizon (HORIZON) - v5
 - laravel/prompts (PROMPTS) - v0
 - laravel/reverb (REVERB) - v1
 - laravel/sanctum (SANCTUM) - v4
+- laravel/telescope (TELESCOPE) - v5
 - laravel/wayfinder (WAYFINDER) - v0
 - laravel/mcp (MCP) - v0
 - laravel/pint (PINT) - v1
@@ -22,6 +24,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 - pestphp/pest (PEST) - v4
 - phpunit/phpunit (PHPUNIT) - v12
 - @inertiajs/vue3 (INERTIA) - v2
+- laravel-echo (ECHO) - v2
 - tailwindcss (TAILWINDCSS) - v4
 - vue (VUE) - v3
 - @laravel/vite-plugin-wayfinder (WAYFINDER) - v0
@@ -36,6 +39,44 @@ This project has domain-specific skills available. You MUST activate the relevan
 - `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works.
 - `inertia-vue-development` — Develops Inertia.js v2 Vue client-side applications. Activates when creating Vue pages, forms, or navigation; using &lt;Link&gt;, &lt;Form&gt;, useForm, or router; working with deferred props, prefetching, or polling; or when user mentions Vue with Inertia, Vue pages, Vue forms, or Vue navigation.
 - `tailwindcss-development` — Styles applications using Tailwind CSS v4 utilities. Activates when adding styles, restyling components, working with gradients, spacing, layout, flex, grid, responsive design, dark mode, colors, typography, or borders; or when the user mentions CSS, styling, classes, Tailwind, restyle, hero section, cards, buttons, or any visual/UI changes.
+- `laravel:api-resources-and-pagination` — Use API Resources with pagination and conditional fields; keep response shapes stable and cache-friendly
+- `laravel:api-surface-evolution` — Evolve APIs safely using versioned DTOs/transformers, deprecations, and compatibility tests
+- `laravel:blade-components-and-layouts` — Compose UIs with Blade components, slots, and layouts; keep templates pure and testable
+- `laravel:bootstrap-check` — Detect Sail/non‑Sail and print the right command pairs for your environment; verify dependencies and key services are reachable
+- `laravel:brainstorming` — Interactive design refinement tailored to Laravel projects; clarify domain, data, interfaces, testing, and quality gates while accounting for Sail/non‑Sail environments
+- `laravel:code-review-requests` — Request effective code reviews—specify focus areas, provide context, ask for architectural feedback, reference Laravel conventions
+- `laravel:complexity-guardrails` — Keep cyclomatic complexity low; flatten control flow, extract helpers, and prefer table-driven/strategy patterns over large switches
+- `laravel:config-env-storage` — Portable storage configuration across S3/R2/MinIO with optional CDN—env toggles, path-style endpoints, and URL generation
+- `laravel:constants-and-configuration` — Replace hardcoded values with constants, enums, and configuration for maintainability; use PHP 8.1+ enums and config files
+- `laravel:controller-cleanup` — Reduce controller bloat using Form Requests for auth/validation, small Actions/Services with DTOs, and resource/single-action controllers
+- `laravel:controller-tests` — Write focused controller tests using HTTP assertions; keep heavy logic in Actions/Services and unit test them
+- `laravel:custom-helpers` — Create and register small, pure helper functions when they improve clarity; keep them organized and tested
+- `laravel:daily-workflow` — Practical daily checklist for Laravel projects; bring services up, run migrations, queues, quality gates, and tests
+- `laravel:data-chunking-large-datasets` — Process large datasets efficiently using chunk(), chunkById(), lazy(), and cursor() to reduce memory consumption and improve performance
+- `laravel:debugging-prompts` — Create effective debugging prompts—include error messages, stack traces, expected vs actual behavior, logs, and attempted solutions
+- `laravel:dependencies-trim-packages` — Remove unneeded Composer packages and assets to improve boot time, memory, and security surface
+- `laravel:documentation-best-practices` — Write meaningful documentation that explains why not what; focus on complex business logic and self-documenting code
+- `laravel:e2e-playwright` — Generic E2E patterns with Playwright—state setup, seeds, test IDs, auth, environment, and Sail integration
+- `laravel:effective-context` — Provide comprehensive context in prompts—files, errors, Laravel version, dependencies, and monorepo details—for accurate AI responses
+- `laravel:eloquent-relationships` — Define clear relationships and load data efficiently; prevent N+1, use constraints, counts/sums, and pivot syncing safely
+- `laravel:exception-handling-and-logging` — Use reportable/renderable exceptions, structured logs, and channel strategy for observability and graceful failures
+- `laravel:executing-plans` — Execute Laravel plans in small batches with checkpoints—TDD first, migrations safe, queues verified, and quality gates enforced
+- `laravel:filesystem-uploads` — Store and serve files via Storage; set visibility, generate URLs, and handle streaming safely
+- `laravel:form-requests` — Move validation and authorization into Form Requests; use rule objects, custom messages, and nested data handling to keep controllers slim
+- `laravel:horizon:metrics-and-dashboards` — Operate Horizon with confidence—naming, tags, concurrency, failure handling, actionable metrics, and dashboards
+- `laravel:http-client-resilience` — Use the HTTP client with sensible timeouts, retries, and backoff; capture context and handle failures explicitly
+- `laravel:interfaces-and-di` — Use interfaces and dependency injection to decouple code; bind implementations in the container
+- `laravel:internationalization-and-translation` — Build with i18n in mind from day one using Laravel translation helpers, JSON files, Blade integration, and locale management
+- `laravel:iterating-on-code` — Refine AI-generated code through specific feedback—point out errors, identify gaps, show desired changes, reference style guides
+- `laravel:laravel-prompting-patterns` — Use Laravel-specific vocabulary—Eloquent patterns, Form Requests, API resources, jobs/queues—to get idiomatic framework code
+- `laravel:migrations-and-factories` — Safe database change patterns; when to modify vs add migrations; always pair models with migrations and factories; seeding guidance
+- `laravel:nova:resource-patterns` — Consistent Nova resources—fields, actions, metrics, lenses, filters, authorization—and how to evolve resources alongside schema changes
+- `laravel:performance-caching` — Use framework caches and value/query caching to reduce work; add tags, locks, and explicit invalidation strategies for correctness
+- `laravel:performance-eager-loading` — Prevent N+1 queries by eager loading; enable lazy-loading protection in non-production; choose selective fields
+- `laravel:performance-select-columns` — Select only required columns to reduce memory and transfer costs; apply to base queries and relations
+- `laravel:policies-and-authorization` — Enforce access via Policies and Gates; use authorize() and authorizeResource() to standardize controller protections
+- `laravel:ports-and-adapters` — Use hexagonal architecture for external systems; define ports (interfaces) and per-provider adapters; select adapter at composition edge
+- `laravel:prompt-structure` — Structure prompts for clarity—separate concerns, prioritize requests, specify acceptance criteria, and break work into testable increments
 
 ## Conventions
 
@@ -255,31 +296,19 @@ Wayfinder generates TypeScript functions for Laravel routes. Import from `@/acti
 - Query Merging: `show(1, { mergeQuery: { page: 2, sort: null } })` merges with current URL, `null` removes params.
 - Inertia: Use `.form()` with `<Form>` component or `form.submit(store())` with useForm.
 
-=== sail rules ===
-
-# Laravel Sail
-
-- Always run PHP, npm, and Composer commands through Sail.
-- Use `./vendor/bin/sail` prefix for all commands:
-  - `./vendor/bin/sail php artisan ...` instead of `php artisan ...`
-  - `./vendor/bin/sail composer ...` instead of `composer ...`
-  - `./vendor/bin/sail npm ...` instead of `npm ...`
-  - `./vendor/bin/sail pint ...` instead of `vendor/bin/pint ...`
-  - `./vendor/bin/sail test ...` instead of `php artisan test ...`
-
 === pint/core rules ===
 
 # Laravel Pint Code Formatter
 
-- You must run `./vendor/bin/sail pint --dirty` before finalizing changes to ensure your code matches the project's expected style.
-- Do not run `./vendor/bin/sail pint --test`, simply run `./vendor/bin/sail pint` to fix any formatting issues.
+- You must run `vendor/bin/pint --dirty` before finalizing changes to ensure your code matches the project's expected style.
+- Do not run `vendor/bin/pint --test`, simply run `vendor/bin/pint` to fix any formatting issues.
 
 === pest/core rules ===
 
 ## Pest
 
-- This project uses Pest for testing. Create tests: `./vendor/bin/sail artisan make:test --pest {name}`.
-- Run tests: `./vendor/bin/sail test --compact` or filter: `./vendor/bin/sail test --compact --filter=testName`.
+- This project uses Pest for testing. Create tests: `php artisan make:test --pest {name}`.
+- Run tests: `php artisan test --compact` or filter: `php artisan test --compact --filter=testName`.
 - Do NOT delete tests without approval.
 - CRITICAL: ALWAYS use `search-docs` tool for version-specific Pest documentation and updated code examples.
 - IMPORTANT: Activate `pest-testing` every time you're working with a Pest or testing-related task.

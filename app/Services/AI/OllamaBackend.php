@@ -10,6 +10,7 @@ use App\Models\Agent;
 use App\Models\Tool;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -103,6 +104,13 @@ class OllamaBackend implements AIBackendInterface
                 $payload['tools'] = $tools;
             }
 
+            Log::info('Ollama request payload', [
+                'model' => $this->model,
+                'tools_count' => count($tools),
+                'tools' => $tools,
+                'message_count' => count($messages),
+            ]);
+
             $response = $this->client->post('/api/chat', [
                 'json' => $payload,
                 'stream' => true,
@@ -144,6 +152,9 @@ class OllamaBackend implements AIBackendInterface
 
                     // Collect tool calls
                     if (isset($data['message']['tool_calls'])) {
+                        Log::info('Ollama stream tool_calls received', [
+                            'raw_tool_calls' => $data['message']['tool_calls'],
+                        ]);
                         $toolCalls = array_merge($toolCalls, $data['message']['tool_calls']);
                     }
 
@@ -446,6 +457,13 @@ class OllamaBackend implements AIBackendInterface
             fn ($tc) => $this->parseToolCall($tc),
             $toolCallsData
         );
+
+        Log::info('Building AI response', [
+            'content_length' => strlen($content),
+            'raw_tool_calls_count' => count($toolCallsData),
+            'raw_tool_calls' => $toolCallsData,
+            'parsed_tool_calls' => array_map(fn ($tc) => $tc->toArray(), $toolCalls),
+        ]);
 
         // Determine finish reason
         $finishReason = 'stop';

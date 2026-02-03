@@ -1,29 +1,102 @@
 """Main CLI entry point."""
 
-import click
+import os
 import platform
 import time
-import os
-from rich.console import Console, Group
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.prompt import Prompt
-from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.live import Live
-from rich.text import Text
-from typing import Optional, Dict, Any, List
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import click
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
+from rich.console import Console, Group
+from rich.live import Live
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.prompt import Prompt
+from rich.table import Table
+from rich.text import Text
 
 from .api import APIClient, AuthManager, SSEClient, SSEEventHandler
-from .tools import BashTool, ReadTool, WriteTool, EditTool, GlobTool, GrepTool
+from .tools import (
+    # Shell tools
+    BashTool,
+    PowerShellTool,
+    # File tools
+    EditTool,
+    GlobTool,
+    GrepTool,
+    ReadTool,
+    WriteTool,
+    # Cross-platform tools
+    ClipboardTool,
+    NotifyTool,
+    OpenTool,
+    SysInfoTool,
+    # OS-specific tools
+    AppleScriptTool,
+    RegistryTool,
+    SystemctlTool,
+)
 from .tools.base import BaseTool
 
 console = Console()
 
-# Input history file path
-HISTORY_FILE = os.path.expanduser("~/.cw/history")
+
+def get_config_dir() -> Path:
+    """Get platform-appropriate config directory."""
+    system = platform.system().lower()
+    if system == "windows":
+        base = Path(os.getenv("APPDATA", os.path.expanduser("~")))
+        return base / "chinese-worker"
+    elif system == "darwin":
+        return Path.home() / "Library" / "Application Support" / "chinese-worker"
+    else:
+        return Path.home() / ".cw"
+
+
+def get_history_file() -> Path:
+    """Get platform-appropriate history file path, ensuring directory exists."""
+    config_dir = get_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir / "history"
+
+
+# Input history file path (for backward compatibility)
+HISTORY_FILE = str(get_history_file())
+
+
+def get_platform_tools() -> Dict[str, BaseTool]:
+    """Get tools appropriate for the current platform."""
+    # File tools available on all platforms
+    tools: Dict[str, BaseTool] = {
+        "read": ReadTool(),
+        "write": WriteTool(),
+        "edit": EditTool(),
+        "glob": GlobTool(),
+        "grep": GrepTool(),
+    }
+
+    # Cross-platform tools (all platforms)
+    tools["clipboard"] = ClipboardTool()
+    tools["sysinfo"] = SysInfoTool()
+    tools["open"] = OpenTool()
+    tools["notify"] = NotifyTool()
+
+    # Platform-specific tools
+    system = platform.system().lower()
+    if system == "windows":
+        tools["powershell"] = PowerShellTool()
+        tools["registry"] = RegistryTool()
+    elif system == "darwin":
+        tools["bash"] = BashTool()
+        tools["applescript"] = AppleScriptTool()
+    else:  # Linux
+        tools["bash"] = BashTool()
+        tools["systemctl"] = SystemctlTool()
+
+    return tools
 
 
 def get_default_api_url() -> str:
@@ -245,15 +318,8 @@ def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optio
 
     client = APIClient(api_url)
 
-    # Initialize tools
-    tools = {
-        "bash": BashTool(),
-        "read": ReadTool(),
-        "write": WriteTool(),
-        "edit": EditTool(),
-        "glob": GlobTool(),
-        "grep": GrepTool(),
-    }
+    # Initialize platform-specific tools
+    tools = get_platform_tools()
 
     try:
         # Get agent info

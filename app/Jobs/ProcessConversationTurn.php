@@ -55,6 +55,20 @@ class ProcessConversationTurn implements ShouldQueue
         public Conversation $conversation
     ) {}
 
+    /**
+     * Get the tags that should be assigned to the job.
+     *
+     * @return array<int, string>
+     */
+    public function tags(): array
+    {
+        return [
+            'conversation:'.$this->conversation->id,
+            'user:'.$this->conversation->user_id,
+            'agent:'.$this->conversation->agent_id,
+        ];
+    }
+
     public function handle(AIBackendManager $aiBackendManager, ToolService $toolService): void
     {
         // Eager load relationships to prevent N+1 queries
@@ -86,6 +100,12 @@ class ProcessConversationTurn implements ShouldQueue
                 'max_turns' => $this->conversation->getMaxTurns(),
             ];
 
+            Log::info('Tool schemas for AI request', [
+                'conversation_id' => $this->conversation->id,
+                'tool_count' => count($context['tools']),
+                'tool_names' => array_column($context['tools'], 'name'),
+            ]);
+
             // Call AI backend with streaming - broadcast chunks via SSE
             $response = $backend->streamExecute(
                 $this->conversation->agent,
@@ -97,6 +117,15 @@ class ProcessConversationTurn implements ShouldQueue
 
             // Track tokens
             $this->conversation->addTokens($response->tokensUsed);
+
+            Log::info('AI response received', [
+                'conversation_id' => $this->conversation->id,
+                'has_content' => ! empty($response->content),
+                'content_preview' => substr($response->content, 0, 200),
+                'tool_calls_count' => count($response->toolCalls),
+                'tool_calls' => array_map(fn (ToolCall $tc) => $tc->toArray(), $response->toolCalls),
+                'finish_reason' => $response->finishReason,
+            ]);
 
             // Filter to only valid, known tool calls
             $validToolCalls = $this->filterValidToolCalls($response->toolCalls);

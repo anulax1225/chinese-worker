@@ -1,13 +1,15 @@
 """Bash tool for executing shell commands."""
 
-import subprocess
 import os
-from typing import Dict, Any, Tuple
+import platform
+import subprocess
+from typing import Any, Dict, Tuple
+
 from .base import BaseTool
 
 
 class BashTool(BaseTool):
-    """Execute bash commands on the local system."""
+    """Execute shell commands on the local system (cross-platform)."""
 
     @property
     def name(self) -> str:
@@ -15,7 +17,7 @@ class BashTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Execute a bash command on the client system"
+        return "Execute a shell command on the client system"
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -51,14 +53,26 @@ class BashTool(BaseTool):
         timeout = args.get("timeout", 120)
 
         try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-                cwd=os.getcwd(),
-            )
+            # Platform-specific shell invocation
+            system = platform.system().lower()
+            if system == "windows":
+                # Use PowerShell on Windows for better compatibility
+                result = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", command],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=os.getcwd(),
+                )
+            else:
+                # Use bash explicitly on Unix-like systems (Linux, macOS)
+                result = subprocess.run(
+                    ["bash", "-c", command],
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    cwd=os.getcwd(),
+                )
 
             # Combine stdout and stderr for output
             output = result.stdout
@@ -72,5 +86,8 @@ class BashTool(BaseTool):
 
         except subprocess.TimeoutExpired:
             return False, "", f"Command timed out after {timeout} seconds"
+        except FileNotFoundError as e:
+            shell_name = "PowerShell" if platform.system().lower() == "windows" else "bash"
+            return False, "", f"{shell_name} not found: {str(e)}"
         except Exception as e:
             return False, "", f"Failed to execute command: {str(e)}"
