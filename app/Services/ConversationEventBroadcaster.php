@@ -11,19 +11,16 @@ class ConversationEventBroadcaster
     /**
      * Broadcast an event to all listeners for a conversation.
      *
+     * Uses Redis lists with RPUSH instead of pub/sub PUBLISH.
+     * This allows non-blocking consumption with BLPOP timeout,
+     * preventing PHP worker deadlocks during SSE streaming.
+     *
      * @param  array<string, mixed>  $data
      */
     public function broadcast(Conversation $conversation, string $event, array $data): void
     {
         try {
             $channel = "conversation:{$conversation->id}:events";
-
-            // Log::info('[Broadcaster] Publishing event to Redis', [
-            //     'conversation_id' => $conversation->id,
-            //     'event' => $event,
-            //     'channel' => $channel,
-            //     'timestamp' => now()->toIso8601String(),
-            // ]);
 
             $payload = [
                 'event' => $event,
@@ -32,14 +29,12 @@ class ConversationEventBroadcaster
                 'data' => $data,
             ];
 
-            Redis::publish($channel, json_encode($payload));
+            // Use RPUSH to list instead of PUBLISH to channel
+            // Messages persist until consumed (unlike pub/sub which loses messages if no subscriber)
+            Redis::rpush($channel, json_encode($payload));
 
-            // Log::info('[Broadcaster] Event published successfully', [
-            //     'conversation_id' => $conversation->id,
-            //     'event' => $event,
-            //     'channel' => $channel,
-            //     'timestamp' => now()->toIso8601String(),
-            // ]);
+            // Set TTL on the list to auto-cleanup abandoned conversations (1 hour)
+            Redis::expire($channel, 3600);
         } catch (\Exception $e) {
             // Don't fail job if broadcasting fails - SSE is best-effort
             Log::warning('[Broadcaster] Failed to broadcast conversation event', [
@@ -140,7 +135,6 @@ class ConversationEventBroadcaster
      * Disconnect and reset Redis connection.
      *
      * No-op: Redis connections are managed by Laravel's connection pool.
-     * Manually closing breaks SSE subscribers that share the pool.
      */
     public function disconnect(): void
     {

@@ -21,8 +21,8 @@ beforeEach(function () {
 });
 
 describe('ConversationEventBroadcaster', function () {
-    test('broadcast publishes event to Redis channel', function () {
-        Redis::shouldReceive('publish')
+    test('broadcast pushes event to Redis list', function () {
+        Redis::shouldReceive('rpush')
             ->once()
             ->withArgs(function ($channel, $payload) {
                 expect($channel)->toBe("conversation:{$this->conversation->id}:events");
@@ -36,11 +36,15 @@ describe('ConversationEventBroadcaster', function () {
                 return true;
             });
 
+        Redis::shouldReceive('expire')
+            ->once()
+            ->with("conversation:{$this->conversation->id}:events", 3600);
+
         $this->broadcaster->broadcast($this->conversation, 'test_event', ['key' => 'value']);
     });
 
     test('textChunk broadcasts text chunk event', function () {
-        Redis::shouldReceive('publish')
+        Redis::shouldReceive('rpush')
             ->once()
             ->withArgs(function ($channel, $payload) {
                 $data = json_decode($payload, true);
@@ -52,11 +56,13 @@ describe('ConversationEventBroadcaster', function () {
                 return true;
             });
 
+        Redis::shouldReceive('expire')->once();
+
         $this->broadcaster->textChunk($this->conversation, 'Hello', 'content');
     });
 
     test('textChunk supports thinking type', function () {
-        Redis::shouldReceive('publish')
+        Redis::shouldReceive('rpush')
             ->once()
             ->withArgs(function ($channel, $payload) {
                 $data = json_decode($payload, true);
@@ -65,6 +71,8 @@ describe('ConversationEventBroadcaster', function () {
 
                 return true;
             });
+
+        Redis::shouldReceive('expire')->once();
 
         $this->broadcaster->textChunk($this->conversation, 'Let me think...', 'thinking');
     });
@@ -76,7 +84,7 @@ describe('ConversationEventBroadcaster', function () {
             'arguments' => ['command' => 'ls -la'],
         ];
 
-        Redis::shouldReceive('publish')
+        Redis::shouldReceive('rpush')
             ->once()
             ->withArgs(function ($channel, $payload) use ($toolRequest) {
                 $data = json_decode($payload, true);
@@ -89,6 +97,8 @@ describe('ConversationEventBroadcaster', function () {
                 return true;
             });
 
+        Redis::shouldReceive('expire')->once();
+
         $this->broadcaster->toolRequest($this->conversation, $toolRequest);
     });
 
@@ -100,7 +110,7 @@ describe('ConversationEventBroadcaster', function () {
         ]);
         $this->conversation->refresh();
 
-        Redis::shouldReceive('publish')
+        Redis::shouldReceive('rpush')
             ->once()
             ->withArgs(function ($channel, $payload) {
                 $data = json_decode($payload, true);
@@ -112,11 +122,13 @@ describe('ConversationEventBroadcaster', function () {
                 return true;
             });
 
+        Redis::shouldReceive('expire')->once();
+
         $this->broadcaster->completed($this->conversation);
     });
 
     test('failed broadcasts failure event', function () {
-        Redis::shouldReceive('publish')
+        Redis::shouldReceive('rpush')
             ->once()
             ->withArgs(function ($channel, $payload) {
                 $data = json_decode($payload, true);
@@ -128,11 +140,13 @@ describe('ConversationEventBroadcaster', function () {
                 return true;
             });
 
+        Redis::shouldReceive('expire')->once();
+
         $this->broadcaster->failed($this->conversation, 'Something went wrong');
     });
 
     test('processing broadcasts status changed event', function () {
-        Redis::shouldReceive('publish')
+        Redis::shouldReceive('rpush')
             ->once()
             ->withArgs(function ($channel, $payload) {
                 $data = json_decode($payload, true);
@@ -142,11 +156,13 @@ describe('ConversationEventBroadcaster', function () {
                 return true;
             });
 
+        Redis::shouldReceive('expire')->once();
+
         $this->broadcaster->processing($this->conversation);
     });
 
     test('broadcast handles Redis failure gracefully', function () {
-        Redis::shouldReceive('publish')
+        Redis::shouldReceive('rpush')
             ->once()
             ->andThrow(new Exception('Redis connection failed'));
 

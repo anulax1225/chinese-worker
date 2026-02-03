@@ -16,20 +16,6 @@ class ToolCall
     ) {}
 
     /**
-     * Create a ToolCall from an Ollama tool call response.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    public static function fromOllama(array $data): self
-    {
-        return new self(
-            id: $data['id'] ?? uniqid('tool_'),
-            name: $data['function']['name'] ?? '',
-            arguments: $data['function']['arguments'] ?? []
-        );
-    }
-
-    /**
      * Convert the tool call to an array.
      *
      * @return array<string, mixed>

@@ -263,18 +263,8 @@ class ConversationController extends Controller
     {
         $this->authorize('view', $conversation);
 
-        Log::info('[SSE] Stream endpoint called', [
-            'conversation_id' => $conversation->id,
-            'status' => $conversation->status,
-            'timestamp' => now()->toIso8601String(),
-        ]);
-
         return response()->stream(
             function () use ($conversation) {
-                Log::info('[SSE] Stream callback started', [
-                    'conversation_id' => $conversation->id,
-                ]);
-
                 // Disable output buffering for real-time streaming
                 if (ob_get_level()) {
                     ob_end_clean();
@@ -293,26 +283,11 @@ class ConversationController extends Controller
                     'status' => 'connected',
                 ]);
 
-                Log::info('[SSE] Sent connected event, refreshing conversation state', [
-                    'conversation_id' => $conversation->id,
-                ]);
-
                 // Check current conversation state and send if already terminal
                 // This handles the race condition where job finishes before SSE connects
                 $conversation->refresh();
 
-                Log::info('[SSE] Conversation state after refresh', [
-                    'conversation_id' => $conversation->id,
-                    'status' => $conversation->status,
-                    'waiting_for' => $conversation->waiting_for ?? 'none',
-                    'has_pending_tool' => ! empty($conversation->pending_tool_request),
-                ]);
-
                 if ($conversation->isWaitingForTool()) {
-                    Log::info('[SSE] Already waiting for tool, sending immediately and closing', [
-                        'conversation_id' => $conversation->id,
-                    ]);
-
                     $this->sendSSEEvent('tool_request', [
                         'status' => 'waiting_for_tool',
                         'conversation_id' => $conversation->id,
@@ -324,18 +299,10 @@ class ConversationController extends Controller
                         ],
                     ]);
 
-                    Log::info('[SSE] Stream closing (already had tool request)', [
-                        'conversation_id' => $conversation->id,
-                    ]);
-
-                    return; // Don't subscribe, already have result
+                    return;
                 }
 
                 if ($conversation->status === 'completed') {
-                    Log::info('[SSE] Already completed, sending immediately and closing', [
-                        'conversation_id' => $conversation->id,
-                    ]);
-
                     $messages = $conversation->getMessages();
                     $lastMessage = end($messages);
                     $data = [
@@ -351,18 +318,10 @@ class ConversationController extends Controller
                     }
                     $this->sendSSEEvent('completed', $data);
 
-                    Log::info('[SSE] Stream closing (already completed)', [
-                        'conversation_id' => $conversation->id,
-                    ]);
-
-                    return; // Don't subscribe, already completed
+                    return;
                 }
 
                 if ($conversation->status === 'failed') {
-                    Log::info('[SSE] Already failed, sending immediately and closing', [
-                        'conversation_id' => $conversation->id,
-                    ]);
-
                     $this->sendSSEEvent('failed', [
                         'status' => 'failed',
                         'conversation_id' => $conversation->id,
@@ -373,85 +332,55 @@ class ConversationController extends Controller
                         ],
                     ]);
 
-                    Log::info('[SSE] Stream closing (already failed)', [
-                        'conversation_id' => $conversation->id,
-                    ]);
-
-                    return; // Don't subscribe, already failed
+                    return;
                 }
 
-                // Subscribe to Redis channel for this conversation
+                // Listen to Redis list for this conversation
+                // Using BLPOP with timeout instead of blocking SUBSCRIBE to prevent PHP worker deadlock
                 $channel = "conversation:{$conversation->id}:events";
+                $timeout = 2; // 2 second timeout for BLPOP - allows periodic client disconnect check
 
-                Log::info('[SSE] Disconnecting DB before Redis subscribe', [
-                    'conversation_id' => $conversation->id,
-                    'channel' => $channel,
-                ]);
-
-                // Release database connection before blocking - we only need Redis from here
-                // This prevents the SSE endpoint from holding DB connections while waiting for events
+                // Release database connection before loop - we only need Redis from here
                 DB::disconnect();
 
-                Log::info('[SSE] DB disconnected, entering Redis subscribe', [
-                    'conversation_id' => $conversation->id,
-                    'channel' => $channel,
-                    'timestamp' => now()->toIso8601String(),
-                ]);
-
                 try {
-                    // Use dedicated pubsub connection - isolated from main pool
-                    // This prevents the blocking subscribe from affecting other Redis operations
-                    $redis = Redis::connection('pubsub');
+                    while (true) {
+                        // Check if client disconnected
+                        if (connection_aborted()) {
+                            break;
+                        }
 
-                    Log::info('[SSE] Redis pubsub connection established, starting subscribe', [
-                        'conversation_id' => $conversation->id,
-                        'channel' => $channel,
-                    ]);
+                        // BLPOP with timeout - returns after $timeout seconds if no message
+                        // This frees the PHP worker periodically, preventing deadlock
+                        $result = Redis::blpop($channel, $timeout);
 
-                    // Use pub/sub - this blocks until events arrive
-                    $redis->subscribe([$channel], function ($message, $channel) use ($conversation) {
-                        Log::info('[SSE] Received message from Redis', [
-                            'conversation_id' => $conversation->id,
-                            'channel' => $channel,
-                            'message_length' => strlen($message),
-                            'timestamp' => now()->toIso8601String(),
-                        ]);
+                        if ($result) {
+                            // $result = [key, value] from blpop
+                            $message = $result[1];
+                            $payload = json_decode($message, true);
 
-                        $payload = json_decode($message, true);
+                            if ($payload && isset($payload['event'], $payload['data'])) {
+                                $this->sendSSEEvent($payload['event'], $payload['data']);
 
-                        if ($payload && isset($payload['event'], $payload['data'])) {
-                            Log::info('[SSE] Sending event to client', [
-                                'conversation_id' => $conversation->id,
-                                'event' => $payload['event'],
-                            ]);
-
-                            $this->sendSSEEvent($payload['event'], $payload['data']);
-
-                            // Close connection after terminal events or tool requests
-                            // Tool requests close so CLI can handle tool and reconnect
-                            if (in_array($payload['event'], ['completed', 'failed', 'tool_request'])) {
-                                Log::info('[SSE] Terminal event received, stopping subscription', [
-                                    'conversation_id' => $conversation->id,
-                                    'event' => $payload['event'],
-                                    'timestamp' => now()->toIso8601String(),
-                                ]);
-
-                                return false; // Stop subscription
+                                // Stop on terminal events
+                                // Tool requests close so CLI can handle tool and reconnect
+                                if (in_array($payload['event'], ['completed', 'failed', 'tool_request'])) {
+                                    break;
+                                }
                             }
                         }
 
-                        return true; // Continue listening
-                    });
-
-                    Log::info('[SSE] Redis subscribe loop ended normally', [
-                        'conversation_id' => $conversation->id,
-                        'timestamp' => now()->toIso8601String(),
-                    ]);
+                        // Flush output to keep connection alive (sends SSE comment as heartbeat)
+                        echo ": heartbeat\n\n";
+                        if (ob_get_level()) {
+                            ob_flush();
+                        }
+                        flush();
+                    }
                 } catch (\Exception $e) {
-                    Log::error('[SSE] Redis subscribe error', [
+                    Log::error('SSE Redis polling error', [
                         'conversation_id' => $conversation->id,
                         'error' => $e->getMessage(),
-                        'trace' => $e->getTraceAsString(),
                     ]);
 
                     $this->sendSSEEvent('error', [
@@ -459,11 +388,6 @@ class ConversationController extends Controller
                         'conversation_id' => $conversation->id,
                     ]);
                 }
-
-                Log::info('[SSE] Stream callback ending', [
-                    'conversation_id' => $conversation->id,
-                    'timestamp' => now()->toIso8601String(),
-                ]);
             },
             200,
             [

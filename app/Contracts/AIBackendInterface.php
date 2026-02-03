@@ -3,6 +3,8 @@
 namespace App\Contracts;
 
 use App\DTOs\AIResponse;
+use App\DTOs\ChatMessage;
+use App\DTOs\ToolCall;
 use App\Models\Agent;
 
 interface AIBackendInterface
@@ -40,4 +42,18 @@ interface AIBackendInterface
      * Disconnect and cleanup any open connections.
      */
     public function disconnect(): void;
+
+    /**
+     * Format a ChatMessage for this backend's API format.
+     *
+     * @return array<string, mixed>
+     */
+    public function formatMessage(ChatMessage $message): array;
+
+    /**
+     * Parse a tool call from this backend's response format.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function parseToolCall(array $data): ToolCall;
 }

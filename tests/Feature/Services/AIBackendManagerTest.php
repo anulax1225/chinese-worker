@@ -76,6 +76,20 @@ describe('AIBackendManager', function () {
             {
                 // No-op for test
             }
+
+            public function formatMessage(\App\DTOs\ChatMessage $message): array
+            {
+                return ['role' => $message->role, 'content' => $message->content];
+            }
+
+            public function parseToolCall(array $data): \App\DTOs\ToolCall
+            {
+                return new \App\DTOs\ToolCall(
+                    id: $data['id'] ?? uniqid('call_'),
+                    name: $data['name'] ?? '',
+                    arguments: $data['arguments'] ?? []
+                );
+            }
         };
 
         $manager = app(AIBackendManager::class);

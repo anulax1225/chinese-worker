@@ -7,7 +7,6 @@ use App\Http\Requests\StoreToolRequest;
 use App\Http\Requests\UpdateToolRequest;
 use App\Http\Resources\ToolResource;
 use App\Models\Tool;
-use App\Services\AgentLoop\BuiltinToolExecutor;
 use App\Services\ToolService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,8 +19,7 @@ use Illuminate\Http\Request;
 class ToolController extends Controller
 {
     public function __construct(
-        protected ToolService $toolService,
-        protected BuiltinToolExecutor $builtinToolExecutor
+        protected ToolService $toolService
     ) {}
 
     /**
@@ -54,14 +52,14 @@ class ToolController extends Controller
         // Get builtin tools if requested
         $builtinTools = collect();
         if ($includeBuiltin && (! $typeFilter || $typeFilter === 'builtin')) {
-            $builtinTools = collect($this->builtinToolExecutor->getBuiltinTools())
+            $builtinTools = collect($this->getBuiltinToolSchemas())
                 ->map(fn ($tool) => [
-                    'id' => 'builtin_'.strtolower($tool->getName()),
+                    'id' => 'builtin_'.strtolower($tool['name']),
                     'user_id' => null,
-                    'name' => $tool->getName(),
+                    'name' => $tool['name'],
                     'type' => 'builtin',
-                    'description' => $tool->getDescription(),
-                    'parameters' => $tool->getParameterSchema(),
+                    'description' => $tool['description'],
+                    'parameters' => $tool['parameters'],
                     'created_at' => null,
                     'updated_at' => null,
                 ]);
@@ -172,5 +170,116 @@ class ToolController extends Controller
         $this->toolService->delete($tool);
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Get builtin tool schemas.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getBuiltinToolSchemas(): array
+    {
+        return [
+            [
+                'name' => 'bash',
+                'description' => 'Execute a bash command on the client system',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'command' => [
+                            'type' => 'string',
+                            'description' => 'The bash command to execute',
+                        ],
+                    ],
+                    'required' => ['command'],
+                ],
+            ],
+            [
+                'name' => 'read',
+                'description' => 'Read the contents of a file',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'file_path' => [
+                            'type' => 'string',
+                            'description' => 'Path to the file to read',
+                        ],
+                    ],
+                    'required' => ['file_path'],
+                ],
+            ],
+            [
+                'name' => 'write',
+                'description' => 'Write content to a file',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'file_path' => [
+                            'type' => 'string',
+                            'description' => 'Path to the file to write',
+                        ],
+                        'content' => [
+                            'type' => 'string',
+                            'description' => 'Content to write to the file',
+                        ],
+                    ],
+                    'required' => ['file_path', 'content'],
+                ],
+            ],
+            [
+                'name' => 'edit',
+                'description' => 'Edit a file by replacing old text with new text',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'file_path' => [
+                            'type' => 'string',
+                            'description' => 'Path to the file to edit',
+                        ],
+                        'old_string' => [
+                            'type' => 'string',
+                            'description' => 'The text to find and replace',
+                        ],
+                        'new_string' => [
+                            'type' => 'string',
+                            'description' => 'The text to replace with',
+                        ],
+                    ],
+                    'required' => ['file_path', 'old_string', 'new_string'],
+                ],
+            ],
+            [
+                'name' => 'glob',
+                'description' => 'Find files matching a pattern',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'pattern' => [
+                            'type' => 'string',
+                            'description' => 'Glob pattern to match files',
+                        ],
+                    ],
+                    'required' => ['pattern'],
+                ],
+            ],
+            [
+                'name' => 'grep',
+                'description' => 'Search for a pattern in files',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'pattern' => [
+                            'type' => 'string',
+                            'description' => 'Pattern to search for',
+                        ],
+                        'path' => [
+                            'type' => 'string',
+                            'description' => 'Path to search in',
+                        ],
+                    ],
+                    'required' => ['pattern'],
+                ],
+            ],
+        ];
     }
 }

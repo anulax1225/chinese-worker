@@ -10,7 +10,6 @@ use App\Models\Agent;
 use App\Models\Tool;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
 
@@ -58,7 +57,7 @@ class OllamaBackend implements AIBackendInterface
 
             $payload = [
                 'model' => $this->model,
-                'messages' => array_map(fn (ChatMessage $m) => $m->toOllama(), $messages),
+                'messages' => array_map(fn (ChatMessage $m) => $this->formatMessage($m), $messages),
                 'stream' => false,
                 'options' => $this->options,
             ];
@@ -66,14 +65,13 @@ class OllamaBackend implements AIBackendInterface
             if (! empty($tools)) {
                 $payload['tools'] = $tools;
             }
-            Log::info('Ollama request payload'."\n".json_encode($payload, JSON_PRETTY_PRINT));
+
             $response = $this->client->post('/api/chat', [
                 'json' => $payload,
                 'timeout' => $this->timeout,
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            Log::info('Ollama response data\n'.json_encode($data, JSON_PRETTY_PRINT));
 
             return $this->parseResponse($data);
         } catch (GuzzleException $e) {
@@ -96,7 +94,7 @@ class OllamaBackend implements AIBackendInterface
 
             $payload = [
                 'model' => $this->model,
-                'messages' => array_map(fn (ChatMessage $m) => $m->toOllama(), $messages),
+                'messages' => array_map(fn (ChatMessage $m) => $this->formatMessage($m), $messages),
                 'stream' => true,
                 'options' => $this->options,
             ];
@@ -445,7 +443,7 @@ class OllamaBackend implements AIBackendInterface
     protected function buildAIResponse(string $content, array $data, array $toolCallsData, ?string $thinking = null): AIResponse
     {
         $toolCalls = array_map(
-            fn ($tc) => ToolCall::fromOllama($tc),
+            fn ($tc) => $this->parseToolCall($tc),
             $toolCallsData
         );
 
@@ -510,5 +508,50 @@ class OllamaBackend implements AIBackendInterface
                 'Connection' => 'close',
             ],
         ]);
+    }
+
+    /**
+     * Format a ChatMessage for Ollama API.
+     *
+     * @return array<string, mixed>
+     */
+    public function formatMessage(ChatMessage $message): array
+    {
+        $formatted = [
+            'role' => $message->role,
+            'content' => $message->content,
+        ];
+
+        if ($message->images !== null) {
+            $formatted['images'] = $message->images;
+        }
+
+        if ($message->toolCalls !== null) {
+            $formatted['tool_calls'] = $message->toolCalls;
+        }
+
+        if ($message->toolCallId !== null) {
+            $formatted['tool_call_id'] = $message->toolCallId;
+        }
+
+        if ($message->thinking !== null) {
+            $formatted['thinking'] = $message->thinking;
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Parse a tool call from Ollama response format.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function parseToolCall(array $data): ToolCall
+    {
+        return new ToolCall(
+            id: $data['id'] ?? uniqid('call_'),
+            name: $data['function']['name'] ?? '',
+            arguments: $data['function']['arguments'] ?? []
+        );
     }
 }

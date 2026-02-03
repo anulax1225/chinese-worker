@@ -63,39 +63,6 @@ class ChatMessage
     }
 
     /**
-     * Convert the message to Ollama format.
-     *
-     * @return array<string, mixed>
-     */
-    public function toOllama(): array
-    {
-        $message = [
-            'role' => $this->role,
-            'content' => $this->content,
-        ];
-
-        if ($this->images !== null) {
-            $message['images'] = $this->images;
-        }
-
-        if ($this->toolCalls !== null) {
-            $message['tool_calls'] = $this->toolCalls;
-        }
-
-        // For tool result messages, include the tool_call_id
-        if ($this->toolCallId !== null) {
-            $message['tool_call_id'] = $this->toolCallId;
-        }
-
-        // Include thinking for assistant messages (some models use this)
-        if ($this->thinking !== null) {
-            $message['thinking'] = $this->thinking;
-        }
-
-        return $message;
-    }
-
-    /**
      * Convert the message to an array.
      *
      * @return array<string, mixed>
