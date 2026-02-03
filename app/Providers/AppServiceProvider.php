@@ -16,6 +16,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->register(FortifyServiceProvider::class);
         $this->app->register(AIServiceProvider::class);
         $this->app->register(HorizonServiceProvider::class);
         if ($this->app->environment('local') && class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
