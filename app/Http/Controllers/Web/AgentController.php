@@ -32,10 +32,11 @@ class AgentController extends Controller
             });
         }
 
-        $agents = $query->latest()->paginate(10)->withQueryString();
+        $agents = $query->latest()->cursorPaginate(12)->withQueryString();
 
         return Inertia::render('Agents/Index', [
-            'agents' => $agents,
+            'agents' => Inertia::merge(fn () => $agents->items()),
+            'nextCursor' => $agents->nextCursor()?->encode(),
             'filters' => [
                 'status' => $request->input('status'),
                 'search' => $request->input('search'),

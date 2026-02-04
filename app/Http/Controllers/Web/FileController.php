@@ -29,10 +29,11 @@ class FileController extends Controller
             $query->where('path', 'like', "%{$search}%");
         }
 
-        $files = $query->latest()->paginate(10)->withQueryString();
+        $files = $query->latest()->cursorPaginate(15)->withQueryString();
 
         return Inertia::render('Files/Index', [
-            'files' => $files,
+            'files' => Inertia::merge(fn () => $files->items()),
+            'nextCursor' => $files->nextCursor()?->encode(),
             'filters' => [
                 'type' => $request->input('type'),
                 'search' => $request->input('search'),

@@ -28,10 +28,11 @@ class ToolController extends Controller
             $query->where('name', 'like', "%{$search}%");
         }
 
-        $tools = $query->latest()->paginate(10)->withQueryString();
+        $tools = $query->latest()->cursorPaginate(12)->withQueryString();
 
         return Inertia::render('Tools/Index', [
-            'tools' => $tools,
+            'tools' => Inertia::merge(fn () => $tools->items()),
+            'nextCursor' => $tools->nextCursor()?->encode(),
             'filters' => [
                 'type' => $request->input('type'),
                 'search' => $request->input('search'),
