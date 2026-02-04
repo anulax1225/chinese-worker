@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/vue3';
 import { usePage } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import { toast } from 'vue-sonner';
-import type { AppPageProps } from '@/types';
+import type { AppPageProps, Agent } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Sonner } from '@/components/ui/sonner';
@@ -22,6 +22,7 @@ import {
     Circle,
 } from 'lucide-vue-next';
 import AppHeader from '@/components/AppHeader.vue';
+import NewConversationDialog from '@/components/NewConversationDialog.vue';
 import { useSidebar } from '@/composables/useSidebar';
 
 defineProps<{
@@ -30,18 +31,20 @@ defineProps<{
 
 const page = usePage<AppPageProps>();
 const mobileMenuOpen = ref(false);
+const newConversationDialogOpen = ref(false);
 
 const { sidebarCollapsed, adminExpanded, toggleSidebar, toggleAdmin } = useSidebar();
+
+const agents = computed(() => (page.props.agents || []) as Pick<Agent, 'id' | 'name' | 'description'>[]);
 
 const adminNavigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Agents', href: '/agents', icon: Bot },
     { name: 'Tools', href: '/tools', icon: Wrench },
-    { name: 'Conversations', href: '/conversations', icon: MessageSquare },
     { name: 'Files', href: '/files', icon: FileText },
 ];
 
-const recentConversations = computed(() => page.props.recentConversations || []);
+const sidebarConversations = computed(() => page.props.sidebarConversations || []);
 
 const isCurrentRoute = (href: string) => {
     const currentPath = window.location.pathname;
@@ -121,32 +124,30 @@ watch(
                 <!-- Sidebar content -->
                 <nav class="flex-1 p-3 space-y-2 overflow-y-auto">
                     <!-- New Conversation Button -->
-                    <Link
-                        href="/conversations/create"
+                    <Button
                         :class="[
                             'flex items-center gap-2 w-full rounded-md font-medium transition-colors',
                             sidebarCollapsed
                                 ? 'justify-center p-2'
                                 : 'px-3 py-2 text-sm',
-                            'bg-primary text-primary-foreground hover:bg-primary/90',
                         ]"
                         :title="sidebarCollapsed ? 'New Conversation' : undefined"
-                        @click="mobileMenuOpen = false"
+                        @click="newConversationDialogOpen = true; mobileMenuOpen = false"
                     >
                         <Plus class="h-4 w-4" />
                         <span v-if="!sidebarCollapsed">New Conversation</span>
-                    </Link>
+                    </Button>
 
                     <Separator class="my-3" />
 
                     <!-- Latest Chats Section -->
-                    <div v-if="recentConversations.length > 0 && !sidebarCollapsed">
+                    <div v-if="sidebarConversations.length > 0 && !sidebarCollapsed">
                         <p class="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                             Latest Chats
                         </p>
                         <div class="space-y-1">
                             <Link
-                                v-for="conversation in recentConversations"
+                                v-for="conversation in sidebarConversations"
                                 :key="conversation.id"
                                 :href="`/conversations/${conversation.id}`"
                                 :class="[
@@ -233,9 +234,15 @@ watch(
         <!-- Main content -->
         <div :class="['pt-14 transition-all duration-200', sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64']">
             <!-- Page content -->
-            <main class="p-4">
+            <main class="p-4 max-w-7xl mx-auto">
                 <slot />
             </main>
         </div>
+
+        <!-- New Conversation Dialog -->
+        <NewConversationDialog
+            v-model:open="newConversationDialogOpen"
+            :agents="agents"
+        />
     </div>
 </template>

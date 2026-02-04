@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Agent;
 use App\Models\Conversation;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -47,16 +48,17 @@ class HandleInertiaRequests extends Middleware
                 'error' => fn () => $request->session()->get('error'),
                 'token' => fn () => $request->session()->get('token'),
             ],
-            'recentConversations' => fn () => $this->getRecentConversations($request),
+            'sidebarConversations' => fn () => $this->getSidebarConversations($request),
+            'agents' => fn () => $this->getActiveAgents($request),
         ];
     }
 
     /**
-     * Get the 4 most recent conversations for the authenticated user.
+     * Get the 4 most recent conversations for the sidebar.
      *
      * @return array<int, array{id: int, title: string, agent_name: string|null, status: string}>
      */
-    protected function getRecentConversations(Request $request): array
+    protected function getSidebarConversations(Request $request): array
     {
         if (! $request->user()) {
             return [];
@@ -74,6 +76,25 @@ class HandleInertiaRequests extends Middleware
                 'agent_name' => $conversation->agent?->name,
                 'status' => $conversation->status,
             ])
+            ->toArray();
+    }
+
+    /**
+     * Get active agents for the authenticated user.
+     *
+     * @return array<int, array{id: int, name: string, description: string|null}>
+     */
+    protected function getActiveAgents(Request $request): array
+    {
+        if (! $request->user()) {
+            return [];
+        }
+
+        return Agent::query()
+            ->where('user_id', $request->user()->id)
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name', 'description'])
             ->toArray();
     }
 }

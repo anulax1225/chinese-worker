@@ -36,7 +36,7 @@ class ConversationController extends Controller
         }
 
         $conversations = $query->latest('last_activity_at')
-            ->paginate(10)
+            ->cursorPaginate(12)
             ->withQueryString();
 
         $agents = Agent::where('user_id', $request->user()->id)
@@ -44,7 +44,8 @@ class ConversationController extends Controller
             ->get(['id', 'name']);
 
         return Inertia::render('Conversations/Index', [
-            'conversations' => $conversations,
+            'conversations' => Inertia::merge(fn () => $conversations->items()),
+            'nextCursor' => $conversations->nextCursor()?->encode(),
             'agents' => $agents,
             'filters' => [
                 'status' => $request->input('status'),
@@ -82,22 +83,25 @@ class ConversationController extends Controller
     {
         $validated = $request->validate([
             'agent_id' => ['required', 'exists:agents,id'],
-            'message' => ['required', 'string', 'max:10000'],
+            'message' => ['nullable', 'string', 'max:10000'],
         ]);
 
         $agent = Agent::findOrFail($validated['agent_id']);
         $this->authorize('view', $agent);
 
+        $messages = [];
+        if (! empty($validated['message'])) {
+            $messages[] = [
+                'role' => 'user',
+                'content' => $validated['message'],
+            ];
+        }
+
         $conversation = Conversation::create([
             'user_id' => $request->user()->id,
             'agent_id' => $validated['agent_id'],
             'status' => 'active',
-            'messages' => [
-                [
-                    'role' => 'user',
-                    'content' => $validated['message'],
-                ],
-            ],
+            'messages' => $messages,
             'metadata' => [],
             'turn_count' => 0,
             'total_tokens' => 0,

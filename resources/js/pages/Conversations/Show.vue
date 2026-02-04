@@ -1,40 +1,25 @@
 <script setup lang="ts">
-import { Link, router } from '@inertiajs/vue3';
+import { router } from '@inertiajs/vue3';
 import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { AppLayout } from '@/layouts';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-    Send,
     Bot,
-    User,
-    Trash2,
     ChevronRight,
     Terminal,
     Wrench,
     Loader2,
-    MoreVertical,
-    Check,
-    X,
-    Square,
     ArrowDown,
     Sparkles,
     Brain,
-    Copy,
 } from 'lucide-vue-next';
 import { toast } from 'vue-sonner';
-import { useConversationStream, type ConnectionState } from '@/composables/useConversationStream';
+import { useConversationStream } from '@/composables/useConversationStream';
 import ToolRequestDialog from '@/components/ToolRequestDialog.vue';
+import ChatInputBar from '@/components/ChatInputBar.vue';
 import {
     sendMessage as sendMessageAction,
     submitToolResult as submitToolResultAction,
@@ -142,34 +127,6 @@ const inputDisabledReason = computed(() => {
     return '';
 });
 
-const connectionStatusColor = computed(() => {
-    const colors: Record<ConnectionState, string> = {
-        idle: 'bg-muted-foreground/50',
-        connecting: 'bg-warning',
-        connected: 'bg-success',
-        streaming: 'bg-success animate-pulse',
-        waiting_tool: 'bg-accent',
-        completed: 'bg-success',
-        failed: 'bg-destructive',
-        error: 'bg-destructive',
-    };
-    return colors[connectionState.value];
-});
-
-const connectionStatusText = computed(() => {
-    const statusMap: Record<ConnectionState, string> = {
-        idle: 'Ready',
-        connecting: 'Connecting...',
-        connected: 'Connected',
-        streaming: 'Streaming',
-        waiting_tool: 'Awaiting approval',
-        completed: 'Completed',
-        failed: 'Failed',
-        error: 'Error',
-    };
-    return statusMap[connectionState.value];
-});
-
 const scrollToBottom = async (force = false) => {
     await nextTick();
     if (messagesContainer.value) {
@@ -237,11 +194,8 @@ const triggerProcessing = async (content: string) => {
     }
 };
 
-const sendMessage = async () => {
-    if (!newMessage.value.trim() || isSubmitting.value) return;
-
-    const message = newMessage.value.trim();
-    newMessage.value = '';
+const sendMessage = async (message: string) => {
+    if (!message.trim() || isSubmitting.value) return;
 
     // Optimistically add user message
     props.conversation.messages.push({
@@ -253,14 +207,6 @@ const sendMessage = async () => {
 
     // Trigger processing via API
     await triggerProcessing(message);
-};
-
-const handleKeydown = (e: KeyboardEvent) => {
-    // Cmd/Ctrl + Enter to send
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        sendMessage();
-    }
 };
 
 const connectToStream = () => {
@@ -437,69 +383,11 @@ watch(() => props.conversation.status, (newStatus) => {
 
 <template>
     <AppLayout :title="`Chat with ${conversation.agent?.name || 'Agent'}`">
-        <div class="flex flex-col h-[calc(100vh-7rem)]">
-            <!-- Conversation Header - Sticky below main header -->
-            <div class="flex items-center justify-between p-3 border-b border-border bg-background/95 backdrop-blur-sm sticky top-0 z-10 overflow-hidden">
-                <!-- Streaming indicator bar -->
-                <div
-                    v-if="connectionState === 'streaming'"
-                    class="absolute bottom-0 left-0 right-0 h-0.5 streaming-bar"
-                />
-                <div class="flex items-center gap-3">
-                    <!-- Agent info -->
-                    <Avatar class="h-9 w-9">
-                        <AvatarFallback class="bg-secondary text-secondary-foreground">
-                            <Bot class="h-4 w-4" />
-                        </AvatarFallback>
-                    </Avatar>
-                    <div>
-                        <p class="text-sm font-medium">{{ conversation.agent?.name || 'Unknown Agent' }}</p>
-                        <!-- Connection status -->
-                        <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <div :class="['h-2 w-2 rounded-full', connectionStatusColor]" />
-                            <span>{{ connectionStatusText }}</span>
-                            <span class="text-muted-foreground/50">·</span>
-                            <span>{{ conversation.turn_count }} turns</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Actions -->
-                <div class="flex items-center gap-2">
-                    <!-- Stop Generation button (visible during streaming) -->
-                    <Button
-                        v-if="isSubmitting"
-                        variant="outline"
-                        size="sm"
-                        class="h-8 gap-1.5"
-                        @click="disconnect(); isSubmitting = false;"
-                    >
-                        <Square class="h-3.5 w-3.5" />
-                        <span class="hidden sm:inline">Stop</span>
-                    </Button>
-                    <Badge :variant="conversation.status === 'active' ? 'default' : 'secondary'" class="text-xs">
-                        {{ conversation.status }}
-                    </Badge>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger as-child>
-                            <Button variant="ghost" size="icon" class="h-8 w-8">
-                                <MoreVertical class="h-4 w-4" />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem @click="deleteConversation" class="text-destructive cursor-pointer">
-                                <Trash2 class="mr-2 h-4 w-4" />
-                                Delete conversation
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                </div>
-            </div>
-
+        <div class="h-[calc(100vh-3.5rem)]">
             <!-- Messages Area -->
             <div
                 ref="messagesContainer"
-                class="flex-1 overflow-y-auto px-4 py-4 relative"
+                class="h-full overflow-y-auto px-4 py-4 pb-44 relative"
                 @scroll="handleScroll"
             >
                 <!-- Empty state -->
@@ -527,7 +415,7 @@ watch(() => props.conversation.status, (newStatus) => {
                     </div>
                 </div>
 
-                <div v-else class="space-y-4 max-w-3xl mx-auto">
+                <div v-else class="space-y-4 max-w-7xl mx-auto">
                     <template v-for="(message, index) in messages" :key="index">
                         <!-- User message - Right aligned bubble -->
                         <div v-if="message.role === 'user'" class="flex justify-end">
@@ -593,7 +481,7 @@ watch(() => props.conversation.status, (newStatus) => {
                                 </details>
 
                                 <!-- Content bubble (only show if content exists) -->
-                                <div v-if="message.content?.trim()" class="bg-card border-l-2 border-primary/30 rounded-2xl rounded-tl-md px-4 py-2.5 shadow-sm">
+                                <div v-if="message.content?.trim()" class="bg-card border border-primary/30 rounded-2xl rounded-tl-md px-4 py-2.5 shadow-sm">
                                     <div class="text-sm markdown-content" v-html="renderMarkdown(message.content)" />
                                 </div>
 
@@ -686,40 +574,20 @@ watch(() => props.conversation.status, (newStatus) => {
                     </button>
                 </Transition>
             </div>
-
-            <!-- Input Area - Sticky at bottom -->
-            <div class="sticky bottom-0 bg-background border-t border-border p-3">
-                <form @submit.prevent="sendMessage" class="flex items-end gap-2 max-w-3xl mx-auto">
-                    <Textarea
-                        v-model="newMessage"
-                        placeholder="Type a message..."
-                        class="min-h-11 max-h-50 resize-none flex-1"
-                        :disabled="isSubmitting || !canSendMessages"
-                        @keydown="handleKeydown"
-                        rows="1"
-                    />
-                    <Button
-                        type="submit"
-                        size="icon"
-                        class="h-11 w-11 shrink-0"
-                        :disabled="!newMessage.trim() || isSubmitting || !canSendMessages"
-                    >
-                        <Loader2 v-if="isSubmitting" class="h-4 w-4 animate-spin" />
-                        <Send v-else class="h-4 w-4" />
-                    </Button>
-                </form>
-                <p class="text-xs text-muted-foreground text-right mt-1 max-w-3xl mx-auto">
-                    <template v-if="canSendMessages">
-                        <kbd class="px-1.5 py-0.5 bg-muted rounded text-[10px]">⌘</kbd>
-                        <kbd class="px-1.5 py-0.5 bg-muted rounded text-[10px] ml-0.5">↵</kbd>
-                        to send
-                    </template>
-                    <template v-else>
-                        {{ inputDisabledReason }}
-                    </template>
-                </p>
-            </div>
         </div>
+
+        <!-- Floating Chat Input Bar -->
+        <ChatInputBar
+            v-model:new-message="newMessage"
+            :conversation="conversation"
+            :is-submitting="isSubmitting"
+            :can-send-messages="canSendMessages"
+            :connection-state="connectionState"
+            :input-disabled-reason="inputDisabledReason"
+            @send="sendMessage"
+            @stop="disconnect(); isSubmitting = false;"
+            @delete="deleteConversation"
+        />
 
         <!-- Tool Request Dialog -->
         <ToolRequestDialog
@@ -734,23 +602,6 @@ watch(() => props.conversation.status, (newStatus) => {
 </template>
 
 <style scoped>
-/* Streaming indicator bar in header */
-.streaming-bar {
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        var(--primary) 50%,
-        transparent 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
 /* Streaming cursor animation */
 .streaming-cursor {
     display: inline-block;

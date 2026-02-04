@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fake AI Chat – Color Tester</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = { darkMode: 'class' }
+  </script>
+  <style>
+    :root {
+      --primary: #6366f1;   /* indigo-500 */
+      --secondary: #22c55e; /* green-500 */
+    }
+  </style>
+</head>
+<body id="appRoot" class="min-h-screen flex bg-slate-100 text-slate-900 dark:bg-[#0b0f17] dark:text-white">
+  <!-- Sidebar / Controls -->
+  <aside class="w-80 p-4 flex flex-col gap-4 border-r bg-white dark:bg-[#0e1420] dark:border-slate-800">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2 text-lg font-semibold">
+        <i data-lucide="palette"></i>
+        <span>Theme Tester</span>
+      </div>
+      <button id="modeToggle" class="flex items-center gap-2 px-3 py-1.5 rounded border text-sm dark:border-slate-700 dark:bg-[#0b1020]">
+        <i data-lucide="moon"></i>
+        <span>Dark</span>
+      </button>
+    </div>
+
+    <div class="space-y-3 dark:text-white">
+      <label class="block text-sm font-medium">Primary color</label>
+      <div class="flex items-center gap-2">
+        <input id="primaryPicker" type="color" value="#6366f1" class="h-10 w-14 rounded border dark:border-slate-700" />
+        <input id="primaryHex" type="text" value="#6366f1" class="flex-1 border rounded px-2 py-1 text-sm bg-white dark:bg-[#0b1020] dark:border-slate-700" />
+      </div>
+    </div>
+
+    <div class="space-y-3 dark:text-white">
+      <label class="block text-sm font-medium">Secondary color</label>
+      <div class="flex items-center gap-2">
+        <input id="secondaryPicker" type="color" value="#22c55e" class="h-10 w-14 rounded border dark:border-slate-700" />
+        <input id="secondaryHex" type="text" value="#22c55e" class="flex-1 border rounded px-2 py-1 text-sm bg-white dark:bg-[#0b1020] dark:border-slate-700" />
+      </div>
+    </div>
+
+    <div class="mt-2">
+      <div class="text-sm font-medium mb-2">Presets</div>
+      <div id="presetList" class="grid grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1"></div>
+    </div>
+
+    <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      Tip: dark mode uses deeper backgrounds and higher contrast for better focus.
+    </div>
+  </aside>
+
+  <!-- Main Chat UI -->
+  <main class="flex-1 flex flex-col">
+    <!-- Header -->
+    <header class="h-14 flex items-center justify-between px-4 border-b bg-white dark:bg-[#0e1420] dark:border-slate-800">
+      <div class="flex items-center gap-2 font-semibold">
+        <i data-lucide="bot"></i>
+        <span>Fake AI Chat</span>
+      </div>
+      <button class="flex items-center gap-2 px-3 py-1.5 rounded text-white" id="newChatBtn">
+        <i data-lucide="plus"></i>
+        <span>New chat</span>
+      </button>
+    </header>
+
+    <!-- Messages -->
+    <div class="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50 dark:bg-[#0b0f17] dark:text-white">
+      <!-- AI message -->
+      <div class="flex gap-3 items-start">
+        <div class="h-9 w-9 rounded-full flex items-center justify-center text-white shadow" id="aiAvatar">
+          <i data-lucide="bot"></i>
+        </div>
+        <div class="border rounded-xl p-3 max-w-xl bg-white dark:bg-[#111827] dark:border-slate-800">
+          <p class="text-sm">Hey! I’m a totally fake AI, but I look pretty real, right? 😄</p>
+        </div>
+      </div>
+
+      <!-- User message -->
+      <div class="flex gap-3 items-start justify-end">
+        <div class="rounded-xl p-3 max-w-xl bg-slate-200 dark:bg-[#0f172a]">
+          <p class="text-sm">Yeah! I’m testing different colors on this UI.</p>
+        </div>
+        <div class="h-9 w-9 rounded-full flex items-center justify-center bg-slate-300 dark:bg-[#1f2937]">
+          <i data-lucide="user"></i>
+        </div>
+      </div>
+
+      <!-- AI message -->
+      <div class="flex gap-3 items-start">
+        <div class="h-9 w-9 rounded-full flex items-center justify-center text-white shadow" id="aiAvatar2">
+          <i data-lucide="bot"></i>
+        </div>
+        <div class="border rounded-xl p-3 max-w-xl bg-white dark:bg-[#111827] dark:border-slate-800">
+          <p class="text-sm">Nice. Try something bold… or something super calm. I won’t judge 😉</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="border-t p-4 flex gap-2 bg-white dark:bg-[#0e1420] dark:border-slate-800">
+      <input type="text" placeholder="Type a message…" class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 bg-white dark:bg-[#0b1020] dark:border-slate-700" id="messageInput" />
+      <button class="px-4 py-2 rounded-lg text-white flex items-center gap-2" id="sendBtn">
+        <i data-lucide="send"></i>
+        <span>Send</span>
+      </button>
+    </div>
+  </main>
+
+  <script>
+    lucide.createIcons();
+
+    const root = document.getElementById('appRoot');
+    const modeToggle = document.getElementById('modeToggle');
+
+    const primaryPicker = document.getElementById('primaryPicker');
+    const secondaryPicker = document.getElementById('secondaryPicker');
+    const primaryHex = document.getElementById('primaryHex');
+    const secondaryHex = document.getElementById('secondaryHex');
+
+    const sendBtn = document.getElementById('sendBtn');
+    const newChatBtn = document.getElementById('newChatBtn');
+    const aiAvatar = document.getElementById('aiAvatar');
+    const aiAvatar2 = document.getElementById('aiAvatar2');
+
+    const presets = [
+      { name: 'Indigo / Emerald', p: '#6366f1', s: '#22c55e' },
+      { name: 'Sky / Violet', p: '#0ea5e9', s: '#8b5cf6' },
+      { name: 'Rose / Slate', p: '#f43f5e', s: '#64748b' },
+      { name: 'Amber / Cyan', p: '#f59e0b', s: '#06b6d4' },
+      { name: 'Lime / Green', p: '#84cc16', s: '#22c55e' },
+      { name: 'Teal / Blue', p: '#14b8a6', s: '#3b82f6' },
+      { name: 'Purple / Pink', p: '#a855f7', s: '#ec4899' },
+      { name: 'Orange / Red', p: '#f97316', s: '#ef4444' },
+      { name: 'Stone / Indigo', p: '#78716c', s: '#4f46e5' },
+      { name: 'Mint / Navy', p: '#34d399', s: '#1e3a8a' },
+      { name: 'Cyber Blue', p: '#38bdf8', s: '#22d3ee' },
+      { name: 'Neon Pink', p: '#fb7185', s: '#f472b6' },
+      { name: 'Forest', p: '#166534', s: '#22c55e' },
+      { name: 'Royal', p: '#1d4ed8', s: '#facc15' },
+      { name: 'Grape', p: '#6d28d9', s: '#c026d3' },
+      { name: 'Sunset', p: '#fb923c', s: '#f43f5e' },
+      { name: 'Ice', p: '#67e8f9', s: '#818cf8' },
+      { name: 'Carbon', p: '#0f172a', s: '#64748b' },
+      { name: 'Coffee', p: '#78350f', s: '#d97706' },
+      { name: 'Aqua Lime', p: '#2dd4bf', s: '#a3e635' }
+    ];
+
+    function applyColors() {
+      const p = primaryHex.value;
+      const s = secondaryHex.value;
+
+      document.documentElement.style.setProperty('--primary', p);
+      document.documentElement.style.setProperty('--secondary', s);
+
+      sendBtn.style.backgroundColor = p;
+      newChatBtn.style.backgroundColor = s;
+      aiAvatar.style.backgroundColor = p;
+      aiAvatar2.style.backgroundColor = p;
+
+      const input = document.getElementById('messageInput');
+      input.style.setProperty('--tw-ring-color', p);
+    }
+
+    function syncPrimary(val) {
+      primaryPicker.value = val;
+      primaryHex.value = val;
+      applyColors();
+    }
+
+    function syncSecondary(val) {
+      secondaryPicker.value = val;
+      secondaryHex.value = val;
+      applyColors();
+    }
+
+    primaryPicker.addEventListener('input', e => syncPrimary(e.target.value));
+    primaryHex.addEventListener('input', e => syncPrimary(e.target.value));
+
+    secondaryPicker.addEventListener('input', e => syncSecondary(e.target.value));
+    secondaryHex.addEventListener('input', e => syncSecondary(e.target.value));
+
+    // Dark / Light toggle
+    modeToggle.addEventListener('click', () => {
+      const isDark = root.classList.toggle('dark');
+      modeToggle.innerHTML = isDark
+        ? '<i data-lucide="sun"></i><span>Light</span>'
+        : '<i data-lucide="moon"></i><span>Dark</span>';
+      lucide.createIcons();
+    });
+
+    // Build presets
+    const presetList = document.getElementById('presetList');
+    presets.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'border rounded-lg p-2 text-left text-xs hover:bg-slate-100 dark:hover:bg-[#0b1020] dark:border-slate-700';
+      btn.innerHTML = `
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block h-3 w-3 rounded" style="background:${t.p}"></span>
+          <span class="inline-block h-3 w-3 rounded" style="background:${t.s}"></span>
+          <span class="font-medium truncate">${t.name}</span>
+        </div>
+        <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate">${t.p} / ${t.s}</div>
+      `;
+      btn.addEventListener('click', () => {
+        syncPrimary(t.p);
+        syncSecondary(t.s);
+      });
+      presetList.appendChild(btn);
+    });
+
+    // Init
+    applyColors();
+  </script>
+</body>
+</html>

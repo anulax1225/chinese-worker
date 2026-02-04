@@ -21,11 +21,18 @@ export interface RecentConversation {
     status: string;
 }
 
+export interface SharedAgent {
+    id: number;
+    name: string;
+    description: string | null;
+}
+
 export type AppPageProps<T extends Record<string, unknown> = Record<string, unknown>> = T & {
     name: string;
     auth: Auth;
     flash: Flash;
     breadcrumbs?: BreadcrumbItem[];
-    recentConversations: RecentConversation[];
+    sidebarConversations: RecentConversation[];
+    agents: SharedAgent[];
     [key: string]: unknown;
 };

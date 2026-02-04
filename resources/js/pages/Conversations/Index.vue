@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Link, router } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Link, router, usePage, WhenVisible } from '@inertiajs/vue3';
+import { ref, computed, watch } from 'vue';
 import { AppLayout } from '@/layouts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
     Select,
     SelectContent,
@@ -13,22 +13,23 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Search, MoreHorizontal, Eye, Trash2 } from 'lucide-vue-next';
-import type { Conversation, Agent, PaginatedResponse } from '@/types';
+import NewConversationDialog from '@/components/NewConversationDialog.vue';
+import {
+    Plus,
+    Search,
+    MoreHorizontal,
+    Trash2,
+    MessageSquare,
+    Filter,
+    X,
+    Loader2,
+} from 'lucide-vue-next';
+import type { Conversation, Agent, SharedAgent } from '@/types';
 
 interface Filters {
     status: string | null;
@@ -36,15 +37,51 @@ interface Filters {
     search: string | null;
 }
 
+interface GroupedConversations {
+    today: Conversation[];
+    yesterday: Conversation[];
+    previousWeek: Conversation[];
+    previousMonth: Conversation[];
+    older: Conversation[];
+}
+
 const props = defineProps<{
-    conversations: PaginatedResponse<Conversation>;
+    conversations: Conversation[];
+    nextCursor: string | null;
     agents: Pick<Agent, 'id' | 'name'>[];
     filters: Filters;
 }>();
 
+const page = usePage();
+const sharedAgents = computed(() => page.props.agents as SharedAgent[]);
+
 const search = ref(props.filters.search || '');
 const status = ref(props.filters.status || 'all');
 const agentId = ref(props.filters.agent_id || 'all');
+const showFilters = ref(false);
+const newConversationDialogOpen = ref(false);
+
+const hasActiveFilters = computed(() => {
+    return props.filters.search || props.filters.status || props.filters.agent_id;
+});
+
+// Build URL params for loading more
+const loadMoreParams = computed(() => {
+    const params: Record<string, string> = {};
+    if (props.nextCursor) {
+        params.cursor = props.nextCursor;
+    }
+    if (props.filters.search) {
+        params.search = props.filters.search;
+    }
+    if (props.filters.status) {
+        params.status = props.filters.status;
+    }
+    if (props.filters.agent_id) {
+        params.agent_id = props.filters.agent_id;
+    }
+    return params;
+});
 
 const applyFilters = () => {
     router.get('/conversations', {
@@ -52,182 +89,515 @@ const applyFilters = () => {
         status: status.value === 'all' ? undefined : status.value,
         agent_id: agentId.value === 'all' ? undefined : agentId.value,
     }, {
-        preserveState: true,
+        preserveState: false,
         replace: true,
     });
 };
 
-const deleteConversation = (conversation: Conversation) => {
+const clearFilters = () => {
+    search.value = '';
+    status.value = 'all';
+    agentId.value = 'all';
+    router.get('/conversations', {}, {
+        preserveState: false,
+        replace: true,
+    });
+};
+
+const deleteConversation = (conversation: Conversation, e: Event) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (confirm('Are you sure you want to delete this conversation?')) {
-        router.delete(`/conversations/${conversation.id}`);
+        router.delete(`/conversations/${conversation.id}`, {
+            preserveState: false,
+        });
     }
 };
 
-const getStatusColor = (status: string) => {
+const getStatusDot = (status: string) => {
     const colors: Record<string, string> = {
         active: 'bg-blue-500',
         completed: 'bg-green-500',
         failed: 'bg-red-500',
-        cancelled: 'bg-gray-500',
+        cancelled: 'bg-muted-foreground',
     };
-    return colors[status] || 'bg-gray-500';
+    return colors[status] || 'bg-muted-foreground';
 };
 
-const formatDate = (date: string | null) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+// Group conversations by time
+const groupedConversations = computed<GroupedConversations>(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+
+    const groups: GroupedConversations = {
+        today: [],
+        yesterday: [],
+        previousWeek: [],
+        previousMonth: [],
+        older: [],
+    };
+
+    props.conversations.forEach((conversation) => {
+        const date = new Date(conversation.last_activity_at || conversation.created_at);
+
+        if (date >= today) {
+            groups.today.push(conversation);
+        } else if (date >= yesterday) {
+            groups.yesterday.push(conversation);
+        } else if (date >= weekAgo) {
+            groups.previousWeek.push(conversation);
+        } else if (date >= monthAgo) {
+            groups.previousMonth.push(conversation);
+        } else {
+            groups.older.push(conversation);
+        }
     });
+
+    return groups;
+});
+
+const formatTime = (date: string | null) => {
+    if (!date) return '';
+    const d = new Date(date);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    if (d >= today) {
+        return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
+
+const getInitials = (name: string | undefined) => {
+    if (!name) return 'A';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+};
+
+// Sync filter refs when props change (after navigation)
+watch(() => props.filters, (newFilters) => {
+    search.value = newFilters.search || '';
+    status.value = newFilters.status || 'all';
+    agentId.value = newFilters.agent_id || 'all';
+}, { immediate: true });
 </script>
 
 <template>
     <AppLayout title="Conversations">
-        <div class="space-y-4">
-            <div class="flex items-center justify-between">
+        <div class="max-w-5xl mx-auto">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-6">
                 <div>
-                    <h1 class="text-xl font-semibold">Conversations</h1>
-                    <p class="text-sm text-muted-foreground">Your agent conversations</p>
+                    <h1 class="text-2xl font-semibold">Conversations</h1>
+                    <p class="text-sm text-muted-foreground mt-1">
+                        {{ conversations.length }} loaded
+                    </p>
                 </div>
-                <Button as-child>
-                    <Link href="/conversations/create">
+                <div class="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        :class="{ 'bg-accent': showFilters || hasActiveFilters }"
+                        @click="showFilters = !showFilters"
+                    >
+                        <Filter class="h-4 w-4" />
+                    </Button>
+                    <Button @click="newConversationDialogOpen = true">
                         <Plus class="h-4 w-4 mr-2" />
-                        New Conversation
-                    </Link>
+                        New Chat
+                    </Button>
+                </div>
+            </div>
+
+            <!-- Filters (collapsible) -->
+            <div
+                v-if="showFilters"
+                class="mb-6 p-4 bg-muted/50 rounded-lg border"
+            >
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm font-medium">Filters</span>
+                    <Button
+                        v-if="hasActiveFilters"
+                        variant="ghost"
+                        size="sm"
+                        class="h-7 text-xs"
+                        @click="clearFilters"
+                    >
+                        <X class="h-3 w-3 mr-1" />
+                        Clear all
+                    </Button>
+                </div>
+                <div class="flex gap-3 flex-wrap">
+                    <div class="relative flex-1 min-w-50">
+                        <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            v-model="search"
+                            placeholder="Search conversations..."
+                            class="pl-8"
+                            @keyup.enter="applyFilters"
+                        />
+                    </div>
+                    <Select v-model="status" @update:model-value="applyFilters">
+                        <SelectTrigger class="w-35">
+                            <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Status</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="completed">Completed</SelectItem>
+                            <SelectItem value="failed">Failed</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select v-model="agentId" @update:model-value="applyFilters">
+                        <SelectTrigger class="w-40">
+                            <SelectValue placeholder="Agent" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Agents</SelectItem>
+                            <SelectItem v-for="agent in agents" :key="agent.id" :value="String(agent.id)">
+                                {{ agent.name }}
+                            </SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div
+                v-if="conversations.length === 0"
+                class="text-center py-16"
+            >
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+                    <MessageSquare class="h-8 w-8 text-muted-foreground" />
+                </div>
+                <h3 class="text-lg font-medium mb-2">No conversations yet</h3>
+                <p class="text-muted-foreground mb-6">
+                    Start a new conversation with one of your agents.
+                </p>
+                <Button @click="newConversationDialogOpen = true">
+                    <Plus class="h-4 w-4 mr-2" />
+                    New Conversation
                 </Button>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <CardTitle>All Conversations</CardTitle>
-                            <CardDescription>{{ conversations.total }} conversations total</CardDescription>
-                        </div>
-                        <div class="flex gap-2 flex-wrap">
-                            <div class="relative">
-                                <Search class="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    v-model="search"
-                                    placeholder="Search..."
-                                    class="pl-8 w-[150px]"
-                                    @keyup.enter="applyFilters"
-                                />
+            <!-- Conversation Cards -->
+            <div v-else class="space-y-8">
+                <!-- Today -->
+                <div v-if="groupedConversations.today.length > 0">
+                    <h2 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                        Today
+                    </h2>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <Link
+                            v-for="conversation in groupedConversations.today"
+                            :key="conversation.id"
+                            :href="`/conversations/${conversation.id}`"
+                            class="group relative bg-card border rounded-xl p-4 hover:border-primary/50 hover:shadow-md transition-all"
+                        >
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        @click.prevent
+                                    >
+                                        <MoreHorizontal class="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        @click="deleteConversation(conversation, $event)"
+                                        class="cursor-pointer text-destructive"
+                                    >
+                                        <Trash2 class="mr-2 h-4 w-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <div class="flex items-start gap-3">
+                                <Avatar class="h-9 w-9 shrink-0">
+                                    <AvatarFallback class="bg-primary/10 text-primary text-xs">
+                                        {{ getInitials(conversation.agent?.name) }}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div class="flex-1 min-w-0 pr-6">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-medium text-sm truncate">
+                                            {{ conversation.agent?.name || 'Unknown Agent' }}
+                                        </span>
+                                        <div :class="['h-1.5 w-1.5 rounded-full shrink-0', getStatusDot(conversation.status)]" />
+                                    </div>
+                                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{{ conversation.turn_count }} turns</span>
+                                        <span>·</span>
+                                        <span>{{ formatTime(conversation.last_activity_at) }}</span>
+                                    </div>
+                                </div>
                             </div>
-                            <Select v-model="status" @update:model-value="applyFilters">
-                                <SelectTrigger class="w-[130px]">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Status</SelectItem>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="completed">Completed</SelectItem>
-                                    <SelectItem value="failed">Failed</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select v-model="agentId" @update:model-value="applyFilters">
-                                <SelectTrigger class="w-[150px]">
-                                    <SelectValue placeholder="Agent" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Agents</SelectItem>
-                                    <SelectItem v-for="agent in agents" :key="agent.id" :value="String(agent.id)">
-                                        {{ agent.name }}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        </Link>
                     </div>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead class="text-xs uppercase tracking-wide">Agent</TableHead>
-                                <TableHead class="text-xs uppercase tracking-wide">Status</TableHead>
-                                <TableHead class="text-xs uppercase tracking-wide">Turns</TableHead>
-                                <TableHead class="text-xs uppercase tracking-wide">Tokens</TableHead>
-                                <TableHead class="text-xs uppercase tracking-wide">Last Activity</TableHead>
-                                <TableHead class="text-xs uppercase tracking-wide text-right">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            <TableRow v-if="conversations.data.length === 0">
-                                <TableCell colspan="6" class="text-center text-muted-foreground py-8">
-                                    No conversations found.
-                                    <Link href="/conversations/create" class="text-primary hover:underline ml-1">
-                                        Start your first conversation
-                                    </Link>
-                                </TableCell>
-                            </TableRow>
-                            <TableRow v-for="conversation in conversations.data" :key="conversation.id">
-                                <TableCell class="font-medium">
-                                    {{ conversation.agent?.name || 'Unknown' }}
-                                </TableCell>
-                                <TableCell>
-                                    <Badge :class="getStatusColor(conversation.status)" variant="secondary">
-                                        {{ conversation.status }}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell>{{ conversation.turn_count }}</TableCell>
-                                <TableCell>{{ conversation.total_tokens.toLocaleString() }}</TableCell>
-                                <TableCell>{{ formatDate(conversation.last_activity_at) }}</TableCell>
-                                <TableCell class="text-right">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger as-child>
-                                            <Button variant="ghost" size="icon">
-                                                <MoreHorizontal class="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem as-child>
-                                                <Link :href="`/conversations/${conversation.id}`" class="cursor-pointer">
-                                                    <Eye class="mr-2 h-4 w-4" />
-                                                    View
-                                                </Link>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                @click="deleteConversation(conversation)"
-                                                class="cursor-pointer text-destructive"
-                                            >
-                                                <Trash2 class="mr-2 h-4 w-4" />
-                                                Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                            </TableRow>
-                        </TableBody>
-                    </Table>
+                </div>
 
-                    <div v-if="conversations.last_page > 1" class="flex items-center justify-between mt-4">
-                        <p class="text-sm text-muted-foreground">
-                            Showing {{ conversations.from }} to {{ conversations.to }} of {{ conversations.total }} results
-                        </p>
-                        <div class="flex gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                :disabled="conversations.current_page === 1"
-                                @click="router.get('/conversations', { page: conversations.current_page - 1 })"
-                            >
-                                Previous
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                :disabled="conversations.current_page === conversations.last_page"
-                                @click="router.get('/conversations', { page: conversations.current_page + 1 })"
-                            >
-                                Next
-                            </Button>
+                <!-- Yesterday -->
+                <div v-if="groupedConversations.yesterday.length > 0">
+                    <h2 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                        Yesterday
+                    </h2>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <Link
+                            v-for="conversation in groupedConversations.yesterday"
+                            :key="conversation.id"
+                            :href="`/conversations/${conversation.id}`"
+                            class="group relative bg-card border rounded-xl p-4 hover:border-primary/50 hover:shadow-md transition-all"
+                        >
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        @click.prevent
+                                    >
+                                        <MoreHorizontal class="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        @click="deleteConversation(conversation, $event)"
+                                        class="cursor-pointer text-destructive"
+                                    >
+                                        <Trash2 class="mr-2 h-4 w-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <div class="flex items-start gap-3">
+                                <Avatar class="h-9 w-9 shrink-0">
+                                    <AvatarFallback class="bg-primary/10 text-primary text-xs">
+                                        {{ getInitials(conversation.agent?.name) }}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div class="flex-1 min-w-0 pr-6">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-medium text-sm truncate">
+                                            {{ conversation.agent?.name || 'Unknown Agent' }}
+                                        </span>
+                                        <div :class="['h-1.5 w-1.5 rounded-full shrink-0', getStatusDot(conversation.status)]" />
+                                    </div>
+                                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{{ conversation.turn_count }} turns</span>
+                                        <span>·</span>
+                                        <span>{{ formatTime(conversation.last_activity_at) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Previous 7 Days -->
+                <div v-if="groupedConversations.previousWeek.length > 0">
+                    <h2 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                        Previous 7 Days
+                    </h2>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <Link
+                            v-for="conversation in groupedConversations.previousWeek"
+                            :key="conversation.id"
+                            :href="`/conversations/${conversation.id}`"
+                            class="group relative bg-card border rounded-xl p-4 hover:border-primary/50 hover:shadow-md transition-all"
+                        >
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        @click.prevent
+                                    >
+                                        <MoreHorizontal class="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        @click="deleteConversation(conversation, $event)"
+                                        class="cursor-pointer text-destructive"
+                                    >
+                                        <Trash2 class="mr-2 h-4 w-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <div class="flex items-start gap-3">
+                                <Avatar class="h-9 w-9 shrink-0">
+                                    <AvatarFallback class="bg-primary/10 text-primary text-xs">
+                                        {{ getInitials(conversation.agent?.name) }}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div class="flex-1 min-w-0 pr-6">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-medium text-sm truncate">
+                                            {{ conversation.agent?.name || 'Unknown Agent' }}
+                                        </span>
+                                        <div :class="['h-1.5 w-1.5 rounded-full shrink-0', getStatusDot(conversation.status)]" />
+                                    </div>
+                                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{{ conversation.turn_count }} turns</span>
+                                        <span>·</span>
+                                        <span>{{ formatTime(conversation.last_activity_at) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Previous 30 Days -->
+                <div v-if="groupedConversations.previousMonth.length > 0">
+                    <h2 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                        Previous 30 Days
+                    </h2>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <Link
+                            v-for="conversation in groupedConversations.previousMonth"
+                            :key="conversation.id"
+                            :href="`/conversations/${conversation.id}`"
+                            class="group relative bg-card border rounded-xl p-4 hover:border-primary/50 hover:shadow-md transition-all"
+                        >
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        @click.prevent
+                                    >
+                                        <MoreHorizontal class="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        @click="deleteConversation(conversation, $event)"
+                                        class="cursor-pointer text-destructive"
+                                    >
+                                        <Trash2 class="mr-2 h-4 w-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <div class="flex items-start gap-3">
+                                <Avatar class="h-9 w-9 shrink-0">
+                                    <AvatarFallback class="bg-primary/10 text-primary text-xs">
+                                        {{ getInitials(conversation.agent?.name) }}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div class="flex-1 min-w-0 pr-6">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-medium text-sm truncate">
+                                            {{ conversation.agent?.name || 'Unknown Agent' }}
+                                        </span>
+                                        <div :class="['h-1.5 w-1.5 rounded-full shrink-0', getStatusDot(conversation.status)]" />
+                                    </div>
+                                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{{ conversation.turn_count }} turns</span>
+                                        <span>·</span>
+                                        <span>{{ formatTime(conversation.last_activity_at) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Older -->
+                <div v-if="groupedConversations.older.length > 0">
+                    <h2 class="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                        Older
+                    </h2>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <Link
+                            v-for="conversation in groupedConversations.older"
+                            :key="conversation.id"
+                            :href="`/conversations/${conversation.id}`"
+                            class="group relative bg-card border rounded-xl p-4 hover:border-primary/50 hover:shadow-md transition-all"
+                        >
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        class="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        @click.prevent
+                                    >
+                                        <MoreHorizontal class="h-4 w-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        @click="deleteConversation(conversation, $event)"
+                                        class="cursor-pointer text-destructive"
+                                    >
+                                        <Trash2 class="mr-2 h-4 w-4" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <div class="flex items-start gap-3">
+                                <Avatar class="h-9 w-9 shrink-0">
+                                    <AvatarFallback class="bg-primary/10 text-primary text-xs">
+                                        {{ getInitials(conversation.agent?.name) }}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div class="flex-1 min-w-0 pr-6">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="font-medium text-sm truncate">
+                                            {{ conversation.agent?.name || 'Unknown Agent' }}
+                                        </span>
+                                        <div :class="['h-1.5 w-1.5 rounded-full shrink-0', getStatusDot(conversation.status)]" />
+                                    </div>
+                                    <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                                        <span>{{ conversation.turn_count }} turns</span>
+                                        <span>·</span>
+                                        <span>{{ formatTime(conversation.last_activity_at) }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Link>
+                    </div>
+                </div>
+
+                <!-- Infinite Scroll Trigger -->
+                <WhenVisible
+                    v-if="nextCursor"
+                    :data="['conversations', 'nextCursor']"
+                    :params="loadMoreParams"
+                    :options="{ rootMargin: '200px 0px' }"
+                >
+                    <div class="flex justify-center py-6">
+                        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 class="h-4 w-4 animate-spin" />
+                            Loading more...
                         </div>
                     </div>
-                </CardContent>
-            </Card>
+                </WhenVisible>
+
+                <!-- End of list indicator -->
+                <div v-else-if="conversations.length > 0" class="text-center py-6 text-sm text-muted-foreground">
+                    You've reached the end
+                </div>
+            </div>
         </div>
+
+        <!-- New Conversation Dialog -->
+        <NewConversationDialog
+            v-model:open="newConversationDialogOpen"
+            :agents="sharedAgents"
+        />
     </AppLayout>
 </template>
