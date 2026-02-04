@@ -18,7 +18,7 @@ class AgentController extends Controller
     public function index(Request $request): Response
     {
         $query = Agent::where('user_id', $request->user()->id)
-            ->withCount(['tools', 'executions']);
+            ->withCount(['tools']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -40,6 +40,9 @@ class AgentController extends Controller
                 'status' => $request->input('status'),
                 'search' => $request->input('search'),
             ],
+            'breadcrumbs' => [
+                ['label' => 'Agents'],
+            ],
         ]);
     }
 
@@ -56,6 +59,10 @@ class AgentController extends Controller
             'tools' => $tools,
             'backends' => array_keys($backends),
             'defaultBackend' => $defaultBackend,
+            'breadcrumbs' => [
+                ['label' => 'Agents', 'href' => '/agents'],
+                ['label' => 'Create'],
+            ],
         ]);
     }
 
@@ -100,12 +107,14 @@ class AgentController extends Controller
     {
         $this->authorize('view', $agent);
 
-        $agent->load(['tools', 'executions' => function ($query) {
-            $query->with('task')->latest()->take(10);
-        }]);
+        $agent->load(['tools']);
 
         return Inertia::render('Agents/Show', [
             'agent' => $agent,
+            'breadcrumbs' => [
+                ['label' => 'Agents', 'href' => '/agents'],
+                ['label' => $agent->name],
+            ],
         ]);
     }
 
@@ -124,6 +133,11 @@ class AgentController extends Controller
             'agent' => $agent,
             'tools' => $tools,
             'backends' => array_keys($backends),
+            'breadcrumbs' => [
+                ['label' => 'Agents', 'href' => '/agents'],
+                ['label' => $agent->name, 'href' => "/agents/{$agent->id}"],
+                ['label' => 'Edit'],
+            ],
         ]);
     }
 

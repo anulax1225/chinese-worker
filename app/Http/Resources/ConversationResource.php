@@ -28,6 +28,11 @@ class ConversationResource extends JsonResource
             'started_at' => $this->started_at,
             'last_activity_at' => $this->last_activity_at,
             'completed_at' => $this->completed_at,
+            'cli_session_id' => $this->cli_session_id,
+            'waiting_for' => $this->waiting_for,
+            'pending_tool_request' => $this->pending_tool_request,
+            'client_type' => $this->client_type ?? 'none',
+            'client_tool_schemas' => $this->client_tool_schemas,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

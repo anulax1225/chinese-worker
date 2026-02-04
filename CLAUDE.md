@@ -51,6 +51,7 @@ This project has domain-specific skills available. You MUST activate the relevan
 - `laravel:constants-and-configuration` — Replace hardcoded values with constants, enums, and configuration for maintainability; use PHP 8.1+ enums and config files
 - `laravel:controller-cleanup` — Reduce controller bloat using Form Requests for auth/validation, small Actions/Services with DTOs, and resource/single-action controllers
 - `laravel:controller-tests` — Write focused controller tests using HTTP assertions; keep heavy logic in Actions/Services and unit test them
+- `create-adaptable-composable` — Create a library-grade Vue composable that accepts maybe-reactive inputs (MaybeRef / MaybeRefOrGetter) so callers can pass a plain value, ref, or getter. Normalize inputs with toValue()/toRef() inside reactive effects (watch/watchEffect) to keep behavior predictable and reactive. Use this skill when user asks for creating adaptable or reusable composables.
 - `laravel:custom-helpers` — Create and register small, pure helper functions when they improve clarity; keep them organized and tested
 - `laravel:daily-workflow` — Practical daily checklist for Laravel projects; bring services up, run migrations, queues, quality gates, and tests
 - `laravel:data-chunking-large-datasets` — Process large datasets efficiently using chunk(), chunkById(), lazy(), and cursor() to reduce memory consumption and improve performance
@@ -78,6 +79,10 @@ This project has domain-specific skills available. You MUST activate the relevan
 - `laravel:policies-and-authorization` — Enforce access via Policies and Gates; use authorize() and authorizeResource() to standardize controller protections
 - `laravel:ports-and-adapters` — Use hexagonal architecture for external systems; define ports (interfaces) and per-provider adapters; select adapter at composition edge
 - `laravel:prompt-structure` — Structure prompts for clarity—separate concerns, prioritize requests, specify acceptance criteria, and break work into testable increments
+- `vue-best-practices` — MUST be used for Vue.js tasks. Strongly recommends Composition API with `&lt;script setup&gt;` and TypeScript as the standard approach. Covers Vue 3, SSR, Volar, vue-tsc. Load for any Vue, .vue files, Vue Router, Pinia, or Vite with Vue work. ALWAYS use Composition API unless the project explicitly requires Options API.
+- `vue-debug-guides` — Vue 3 debugging and error handling for runtime errors, warnings, async failures, and SSR/hydration issues. Use when diagnosing or fixing Vue issues.
+- `vue-development-guides` — A collection of best practices and tips for developing applications using Vue.js. This skill MUST be apply when developing, refactoring or reviewing Vue.js or Nuxt projects.
+- `vue-testing-best-practices` — Use for Vue.js testing. Covers Vitest, Vue Test Utils, component testing, mocking, testing patterns, and Playwright for E2E testing.
 
 ## Conventions
 

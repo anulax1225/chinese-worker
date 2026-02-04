@@ -1,0 +1,113 @@
+import { ref, onUnmounted } from 'vue';
+import { stream } from '@/actions/App/Http/Controllers/Api/V1/ConversationController';
+import type { ToolRequest } from '@/types';
+
+export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'streaming' | 'waiting_tool' | 'completed' | 'failed' | 'error';
+
+export interface StreamEventHandlers {
+    onTextChunk?: (chunk: string, type: 'content' | 'thinking') => void;
+    onToolRequest?: (request: ToolRequest) => void;
+    onCompleted?: (stats: { turns: number; tokens: number }) => void;
+    onFailed?: (error: string) => void;
+    onStatusChanged?: (status: string) => void;
+}
+
+export function useConversationStream() {
+    const connectionState = ref<ConnectionState>('idle');
+    const eventSource = ref<EventSource | null>(null);
+
+    function connect(conversationId: number, handlers: StreamEventHandlers) {
+        // Close existing connection if any
+        disconnect();
+
+        connectionState.value = 'connecting';
+
+        const es = new EventSource(stream.url(conversationId));
+        eventSource.value = es;
+
+        es.addEventListener('connected', () => {
+            connectionState.value = 'connected';
+        });
+
+        es.addEventListener('text_chunk', (event) => {
+            connectionState.value = 'streaming';
+            try {
+                const data = JSON.parse(event.data);
+                const chunkType = data.type === 'thinking' ? 'thinking' : 'content';
+                handlers.onTextChunk?.(data.chunk || data.content || '', chunkType);
+            } catch (e) {
+                console.error('Error parsing text_chunk event:', e);
+            }
+        });
+
+        es.addEventListener('tool_request', (event) => {
+            connectionState.value = 'waiting_tool';
+            try {
+                const data = JSON.parse(event.data);
+                handlers.onToolRequest?.(data.tool_request);
+            } catch (e) {
+                console.error('Error parsing tool_request event:', e);
+            }
+            // Close connection - client will reconnect after handling tool
+            es.close();
+        });
+
+        es.addEventListener('completed', (event) => {
+            connectionState.value = 'completed';
+            try {
+                const data = JSON.parse(event.data);
+                handlers.onCompleted?.(data.stats || { turns: 0, tokens: 0 });
+            } catch (e) {
+                console.error('Error parsing completed event:', e);
+            }
+            es.close();
+        });
+
+        es.addEventListener('failed', (event) => {
+            connectionState.value = 'failed';
+            try {
+                const data = JSON.parse(event.data);
+                handlers.onFailed?.(data.error || 'Unknown error');
+            } catch (e) {
+                console.error('Error parsing failed event:', e);
+            }
+            es.close();
+        });
+
+        es.addEventListener('status_changed', (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                handlers.onStatusChanged?.(data.status);
+            } catch (e) {
+                console.error('Error parsing status_changed event:', e);
+            }
+        });
+
+        es.onerror = () => {
+            // EventSource will try to reconnect automatically
+            // Only set error state if connection is completely lost
+            if (es.readyState === EventSource.CLOSED) {
+                connectionState.value = 'error';
+            }
+        };
+    }
+
+    function disconnect() {
+        if (eventSource.value) {
+            eventSource.value.close();
+            eventSource.value = null;
+        }
+        connectionState.value = 'idle';
+    }
+
+    // Clean up on unmount
+    onUnmounted(() => {
+        disconnect();
+    });
+
+    return {
+        connectionState,
+        connect,
+        disconnect,
+    };
+}

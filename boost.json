@@ -22,6 +22,7 @@
         "laravel:constants-and-configuration",
         "laravel:controller-cleanup",
         "laravel:controller-tests",
+        "create-adaptable-composable",
         "laravel:custom-helpers",
         "laravel:daily-workflow",
         "laravel:data-chunking-large-datasets",
@@ -48,6 +49,10 @@
         "laravel:performance-select-columns",
         "laravel:policies-and-authorization",
         "laravel:ports-and-adapters",
-        "laravel:prompt-structure"
+        "laravel:prompt-structure",
+        "vue-best-practices",
+        "vue-debug-guides",
+        "vue-development-guides",
+        "vue-testing-best-practices"
     ]
 }

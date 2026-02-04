@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Conversation;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -41,6 +42,38 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'flash' => [
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
+                'token' => fn () => $request->session()->get('token'),
+            ],
+            'recentConversations' => fn () => $this->getRecentConversations($request),
         ];
+    }
+
+    /**
+     * Get the 4 most recent conversations for the authenticated user.
+     *
+     * @return array<int, array{id: int, title: string, agent_name: string|null, status: string}>
+     */
+    protected function getRecentConversations(Request $request): array
+    {
+        if (! $request->user()) {
+            return [];
+        }
+
+        return Conversation::query()
+            ->where('user_id', $request->user()->id)
+            ->with('agent:id,name')
+            ->orderByDesc('last_activity_at')
+            ->limit(4)
+            ->get(['id', 'agent_id', 'status', 'last_activity_at'])
+            ->map(fn (Conversation $conversation) => [
+                'id' => $conversation->id,
+                'title' => $conversation->agent?->name ?? 'Conversation #'.$conversation->id,
+                'agent_name' => $conversation->agent?->name,
+                'status' => $conversation->status,
+            ])
+            ->toArray();
     }
 }

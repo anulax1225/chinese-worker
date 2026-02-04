@@ -20,7 +20,6 @@ export interface Agent {
     created_at: string;
     updated_at: string;
     tools?: Tool[];
-    executions?: Execution[];
 }
 
 export interface Tool {
@@ -67,41 +66,6 @@ export interface File {
     updated_at: string;
 }
 
-export interface Task {
-    id: number;
-    agent_id: number;
-    payload: Record<string, any>;
-    priority: number;
-    scheduled_at: string | null;
-    created_at: string;
-    updated_at: string;
-    agent?: Agent;
-    executions?: Execution[];
-}
-
-export interface Execution {
-    id: number;
-    task_id: number;
-    status: 'pending' | 'running' | 'completed' | 'failed';
-    started_at: string | null;
-    completed_at: string | null;
-    result: ExecutionResult | null;
-    logs: string | null;
-    error: string | null;
-    created_at: string;
-    updated_at: string;
-    task?: Task;
-    files?: File[];
-}
-
-export interface ExecutionResult {
-    content: string;
-    model: string;
-    tokens_used: number;
-    finish_reason: string;
-    metadata?: Record<string, any>;
-}
-
 export interface AIBackend {
     name: string;
     driver: string;
@@ -119,6 +83,60 @@ export interface AIModel {
     modified_at?: string;
     size?: number;
     digest?: string;
+}
+
+export interface Conversation {
+    id: number;
+    agent_id: number;
+    user_id: number;
+    status: 'active' | 'completed' | 'failed' | 'cancelled' | 'waiting_tool';
+    messages: ChatMessage[];
+    metadata: Record<string, unknown>;
+    turn_count: number;
+    total_tokens: number;
+    started_at: string | null;
+    last_activity_at: string | null;
+    completed_at: string | null;
+    cli_session_id: string | null;
+    waiting_for: string | null;
+    pending_tool_request: ToolRequest | null;
+    client_type: 'cli' | 'cli_web' | 'api';
+    client_tool_schemas: Record<string, unknown>[] | null;
+    created_at: string;
+    updated_at: string;
+    agent?: Agent;
+}
+
+export interface ChatMessage {
+    role: 'user' | 'assistant' | 'system' | 'tool';
+    content: string;
+    thinking?: string;
+    tool_call_id?: string;
+    tool_calls?: ToolCall[];
+    name?: string;
+}
+
+export interface ToolRequest {
+    call_id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+}
+
+export interface ToolCall {
+    id: string;
+    type: 'function';
+    function: {
+        name: string;
+        arguments: string;
+    };
+}
+
+export interface PersonalAccessToken {
+    id: number;
+    name: string;
+    abilities: string[];
+    last_used_at: string | null;
+    created_at: string;
 }
 
 export interface PaginatedResponse<T> {
