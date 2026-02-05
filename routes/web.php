@@ -29,6 +29,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Search test page
     Route::get('/search', [SearchController::class, 'index'])->name('search');
     Route::post('/search', [SearchController::class, 'search'])->name('search.perform');
+    Route::post('/search/fetch', [SearchController::class, 'fetch'])->name('search.fetch');
 
     // Settings - Consolidated page
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');

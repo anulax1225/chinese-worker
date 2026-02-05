@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import { AppLayout } from '@/layouts';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,14 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
+import {
     Search,
     Loader2,
     Clock,
@@ -22,6 +31,8 @@ import {
     AlertCircle,
     CheckCircle2,
     XCircle,
+    Globe,
+    FileText,
 } from 'lucide-vue-next';
 
 interface SearchResult {
@@ -31,6 +42,19 @@ interface SearchResult {
     engine: string | null;
     score: number | null;
     published_date: string | null;
+}
+
+interface FetchedDocument {
+    url: string;
+    title: string;
+    text: string;
+    content_type: string;
+    fetch_time_ms: number;
+    from_cache: boolean;
+    metadata: {
+        status_code?: number;
+        content_length?: number;
+    };
 }
 
 const props = defineProps<{
@@ -44,6 +68,7 @@ const props = defineProps<{
     serviceAvailable: boolean;
 }>();
 
+// Search form
 const form = useForm({
     query: props.query,
     max_results: props.maxResults.toString(),
@@ -54,6 +79,46 @@ const submit = () => {
     form.post('/search', {
         preserveScroll: true,
     });
+};
+
+// Fetch form
+const fetchUrl = ref('');
+const fetchLoading = ref(false);
+const fetchError = ref<string | null>(null);
+const fetchResult = ref<FetchedDocument | null>(null);
+const fetchDialogOpen = ref(false);
+
+const submitFetch = async () => {
+    if (!fetchUrl.value.trim()) return;
+
+    fetchLoading.value = true;
+    fetchError.value = null;
+    fetchResult.value = null;
+
+    try {
+        const response = await fetch('/search/fetch', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({ url: fetchUrl.value }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            fetchResult.value = data.data;
+            fetchDialogOpen.value = true;
+        } else {
+            fetchError.value = data.error || 'Failed to fetch URL';
+        }
+    } catch {
+        fetchError.value = 'Network error occurred';
+    } finally {
+        fetchLoading.value = false;
+    }
 };
 
 const getEngineBadgeClass = (engine: string | null) => {
@@ -71,6 +136,12 @@ const truncateUrl = (url: string, maxLength = 60) => {
     if (url.length <= maxLength) return url;
     return url.substring(0, maxLength) + '...';
 };
+
+const formatBytes = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+};
 </script>
 
 <template>
@@ -79,9 +150,9 @@ const truncateUrl = (url: string, maxLength = 60) => {
             <!-- Header -->
             <div class="flex items-center justify-between mb-6">
                 <div>
-                    <h1 class="text-2xl font-semibold">Search Test</h1>
+                    <h1 class="text-2xl font-semibold">Search & Fetch Test</h1>
                     <p class="text-sm text-muted-foreground mt-1">
-                        Test the SearXNG search integration
+                        Test the SearXNG search and web fetch integrations
                     </p>
                 </div>
                 <Badge
@@ -96,9 +167,15 @@ const truncateUrl = (url: string, maxLength = 60) => {
                 </Badge>
             </div>
 
-            <!-- Search Form -->
-            <form @submit.prevent="submit" class="mb-8">
-                <div class="bg-card border rounded-xl p-6 space-y-4">
+            <!-- Tabs-like sections -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Search Form -->
+                <form @submit.prevent="submit" class="bg-card border rounded-xl p-6 space-y-4">
+                    <div class="flex items-center gap-2 mb-4">
+                        <Search class="h-5 w-5 text-primary" />
+                        <h2 class="font-semibold">Web Search</h2>
+                    </div>
+
                     <div class="space-y-2">
                         <Label for="query">Search Query</Label>
                         <div class="relative">
@@ -116,7 +193,7 @@ const truncateUrl = (url: string, maxLength = 60) => {
                         </p>
                     </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-2">
                             <Label for="max_results">Max Results</Label>
                             <Select v-model="form.max_results" :disabled="form.processing">
@@ -133,26 +210,56 @@ const truncateUrl = (url: string, maxLength = 60) => {
                         </div>
 
                         <div class="space-y-2">
-                            <Label for="engines">Engines (optional)</Label>
+                            <Label for="engines">Engines</Label>
                             <Input
                                 id="engines"
                                 v-model="form.engines"
-                                placeholder="google, bing, duckduckgo"
+                                placeholder="google, bing"
                                 :disabled="form.processing"
                             />
-                            <p class="text-xs text-muted-foreground">
-                                Comma-separated list of engines
-                            </p>
                         </div>
                     </div>
 
-                    <Button type="submit" :disabled="form.processing || !form.query.trim()">
+                    <Button type="submit" :disabled="form.processing || !form.query.trim()" class="w-full">
                         <Loader2 v-if="form.processing" class="h-4 w-4 mr-2 animate-spin" />
                         <Search v-else class="h-4 w-4 mr-2" />
                         Search
                     </Button>
-                </div>
-            </form>
+                </form>
+
+                <!-- Fetch Form -->
+                <form @submit.prevent="submitFetch" class="bg-card border rounded-xl p-6 space-y-4">
+                    <div class="flex items-center gap-2 mb-4">
+                        <Globe class="h-5 w-5 text-primary" />
+                        <h2 class="font-semibold">Web Fetch</h2>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="fetch_url">URL to Fetch</Label>
+                        <div class="relative">
+                            <Globe class="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                id="fetch_url"
+                                v-model="fetchUrl"
+                                placeholder="https://example.com"
+                                class="pl-9"
+                                :disabled="fetchLoading"
+                            />
+                        </div>
+                    </div>
+
+                    <Alert v-if="fetchError" variant="destructive">
+                        <AlertCircle class="h-4 w-4" />
+                        <AlertDescription>{{ fetchError }}</AlertDescription>
+                    </Alert>
+
+                    <Button type="submit" :disabled="fetchLoading || !fetchUrl.trim()" class="w-full">
+                        <Loader2 v-if="fetchLoading" class="h-4 w-4 mr-2 animate-spin" />
+                        <FileText v-else class="h-4 w-4 mr-2" />
+                        Fetch Content
+                    </Button>
+                </form>
+            </div>
 
             <!-- Error Alert -->
             <Alert v-if="error" variant="destructive" class="mb-6">
@@ -160,7 +267,7 @@ const truncateUrl = (url: string, maxLength = 60) => {
                 <AlertDescription>{{ error }}</AlertDescription>
             </Alert>
 
-            <!-- Results -->
+            <!-- Search Results -->
             <div v-if="results !== null">
                 <!-- Results Metadata -->
                 <div class="flex items-center gap-4 mb-4 text-sm text-muted-foreground">
@@ -245,5 +352,58 @@ const truncateUrl = (url: string, maxLength = 60) => {
                 </p>
             </div>
         </div>
+
+        <!-- Fetch Result Dialog -->
+        <Dialog v-model:open="fetchDialogOpen">
+            <DialogContent class="max-w-3xl max-h-[80vh] overflow-hidden flex flex-col">
+                <DialogHeader>
+                    <DialogTitle class="flex items-center gap-2">
+                        <FileText class="h-5 w-5" />
+                        {{ fetchResult?.title || 'Fetched Content' }}
+                    </DialogTitle>
+                    <DialogDescription v-if="fetchResult">
+                        <a
+                            :href="fetchResult.url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-primary hover:underline flex items-center gap-1"
+                        >
+                            {{ truncateUrl(fetchResult.url, 80) }}
+                            <ExternalLink class="h-3 w-3" />
+                        </a>
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div v-if="fetchResult" class="flex-1 overflow-hidden flex flex-col">
+                    <!-- Metadata -->
+                    <div class="flex flex-wrap items-center gap-3 py-3 text-sm">
+                        <Badge variant="outline" class="flex items-center gap-1">
+                            <Clock class="h-3 w-3" />
+                            {{ fetchResult.fetch_time_ms.toFixed(0) }}ms
+                        </Badge>
+                        <Badge v-if="fetchResult.from_cache" variant="secondary" class="flex items-center gap-1">
+                            <Database class="h-3 w-3" />
+                            Cached
+                        </Badge>
+                        <Badge variant="outline">
+                            {{ fetchResult.content_type }}
+                        </Badge>
+                        <Badge v-if="fetchResult.metadata.content_length" variant="outline">
+                            {{ formatBytes(fetchResult.metadata.content_length) }}
+                        </Badge>
+                        <Badge v-if="fetchResult.metadata.status_code" variant="outline" class="text-green-600">
+                            HTTP {{ fetchResult.metadata.status_code }}
+                        </Badge>
+                    </div>
+
+                    <Separator />
+
+                    <!-- Content -->
+                    <div class="flex-1 overflow-y-auto mt-4">
+                        <pre class="text-sm whitespace-pre-wrap font-sans leading-relaxed text-foreground/90">{{ fetchResult.text }}</pre>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
     </AppLayout>
 </template>

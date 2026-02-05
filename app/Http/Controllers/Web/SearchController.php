@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Web;
 
 use App\DTOs\Search\SearchQuery;
+use App\DTOs\WebFetch\FetchRequest;
 use App\Exceptions\SearchException;
+use App\Exceptions\WebFetchException;
 use App\Http\Controllers\Controller;
 use App\Services\Search\SearchService;
+use App\Services\WebFetch\WebFetchService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -13,7 +17,8 @@ use Inertia\Response;
 class SearchController extends Controller
 {
     public function __construct(
-        private readonly SearchService $searchService
+        private readonly SearchService $searchService,
+        private readonly WebFetchService $webFetchService,
     ) {}
 
     public function index(): Response
@@ -70,5 +75,35 @@ class SearchController extends Controller
             'fromCache' => $fromCache,
             'serviceAvailable' => $this->searchService->isAvailable(),
         ]);
+    }
+
+    public function fetch(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'url' => ['required', 'url'],
+        ]);
+
+        try {
+            $fetchRequest = new FetchRequest(url: $validated['url']);
+
+            if (! $fetchRequest->isValid()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Invalid URL',
+                ], 422);
+            }
+
+            $document = $this->webFetchService->fetch($fetchRequest);
+
+            return response()->json([
+                'success' => true,
+                'data' => $document->toArray(),
+            ]);
+        } catch (WebFetchException $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 422);
+        }
     }
 }
