@@ -124,9 +124,9 @@ services:
         environment:
             OLLAMA_CONTEXT_LENGTH: 64000
         # Vulkan adapter if not an nvidia card
-            OLLAMA_VULKAN: 1
-        devices:
-            - /dev/dri
+        #     OLLAMA_VULKAN: 1
+        # devices:
+        #     - /dev/dri
         # if it's an nvdia card (also install nvidia-container-kit for integration with docker)
         # gpus: all
         ports:

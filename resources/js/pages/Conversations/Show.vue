@@ -4,12 +4,10 @@ import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import MarkdownIt from 'markdown-it';
 import { AppLayout } from '@/layouts';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
     Bot,
     ChevronRight,
-    Terminal,
     Wrench,
     Loader2,
     ArrowDown,
@@ -20,6 +18,14 @@ import { toast } from 'vue-sonner';
 import { useConversationStream } from '@/composables/useConversationStream';
 import ToolRequestDialog from '@/components/ToolRequestDialog.vue';
 import ChatInputBar from '@/components/ChatInputBar.vue';
+import {
+    ToolResultDefault,
+    WebSearchResult,
+    WebFetchResult,
+    BashResult,
+    FileReadResult,
+    FileWriteResult,
+} from '@/components/tools';
 import {
     sendMessage as sendMessageAction,
     submitToolResult as submitToolResultAction,
@@ -355,6 +361,17 @@ const formatTime = (date: string | null) => {
     });
 };
 
+// Get the appropriate tool result component based on tool name
+const getToolResultComponent = (toolName: string | undefined) => {
+    const name = toolName?.toLowerCase() || '';
+    if (name === 'web_search') return WebSearchResult;
+    if (name === 'web_fetch') return WebFetchResult;
+    if (name === 'bash') return BashResult;
+    if (name === 'read') return FileReadResult;
+    if (name === 'write') return FileWriteResult;
+    return ToolResultDefault;
+};
+
 // On mount: check if there's a pending user message that needs processing
 onMounted(async () => {
     scrollToBottom();
@@ -426,21 +443,13 @@ watch(() => props.conversation.status, (newStatus) => {
                             </div>
                         </div>
 
-                        <!-- Tool message - Accent colored card -->
-                        <div v-else-if="message.role === 'tool'" class="flex gap-3">
-                            <div class="h-8 w-8 shrink-0 rounded-full bg-info/10 flex items-center justify-center">
-                                <Terminal class="h-4 w-4 text-info" />
-                            </div>
-                            <Card class="flex-1 max-w-[85%] p-3 border-info/30 bg-info/5">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <Badge variant="outline" class="bg-info/10 text-info border-info/30 text-xs">
-                                        {{ message.name || 'tool' }}
-                                    </Badge>
-                                    <span class="text-xs text-muted-foreground">Tool Result</span>
-                                </div>
-                                <pre class="text-xs font-mono whitespace-pre-wrap overflow-x-auto max-h-40 bg-muted/50 rounded p-2">{{ message.content }}</pre>
-                            </Card>
-                        </div>
+                        <!-- Tool message - Dynamic component based on tool type -->
+                        <component
+                            v-else-if="message.role === 'tool'"
+                            :is="getToolResultComponent(message.name)"
+                            :content="message.content"
+                            :tool-name="message.name"
+                        />
 
                         <!-- System message - Centered, muted -->
                         <div v-else-if="message.role === 'system'" class="flex justify-center">
