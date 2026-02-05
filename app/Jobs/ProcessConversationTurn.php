@@ -3,17 +3,22 @@
 namespace App\Jobs;
 
 use App\DTOs\ChatMessage;
+use App\DTOs\Search\SearchQuery;
 use App\DTOs\ToolCall;
 use App\DTOs\ToolResult;
+use App\DTOs\WebFetch\FetchRequest;
+use App\Exceptions\SearchException;
+use App\Exceptions\WebFetchException;
 use App\Models\Conversation;
 use App\Models\Todo;
 use App\Services\AIBackendManager;
 use App\Services\ClientToolRegistry;
 use App\Services\ConversationEventBroadcaster;
+use App\Services\Search\SearchService;
 use App\Services\ToolSchemaRegistry;
 use App\Services\ToolService;
+use App\Services\WebFetch\WebFetchService;
 use Exception;
-use GuzzleHttp\Client;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +54,7 @@ class ProcessConversationTurn implements ShouldQueue
         'todo_delete',
         'todo_clear',
         'web_search',
+        'web_fetch',
     ];
 
     public function __construct(
@@ -296,6 +302,7 @@ class ProcessConversationTurn implements ShouldQueue
                 'todo_delete' => $this->todoDelete($toolCall->arguments),
                 'todo_clear' => $this->todoClear(),
                 'web_search' => $this->webSearch($toolCall->arguments),
+                'web_fetch' => $this->webFetch($toolCall->arguments),
                 default => new ToolResult(
                     success: false,
                     output: '',
@@ -488,70 +495,71 @@ class ProcessConversationTurn implements ShouldQueue
 
     protected function webSearch(array $args): ToolResult
     {
-        $query = $args['query'] ?? '';
-        $maxResults = $args['max_results'] ?? 5;
+        $query = new SearchQuery(
+            query: $args['query'] ?? '',
+            maxResults: $args['max_results'] ?? 5,
+        );
 
-        if (empty($query)) {
+        if (! $query->isValid()) {
             return new ToolResult(
                 success: false,
                 output: '',
-                error: 'Query is required'
+                error: 'Search query cannot be empty'
             );
         }
 
         try {
-            $client = new Client;
-            $response = $client->get('https://api.duckduckgo.com/', [
-                'query' => [
-                    'q' => $query,
-                    'format' => 'json',
-                    'no_html' => 1,
-                ],
-                'timeout' => 10,
-            ]);
+            $results = app(SearchService::class)->search($query);
 
-            $data = json_decode($response->getBody(), true);
-
-            $results = [];
-
-            // Add abstract if available
-            if (! empty($data['AbstractText'])) {
-                $results[] = [
-                    'title' => $data['Heading'] ?? 'Result',
-                    'snippet' => $data['AbstractText'],
-                    'url' => $data['AbstractURL'] ?? '',
-                ];
-            }
-
-            // Add related topics
-            foreach ($data['RelatedTopics'] ?? [] as $topic) {
-                if (isset($topic['Text']) && count($results) < $maxResults) {
-                    $results[] = [
-                        'title' => $topic['FirstURL'] ?? '',
-                        'snippet' => $topic['Text'],
-                        'url' => $topic['FirstURL'] ?? '',
-                    ];
-                }
-            }
-
-            if (empty($results)) {
+            if ($results->isEmpty()) {
                 return new ToolResult(
                     success: true,
-                    output: 'No results found for: '.$query,
+                    output: 'No results found for: '.$query->query,
                     error: null
                 );
             }
 
             return new ToolResult(
                 success: true,
-                output: json_encode($results, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES),
+                output: $results->toJson(),
                 error: null
             );
-        } catch (Exception $e) {
+        } catch (SearchException $e) {
             return new ToolResult(
                 success: false,
                 output: '',
                 error: 'Web search failed: '.$e->getMessage()
+            );
+        }
+    }
+
+    // Web fetch system tool
+
+    protected function webFetch(array $args): ToolResult
+    {
+        $request = new FetchRequest(url: $args['url'] ?? '');
+
+        if (! $request->isValid()) {
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: 'Invalid or missing URL'
+            );
+        }
+
+        try {
+            $document = app(WebFetchService::class)->fetch($request);
+
+            return new ToolResult(
+                success: true,
+                output: $document->toJson(),
+                error: null
+            );
+        } catch (WebFetchException $e) {
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: 'Web fetch failed: '.$e->getMessage()
             );
         }
     }

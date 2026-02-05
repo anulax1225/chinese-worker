@@ -114,6 +114,20 @@ class ToolSchemaRegistry
                     'required' => ['query'],
                 ],
             ],
+            [
+                'name' => 'web_fetch',
+                'description' => 'Fetch and extract readable content from a URL. Returns the page title and main text content.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'url' => [
+                            'type' => 'string',
+                            'description' => 'The URL to fetch (must be http or https)',
+                        ],
+                    ],
+                    'required' => ['url'],
+                ],
+            ],
         ];
     }
 

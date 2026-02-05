@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Services\Search\SearchService;
+use App\Services\WebFetch\WebFetchService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Date;
@@ -23,6 +25,12 @@ class AppServiceProvider extends ServiceProvider
             $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
             $this->app->register(TelescopeServiceProvider::class);
         }
+
+        // Register SearchService as singleton
+        $this->app->singleton(SearchService::class, SearchService::make(...));
+
+        // Register WebFetchService as singleton
+        $this->app->singleton(WebFetchService::class, WebFetchService::make(...));
     }
 
     /**

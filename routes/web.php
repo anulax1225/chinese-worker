@@ -4,6 +4,7 @@ use App\Http\Controllers\Web\AgentController;
 use App\Http\Controllers\Web\ConversationController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\FileController;
+use App\Http\Controllers\Web\SearchController;
 use App\Http\Controllers\Web\SettingsController;
 use App\Http\Controllers\Web\ToolController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +25,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('tools', ToolController::class);
     Route::resource('files', FileController::class)->except(['update']);
     Route::resource('conversations', ConversationController::class);
+
+    // Search test page
+    Route::get('/search', [SearchController::class, 'index'])->name('search');
+    Route::post('/search', [SearchController::class, 'search'])->name('search.perform');
 
     // Settings - Consolidated page
     Route::get('/settings', [SettingsController::class, 'index'])->name('settings');

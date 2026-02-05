@@ -13,6 +13,7 @@ import {
     Wrench,
     MessageSquare,
     FileText,
+    Search,
     X,
     Plus,
     ChevronDown,
@@ -42,6 +43,7 @@ const adminNavigation = [
     { name: 'Agents', href: '/agents', icon: Bot },
     { name: 'Tools', href: '/tools', icon: Wrench },
     { name: 'Files', href: '/files', icon: FileText },
+    { name: 'Search', href: '/search', icon: Search },
 ];
 
 const sidebarConversations = computed(() => page.props.sidebarConversations || []);

@@ -1,0 +1,14 @@
+use_default_settings: true
+
+search:
+  safe_search: 1
+  autocomplete: "google"
+  default_lang: "auto"
+  formats:
+    - html
+    - json
+
+server:
+  limiter: false
+  image_proxy: true
+  secret_key: "searxng-secret-key-change-in-production"

@@ -27,6 +27,7 @@ services:
             - rustfs
             - mailpit
             - ollama
+            - searxng
     mysql:
         image: 'mysql:8.4'
         ports:
@@ -123,11 +124,11 @@ services:
         environment:
             OLLAMA_CONTEXT_LENGTH: 64000
         # Vulkan adapter if not an nvidia card
-            # OLLAMA_VULKAN: 1
-        # devices:
-        #     - /dev/dri
+            OLLAMA_VULKAN: 1
+        devices:
+            - /dev/dri
         # if it's an nvdia card (also install nvidia-container-kit for integration with docker)
-        gpus: all
+        # gpus: all
         ports:
             - '${FORWARD_OLLAMA_PORT:-11434}:11434'
         volumes:
@@ -144,6 +145,28 @@ services:
             timeout: 10s
             retries: 3
             start_period: 10s
+    searxng:
+        image: 'searxng/searxng:latest'
+        ports:
+            - '${FORWARD_SEARXNG_PORT:-8888}:8080'
+        environment:
+            SEARXNG_BASE_URL: 'http://searxng:8080'
+        volumes:
+            - 'sail-searxng:/etc/searxng'
+            - './.sail/searxng/settings.yml:/etc/searxng/settings.yml:ro'
+        networks:
+            - sail
+        healthcheck:
+            test:
+                - CMD
+                - wget
+                - '-q'
+                - '--spider'
+                - 'http://localhost:8080/healthz'
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 10s
 networks:
     sail:
         driver: bridge
@@ -155,4 +178,6 @@ volumes:
     sail-rustfs:
         driver: local
     sail-ollama:
+        driver: local
+    sail-searxng:
         driver: local
