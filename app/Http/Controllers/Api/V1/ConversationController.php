@@ -55,7 +55,7 @@ class ConversationController extends Controller
         $request->validate([
             'title' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
-            'client_type' => ['nullable', 'string'],
+            'client_type' => ['required', 'string'],
             'client_tool_schemas' => ['nullable', 'array'],
             'client_tool_schemas.*.name' => ['required_with:client_tool_schemas', 'string'],
             'client_tool_schemas.*.description' => ['required_with:client_tool_schemas', 'string'],

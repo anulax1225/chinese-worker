@@ -7,6 +7,7 @@ use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
 use App\DTOs\ModelPullProgress;
+use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
 use App\Models\Tool;
@@ -28,6 +29,8 @@ class OllamaBackend implements AIBackendInterface
 
     protected array $options;
 
+    protected ?NormalizedModelConfig $normalizedConfig = null;
+
     public function __construct(array $config)
     {
         if (! $this->validateConfig($config)) {
@@ -47,6 +50,27 @@ class OllamaBackend implements AIBackendInterface
                 'Accept' => 'application/json',
             ],
         ]);
+    }
+
+    public function withConfig(NormalizedModelConfig $config): static
+    {
+        $clone = clone $this;
+        $clone->normalizedConfig = $config;
+        $clone->model = $config->model;
+        $clone->timeout = $config->timeout;
+        $clone->options = $config->toOllamaOptions();
+
+        // Recreate client with new timeout
+        $clone->client = new Client([
+            'base_uri' => $clone->baseUrl,
+            'timeout' => $clone->timeout,
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+            ],
+        ]);
+
+        return $clone;
     }
 
     public function execute(Agent $agent, array $context): AIResponse

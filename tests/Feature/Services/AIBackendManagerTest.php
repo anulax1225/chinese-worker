@@ -48,6 +48,11 @@ describe('AIBackendManager', function () {
 
         $mockBackend = new class implements AIBackendInterface
         {
+            public function withConfig(\App\DTOs\NormalizedModelConfig $config): static
+            {
+                return $this;
+            }
+
             public function execute(Agent $agent, array $context): AIResponse
             {
                 return new AIResponse('test', 'custom-model', 0, 'stop');

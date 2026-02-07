@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Contracts\AIBackendInterface;
+use App\DTOs\NormalizedModelConfig;
+use App\Models\Agent;
+use App\Services\AI\ModelConfigNormalizer;
 use App\Services\AI\OllamaBackend;
 use Closure;
 use InvalidArgumentException;
@@ -22,6 +25,31 @@ class AIBackendManager
      * @var array<string, Closure>
      */
     protected array $customCreators = [];
+
+    protected ModelConfigNormalizer $normalizer;
+
+    public function __construct()
+    {
+        $this->normalizer = new ModelConfigNormalizer;
+    }
+
+    /**
+     * Get a configured backend for a specific agent.
+     * This merges global config with agent-specific overrides.
+     *
+     * @return array{backend: AIBackendInterface, config: NormalizedModelConfig}
+     */
+    public function forAgent(Agent $agent): array
+    {
+        $backendName = $agent->ai_backend ?? config('ai.default');
+        $backend = $this->driver($backendName);
+        $config = $this->normalizer->normalize($agent);
+
+        return [
+            'backend' => $backend->withConfig($config),
+            'config' => $config,
+        ];
+    }
 
     /**
      * Get a backend driver instance.

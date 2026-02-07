@@ -32,8 +32,7 @@ class PromptAssembler
             ->get();
 
         if ($prompts->isEmpty()) {
-            // Fallback to legacy agent.code
-            return $agent->code ?? '';
+            return '';
         }
 
         $sections = [];

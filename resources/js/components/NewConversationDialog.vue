@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useForm, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { router } from '@inertiajs/vue3';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -18,6 +19,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { MessageSquarePlus, Bot } from 'lucide-vue-next';
+import { store } from '@/actions/App/Http/Controllers/Api/V1/ConversationController';
 import type { Agent } from '@/types';
 
 const props = defineProps<{
@@ -26,23 +28,50 @@ const props = defineProps<{
 
 const open = defineModel<boolean>('open', { default: false });
 
-const form = useForm({
-    agent_id: '',
-});
+const agentId = ref('');
+const processing = ref(false);
+const errors = ref<Record<string, string>>({});
 
-const submit = () => {
-    form.post('/conversations', {
-        onSuccess: () => {
+const submit = async () => {
+    if (!agentId.value) return;
+
+    processing.value = true;
+    errors.value = {};
+
+    try {
+        const response = await fetch(store.url(agentId.value), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+                ),
+            },
+            body: JSON.stringify({
+                client_type: "cli_web", 
+            }),
+        });
+
+        if (response.ok) {
+            const data = await response.json();
             open.value = false;
-            form.reset();
-        },
-    });
+            agentId.value = '';
+            router.visit(`/conversations/${data.id}`);
+        } else if (response.status === 422) {
+            const data = await response.json();
+            errors.value = data.errors || {};
+        }
+    } finally {
+        processing.value = false;
+    }
 };
 
 const handleOpenChange = (value: boolean) => {
     open.value = value;
     if (!value) {
-        form.reset();
+        agentId.value = '';
+        errors.value = {};
     }
 };
 </script>
@@ -52,7 +81,7 @@ const handleOpenChange = (value: boolean) => {
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2">
-                    <MessageSquarePlus class="h-5 w-5" />
+                    <MessageSquarePlus class="w-5 h-5" />
                     New Conversation
                 </DialogTitle>
                 <DialogDescription>
@@ -63,7 +92,7 @@ const handleOpenChange = (value: boolean) => {
             <form @submit.prevent="submit" class="space-y-4 py-4">
                 <div class="space-y-2">
                     <Label for="agent">Agent</Label>
-                    <Select v-model="form.agent_id" required>
+                    <Select v-model="agentId" required>
                         <SelectTrigger class="w-full">
                             <SelectValue placeholder="Select an agent" />
                         </SelectTrigger>
@@ -74,12 +103,12 @@ const handleOpenChange = (value: boolean) => {
                                 :value="String(agent.id)"
                             >
                                 <div class="flex items-center gap-2">
-                                    <Bot class="h-4 w-4 text-muted-foreground" />
+                                    <Bot class="w-4 h-4 text-muted-foreground" />
                                     <div class="flex flex-col">
                                         <span>{{ agent.name }}</span>
                                         <span
                                             v-if="agent.description"
-                                            class="text-xs text-muted-foreground truncate max-w-[200px]"
+                                            class="max-w-[200px] text-muted-foreground text-xs truncate"
                                         >
                                             {{ agent.description }}
                                         </span>
@@ -88,10 +117,10 @@ const handleOpenChange = (value: boolean) => {
                             </SelectItem>
                         </SelectContent>
                     </Select>
-                    <p v-if="form.errors.agent_id" class="text-sm text-destructive">
-                        {{ form.errors.agent_id }}
+                    <p v-if="errors.agent_id" class="text-destructive text-sm">
+                        {{ errors.agent_id }}
                     </p>
-                    <p v-if="agents.length === 0" class="text-sm text-muted-foreground">
+                    <p v-if="agents.length === 0" class="text-muted-foreground text-sm">
                         No active agents available. Create one first.
                     </p>
                 </div>
@@ -106,9 +135,9 @@ const handleOpenChange = (value: boolean) => {
                     </Button>
                     <Button
                         type="submit"
-                        :disabled="form.processing || !form.agent_id || agents.length === 0"
+                        :disabled="processing || !agentId || agents.length === 0"
                     >
-                        {{ form.processing ? 'Starting...' : 'Start Conversation' }}
+                        {{ processing ? 'Starting...' : 'Start Conversation' }}
                     </Button>
                 </DialogFooter>
             </form>

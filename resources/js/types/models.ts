@@ -8,6 +8,19 @@ export interface User {
     updated_at: string;
 }
 
+export interface ModelConfig {
+    model?: string;
+    temperature?: number;
+    max_tokens?: number;
+    top_p?: number;
+    top_k?: number;
+    context_length?: number;
+    frequency_penalty?: number;
+    presence_penalty?: number;
+    timeout?: number;
+    stop_sequences?: string[];
+}
+
 export interface Agent {
     id: number;
     user_id: number;
@@ -15,6 +28,7 @@ export interface Agent {
     description: string | null;
     code: string;
     config: Record<string, any>;
+    model_config: ModelConfig | null;
     status: 'active' | 'inactive' | 'error';
     ai_backend: 'ollama' | 'anthropic' | 'openai';
     context_variables: Record<string, unknown> | null;

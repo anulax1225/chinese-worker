@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { AppLayout } from '@/layouts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, ChevronUp, ChevronDown, X } from 'lucide-vue-next';
 import { update } from '@/actions/App/Http/Controllers/Api/V1/AgentController';
-import type { Agent, Tool, SystemPrompt } from '@/types';
+import { models as fetchBackendModels } from '@/actions/App/Http/Controllers/Api/V1/AIBackendController';
+import type { Agent, Tool, SystemPrompt, ModelConfig } from '@/types';
 
 const props = defineProps<{
     agent: Agent & { tools: Tool[]; system_prompts?: SystemPrompt[] };
@@ -31,12 +32,50 @@ const form = ref({
     description: props.agent.description || '',
     code: props.agent.code,
     config: props.agent.config,
+    model_config: {
+        model: props.agent.model_config?.model,
+        temperature: props.agent.model_config?.temperature,
+        max_tokens: props.agent.model_config?.max_tokens,
+        top_p: props.agent.model_config?.top_p,
+        top_k: props.agent.model_config?.top_k,
+        context_length: props.agent.model_config?.context_length,
+        timeout: props.agent.model_config?.timeout,
+    } as ModelConfig,
     status: props.agent.status as 'active' | 'inactive' | 'error',
     ai_backend: props.agent.ai_backend,
     tool_ids: props.agent.tools?.map(t => t.id as number) || [],
     system_prompt_ids: props.agent.system_prompts
         ?.sort((a, b) => (a.pivot?.order ?? 0) - (b.pivot?.order ?? 0))
         .map(p => p.id) || [],
+});
+
+const availableModels = ref<string[]>([]);
+const loadingModels = ref(false);
+
+const loadModelsForBackend = async (backend: string) => {
+    loadingModels.value = true;
+    try {
+        const response = await fetch(fetchBackendModels.url(backend));
+        if (response.ok) {
+            const data = await response.json();
+            availableModels.value = data.models?.map((m: { name: string }) => m.name) || [];
+        } else {
+            availableModels.value = [];
+        }
+    } catch {
+        availableModels.value = [];
+    } finally {
+        loadingModels.value = false;
+    }
+};
+
+watch(() => form.value.ai_backend, (newBackend) => {
+    form.value.model_config.model = undefined;
+    loadModelsForBackend(newBackend);
+});
+
+onMounted(() => {
+    loadModelsForBackend(form.value.ai_backend);
 });
 
 const errors = ref<Record<string, string>>({});
@@ -194,6 +233,105 @@ const moveDown = (index: number) => {
                                     <SelectItem value="error">Error</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Model Configuration</CardTitle>
+                        <CardDescription>Customize AI parameters (leave empty for defaults)</CardDescription>
+                    </CardHeader>
+                    <CardContent class="space-y-4">
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div class="space-y-2">
+                                <Label for="model">Model</Label>
+                                <Select v-model="form.model_config.model">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Use backend default" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="model in availableModels"
+                                            :key="model"
+                                            :value="model"
+                                        >
+                                            {{ model }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p v-if="loadingModels" class="text-xs text-muted-foreground">
+                                    Loading models...
+                                </p>
+                                <p v-else-if="!availableModels.length" class="text-xs text-muted-foreground">
+                                    No models available for this backend
+                                </p>
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label for="temperature">Temperature</Label>
+                                <Input
+                                    id="temperature"
+                                    type="number"
+                                    v-model.number="form.model_config.temperature"
+                                    placeholder="0.7"
+                                    min="0"
+                                    max="2"
+                                    step="0.1"
+                                />
+                                <p class="text-xs text-muted-foreground">Controls randomness (0-2)</p>
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label for="max_tokens">Max Tokens</Label>
+                                <Input
+                                    id="max_tokens"
+                                    type="number"
+                                    v-model.number="form.model_config.max_tokens"
+                                    placeholder="4096"
+                                    min="1"
+                                />
+                                <p class="text-xs text-muted-foreground">Maximum response length</p>
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label for="context_length">Context Length</Label>
+                                <Input
+                                    id="context_length"
+                                    type="number"
+                                    v-model.number="form.model_config.context_length"
+                                    placeholder="4096"
+                                    min="1024"
+                                />
+                                <p class="text-xs text-muted-foreground">Context window size</p>
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label for="top_p">Top P</Label>
+                                <Input
+                                    id="top_p"
+                                    type="number"
+                                    v-model.number="form.model_config.top_p"
+                                    placeholder="1.0"
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                />
+                                <p class="text-xs text-muted-foreground">Nucleus sampling (0-1)</p>
+                            </div>
+
+                            <div class="space-y-2">
+                                <Label for="timeout">Timeout (seconds)</Label>
+                                <Input
+                                    id="timeout"
+                                    type="number"
+                                    v-model.number="form.model_config.timeout"
+                                    placeholder="120"
+                                    min="10"
+                                    max="3600"
+                                />
+                                <p class="text-xs text-muted-foreground">Request timeout</p>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

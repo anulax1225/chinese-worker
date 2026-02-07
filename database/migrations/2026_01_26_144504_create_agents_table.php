@@ -16,7 +16,6 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('name', 255);
             $table->text('description')->nullable();
-            $table->longText('code');
             $table->json('config')->nullable();
             $table->enum('status', ['active', 'inactive', 'error'])->default('active');
             $table->string('ai_backend')->default('ollama');

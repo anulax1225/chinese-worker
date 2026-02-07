@@ -22,6 +22,7 @@ class Conversation extends Model
         'messages',
         'system_prompt_snapshot',
         'prompt_context_snapshot',
+        'model_config_snapshot',
         'metadata',
         'turn_count',
         'total_tokens',
@@ -45,6 +46,7 @@ class Conversation extends Model
         return [
             'messages' => 'array',
             'prompt_context_snapshot' => 'array',
+            'model_config_snapshot' => 'array',
             'metadata' => 'array',
             'pending_tool_request' => 'array',
             'client_tool_schemas' => 'array',

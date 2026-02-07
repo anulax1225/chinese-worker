@@ -8,14 +8,12 @@ beforeEach(function () {
     $this->assembler = app(PromptAssembler::class);
 });
 
-test('falls back to agent code when no system prompts exist', function () {
-    $agent = Agent::factory()->create([
-        'code' => 'You are a helpful assistant.',
-    ]);
+test('returns empty string when no system prompts exist', function () {
+    $agent = Agent::factory()->create();
 
     $result = $this->assembler->assemble($agent);
 
-    expect($result)->toBe('You are a helpful assistant.');
+    expect($result)->toBe('');
 });
 
 test('assembles prompt from single system prompt', function () {

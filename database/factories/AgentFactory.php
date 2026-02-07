@@ -20,7 +20,6 @@ class AgentFactory extends Factory
             'user_id' => \App\Models\User::factory(),
             'name' => fake()->words(3, true),
             'description' => fake()->sentence(),
-            'code' => fake()->paragraph(),
             'config' => [
                 'max_iterations' => fake()->numberBetween(1, 10),
                 'timeout' => fake()->numberBetween(30, 300),

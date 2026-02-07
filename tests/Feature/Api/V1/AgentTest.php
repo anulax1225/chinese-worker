@@ -25,7 +25,6 @@ describe('Agent Management', function () {
                             'id',
                             'name',
                             'description',
-                            'code',
                             'config',
                             'status',
                             'ai_backend',
@@ -43,7 +42,6 @@ describe('Agent Management', function () {
             $agentData = [
                 'name' => 'Test Agent',
                 'description' => 'A test agent',
-                'code' => 'You are a helpful assistant.',
                 'config' => ['max_iterations' => 5],
                 'status' => 'active',
                 'ai_backend' => 'ollama',
@@ -65,27 +63,15 @@ describe('Agent Management', function () {
         });
 
         test('agent creation fails without required name', function () {
-            $response = $this->postJson('/api/v1/agents', [
-                'code' => 'You are a helpful assistant.',
-            ]);
+            $response = $this->postJson('/api/v1/agents', []);
 
             $response->assertStatus(422)
                 ->assertJsonValidationErrors(['name']);
         });
 
-        test('agent creation fails without required code', function () {
-            $response = $this->postJson('/api/v1/agents', [
-                'name' => 'Test Agent',
-            ]);
-
-            $response->assertStatus(422)
-                ->assertJsonValidationErrors(['code']);
-        });
-
         test('agent creation fails with invalid status', function () {
             $response = $this->postJson('/api/v1/agents', [
                 'name' => 'Test Agent',
-                'code' => 'You are a helpful assistant.',
                 'status' => 'invalid_status',
             ]);
 
@@ -96,7 +82,6 @@ describe('Agent Management', function () {
         test('agent creation fails with invalid ai_backend', function () {
             $response = $this->postJson('/api/v1/agents', [
                 'name' => 'Test Agent',
-                'code' => 'You are a helpful assistant.',
                 'ai_backend' => 'invalid_backend',
             ]);
 
@@ -109,7 +94,6 @@ describe('Agent Management', function () {
 
             $response = $this->postJson('/api/v1/agents', [
                 'name' => 'Test Agent',
-                'code' => 'You are a helpful assistant.',
                 'tool_ids' => $tools->pluck('id')->toArray(),
             ]);
 
@@ -155,7 +139,6 @@ describe('Agent Management', function () {
             $response = $this->putJson("/api/v1/agents/{$agent->id}", [
                 'name' => 'Updated Agent',
                 'description' => 'Updated description',
-                'code' => 'Updated code',
                 'status' => 'inactive',
             ]);
 

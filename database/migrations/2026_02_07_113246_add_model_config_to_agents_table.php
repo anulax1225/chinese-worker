@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('agents', function (Blueprint $table) {
-            $table->json('context_variables')->nullable()->after('description');
+            $table->json('model_config')->nullable()->after('ai_backend');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('agents', function (Blueprint $table) {
-            $table->dropColumn('context_variables');
+            $table->dropColumn('model_config');
         });
     }
 };

@@ -6,11 +6,18 @@ use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
 use App\DTOs\ModelPullProgress;
+use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
 
 interface AIBackendInterface
 {
+    /**
+     * Create a new instance with the specified configuration.
+     * This allows per-agent configuration without mutating the original backend.
+     */
+    public function withConfig(NormalizedModelConfig $config): static;
+
     /**
      * Execute an agent with the given context.
      */

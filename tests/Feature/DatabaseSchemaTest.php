@@ -12,7 +12,6 @@ describe('Database Schema', function () {
             'user_id',
             'name',
             'description',
-            'code',
             'config',
             'status',
             'ai_backend',

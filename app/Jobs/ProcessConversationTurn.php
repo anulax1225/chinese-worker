@@ -81,11 +81,22 @@ class ProcessConversationTurn implements ShouldQueue
         // Eager load relationships to prevent N+1 queries
         $this->conversation->load(['agent.tools']);
 
-        // Get AI backend and broadcaster early so we can disconnect in finally
-        $backend = $aiBackendManager->driver($this->conversation->agent->ai_backend);
+        // Get AI backend configured for this agent with normalized config
+        $result = $aiBackendManager->forAgent($this->conversation->agent);
+        $backend = $result['backend'];
+        $modelConfig = $result['config'];
+
         $broadcaster = app(ConversationEventBroadcaster::class);
 
         try {
+            // Log model configuration for debugging
+            Log::info('AI request configuration', [
+                'conversation_id' => $this->conversation->id,
+                'agent_id' => $this->conversation->agent_id,
+                'config' => $modelConfig->toArray(),
+                'warnings' => $modelConfig->validationWarnings,
+            ]);
+
             $maxTurns = $this->conversation->getMaxTurns();
 
             // Check if max turns for this request reached
@@ -108,6 +119,7 @@ class ProcessConversationTurn implements ShouldQueue
                 $this->conversation->update([
                     'system_prompt_snapshot' => $systemPrompt,
                     'prompt_context_snapshot' => $assembler->getLastContext(),
+                    'model_config_snapshot' => $modelConfig->toArray(),
                 ]);
             }
 

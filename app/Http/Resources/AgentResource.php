@@ -21,6 +21,7 @@ class AgentResource extends JsonResource
             'description' => $this->description,
             'code' => $this->code,
             'config' => $this->config,
+            'model_config' => $this->model_config,
             'status' => $this->status,
             'ai_backend' => $this->ai_backend,
             'context_variables' => $this->context_variables,

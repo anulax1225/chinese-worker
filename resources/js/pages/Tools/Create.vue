@@ -76,7 +76,7 @@ const submit = async () => {
 
         if (response.ok) {
             const data = await response.json();
-            router.visit(`/tools/${data.data.id}`);
+            router.visit(`/tools/${data.id}`);
         } else if (response.status === 422) {
             const data = await response.json();
             errors.value = data.errors || {};

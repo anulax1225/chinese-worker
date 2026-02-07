@@ -19,6 +19,7 @@ describe('Conversation Management', function () {
         test('user can create a conversation with an agent', function () {
             $response = $this->postJson("/api/v1/agents/{$this->agent->id}/conversations", [
                 'title' => 'Test conversation',
+                'client_type' => 'cli_web',
                 'metadata' => ['key' => 'value'],
             ]);
 

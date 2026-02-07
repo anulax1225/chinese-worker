@@ -11,8 +11,8 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('agents', function (Blueprint $table) {
-            $table->json('context_variables')->nullable()->after('description');
+        Schema::table('conversations', function (Blueprint $table) {
+            $table->json('model_config_snapshot')->nullable()->after('prompt_context_snapshot');
         });
     }
 
@@ -21,8 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('agents', function (Blueprint $table) {
-            $table->dropColumn('context_variables');
+        Schema::table('conversations', function (Blueprint $table) {
+            $table->dropColumn('model_config_snapshot');
         });
     }
 };

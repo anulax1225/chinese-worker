@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\DTOs\ModelConfig;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -21,11 +22,11 @@ class Agent extends Model
         'user_id',
         'name',
         'description',
-        'code',
         'context_variables',
         'config',
         'status',
         'ai_backend',
+        'model_config',
         'metadata',
     ];
 
@@ -39,8 +40,17 @@ class Agent extends Model
         return [
             'context_variables' => 'array',
             'config' => 'array',
+            'model_config' => 'array',
             'metadata' => 'array',
         ];
+    }
+
+    /**
+     * Get the model configuration as a DTO.
+     */
+    public function getModelConfigDto(): ModelConfig
+    {
+        return ModelConfig::fromArray($this->model_config ?? []);
     }
 
     /**
@@ -86,8 +96,8 @@ class Agent extends Model
     public function getContextVariables(): array
     {
         return array_merge([
-            'agent_name' => $this->name,
-            'agent_description' => $this->description,
+            'agent_name' => $this->name ?? '',
+            'agent_description' => $this->description ?? '',
         ], $this->context_variables ?? []);
     }
 }

@@ -29,7 +29,6 @@ describe('OllamaBackend', function () {
             'user_id' => $this->user->id,
             'name' => 'Test Agent',
             'description' => 'A test agent',
-            'code' => 'You are a helpful assistant.',
         ]);
     });
 
@@ -267,7 +266,6 @@ describe('OllamaBackend', function () {
             ->and($messages[0])->toBeInstanceOf(ChatMessage::class)
             ->and($messages[0]->role)->toBe('system')
             ->and($messages[0]->content)->toContain('A test agent')
-            ->and($messages[0]->content)->toContain('You are a helpful assistant.')
             ->and($messages[1]->role)->toBe('user')
             ->and($messages[1]->content)->toBe('Hello')
             ->and($messages[2]->role)->toBe('assistant')
@@ -296,7 +294,6 @@ describe('OllamaBackend', function () {
         $prompt = $method->invoke($backend, $this->agent);
 
         expect($prompt)->toContain('A test agent')
-            ->and($prompt)->toContain('You are a helpful assistant.')
             ->and($prompt)->toContain('Available tools:')
             ->and($prompt)->toContain('web_search: api tool');
     });
