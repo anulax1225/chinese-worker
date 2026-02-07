@@ -3,8 +3,10 @@
 namespace App\Services\AI;
 
 use App\Contracts\AIBackendInterface;
+use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
+use App\DTOs\ModelPullProgress;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
 use App\Models\Tool;
@@ -253,21 +255,27 @@ class OllamaBackend implements AIBackendInterface
     /**
      * Build the system prompt from agent configuration.
      *
+     * Uses pre-assembled prompt from context if available (from PromptAssembler),
+     * otherwise falls back to legacy behavior for backward compatibility.
+     *
      * @param  array<string, mixed>  $context
      */
     protected function buildSystemPrompt(Agent $agent, array $context = []): string
     {
         $parts = [];
 
-        // Add thinking instructions
-        // $parts[] = 'IMPORTANT: Before using any tool, you MUST first explain your reasoning and what you plan to do. Write your thinking process in your response, then call the appropriate tool. Never call a tool without first explaining why.';
+        // Use pre-assembled system prompt if provided
+        if (! empty($context['system_prompt'])) {
+            $parts[] = $context['system_prompt'];
+        } else {
+            // Legacy fallback: build from agent fields directly
+            if (! empty($agent->description)) {
+                $parts[] = $agent->description;
+            }
 
-        if (! empty($agent->description)) {
-            $parts[] = $agent->description;
-        }
-
-        if (! empty($agent->code)) {
-            $parts[] = $agent->code;
+            if (! empty($agent->code)) {
+                $parts[] = $agent->code;
+            }
         }
 
         // Add tool descriptions if the agent has tools
@@ -571,5 +579,88 @@ class OllamaBackend implements AIBackendInterface
             name: $data['function']['name'] ?? '',
             arguments: $data['function']['arguments'] ?? []
         );
+    }
+
+    public function supportsModelManagement(): bool
+    {
+        return true;
+    }
+
+    public function pullModel(string $modelName, callable $onProgress): void
+    {
+        try {
+            $response = $this->client->post('/api/pull', [
+                'json' => ['name' => $modelName],
+                'stream' => true,
+                'timeout' => 0, // No timeout for large downloads
+            ]);
+
+            $body = $response->getBody();
+
+            try {
+                while (! $body->eof()) {
+                    $line = $this->readLine($body);
+
+                    if (empty($line)) {
+                        continue;
+                    }
+
+                    $data = json_decode($line, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        continue;
+                    }
+
+                    $progress = ModelPullProgress::fromOllamaResponse($data);
+                    $onProgress($progress);
+
+                    if ($progress->isFailed()) {
+                        throw new RuntimeException("Model pull failed: {$progress->error}");
+                    }
+                }
+            } finally {
+                $body->close();
+            }
+        } catch (GuzzleException $e) {
+            throw new RuntimeException(
+                "Failed to pull model: {$e->getMessage()}",
+                $e->getCode(),
+                $e
+            );
+        }
+    }
+
+    public function deleteModel(string $modelName): void
+    {
+        try {
+            $this->client->delete('/api/delete', [
+                'json' => ['name' => $modelName],
+            ]);
+        } catch (GuzzleException $e) {
+            throw new RuntimeException(
+                "Failed to delete model: {$e->getMessage()}",
+                $e->getCode(),
+                $e
+            );
+        }
+    }
+
+    public function showModel(string $modelName): AIModel
+    {
+        try {
+            $response = $this->client->post('/api/show', [
+                'json' => ['name' => $modelName],
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            return AIModel::fromOllamaShow($data);
+        } catch (GuzzleException $e) {
+            throw new RuntimeException(
+                "Failed to get model info: {$e->getMessage()}",
+                $e->getCode(),
+                $e
+            );
+        }
     }
 }

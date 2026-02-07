@@ -30,6 +30,8 @@ class UpdateAgentRequest extends FormRequest
             'ai_backend' => ['nullable', 'string', 'in:ollama,anthropic,openai'],
             'tool_ids' => ['nullable', 'array'],
             'tool_ids.*' => ['integer', 'exists:tools,id'],
+            'system_prompt_ids' => ['nullable', 'array'],
+            'system_prompt_ids.*' => ['integer', 'exists:system_prompts,id'],
         ];
     }
 
@@ -47,6 +49,7 @@ class UpdateAgentRequest extends FormRequest
             'status.in' => 'The status must be one of: active, inactive, or error.',
             'ai_backend.in' => 'The AI backend must be one of: ollama, anthropic, or openai.',
             'tool_ids.*.exists' => 'One or more selected tools do not exist.',
+            'system_prompt_ids.*.exists' => 'One or more selected system prompts do not exist.',
         ];
     }
 }

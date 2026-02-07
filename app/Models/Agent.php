@@ -22,6 +22,7 @@ class Agent extends Model
         'name',
         'description',
         'code',
+        'context_variables',
         'config',
         'status',
         'ai_backend',
@@ -36,6 +37,7 @@ class Agent extends Model
     protected function casts(): array
     {
         return [
+            'context_variables' => 'array',
             'config' => 'array',
             'metadata' => 'array',
         ];
@@ -63,5 +65,29 @@ class Agent extends Model
     public function conversations(): HasMany
     {
         return $this->hasMany(Conversation::class);
+    }
+
+    /**
+     * Get the system prompts assigned to the agent.
+     */
+    public function systemPrompts(): BelongsToMany
+    {
+        return $this->belongsToMany(SystemPrompt::class, 'agent_system_prompt')
+            ->using(AgentSystemPrompt::class)
+            ->withPivot(['order', 'variable_overrides'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Get context variables for prompt rendering.
+     *
+     * @return array<string, mixed>
+     */
+    public function getContextVariables(): array
+    {
+        return array_merge([
+            'agent_name' => $this->name,
+            'agent_description' => $this->description,
+        ], $this->context_variables ?? []);
     }
 }

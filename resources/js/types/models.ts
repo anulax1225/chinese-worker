@@ -17,9 +17,27 @@ export interface Agent {
     config: Record<string, any>;
     status: 'active' | 'inactive' | 'error';
     ai_backend: 'ollama' | 'anthropic' | 'openai';
+    context_variables: Record<string, unknown> | null;
     created_at: string;
     updated_at: string;
     tools?: Tool[];
+    system_prompts?: SystemPrompt[];
+}
+
+export interface SystemPrompt {
+    id: number;
+    name: string;
+    slug: string;
+    template: string;
+    required_variables: string[] | null;
+    default_values: Record<string, unknown> | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+    pivot?: {
+        order: number;
+        variable_overrides: Record<string, unknown> | null;
+    };
 }
 
 export interface Tool {
@@ -70,19 +88,46 @@ export interface AIBackend {
     name: string;
     driver: string;
     is_default: boolean;
+    model?: string;
+    status: 'connected' | 'error' | 'unknown';
     capabilities: {
         streaming: boolean;
         function_calling: boolean;
         vision: boolean;
+        embeddings?: boolean;
         max_context?: number;
     };
+    models: AIModel[];
+    error?: string;
 }
 
 export interface AIModel {
     name: string;
     modified_at?: string;
     size?: number;
+    size_human?: string;
     digest?: string;
+    family?: string;
+    parameter_size?: string;
+    quantization_level?: string;
+    details?: Record<string, unknown>;
+}
+
+export interface ModelPullProgress {
+    status: string;
+    digest?: string;
+    total?: number;
+    completed?: number;
+    percentage?: number;
+    error?: string;
+}
+
+export interface ModelPullResponse {
+    pull_id: string;
+    model: string;
+    backend: string;
+    status: 'queued';
+    stream_url: string;
 }
 
 export interface Conversation {

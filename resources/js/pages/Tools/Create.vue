@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useForm, Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { Link, router } from '@inertiajs/vue3';
+import { ref } from 'vue';
 import { AppLayout } from '@/layouts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft } from 'lucide-vue-next';
+import { store } from '@/actions/App/Http/Controllers/Api/V1/ToolController';
 
-const form = useForm({
+const form = ref({
     name: '',
     type: 'api' as 'api' | 'function' | 'command',
     config: {
@@ -28,32 +29,60 @@ const form = useForm({
     },
 });
 
-const submit = () => {
-    const config = getConfigForType();
-    form.transform(data => ({
-        ...data,
-        config,
-    })).post('/tools');
-};
+const errors = ref<Record<string, string>>({});
+const processing = ref(false);
 
 const getConfigForType = () => {
-    switch (form.type) {
+    switch (form.value.type) {
         case 'api':
             return {
-                url: form.config.url,
-                method: form.config.method,
-                headers: form.config.headers,
+                url: form.value.config.url,
+                method: form.value.config.method,
+                headers: form.value.config.headers,
             };
         case 'function':
             return {
-                code: form.config.code,
+                code: form.value.config.code,
             };
         case 'command':
             return {
-                command: form.config.command,
+                command: form.value.config.command,
             };
         default:
             return {};
+    }
+};
+
+const submit = async () => {
+    processing.value = true;
+    errors.value = {};
+
+    try {
+        const response = await fetch(store.url(), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+                ),
+            },
+            body: JSON.stringify({
+                name: form.value.name,
+                type: form.value.type,
+                config: getConfigForType(),
+            }),
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            router.visit(`/tools/${data.data.id}`);
+        } else if (response.status === 422) {
+            const data = await response.json();
+            errors.value = data.errors || {};
+        }
+    } finally {
+        processing.value = false;
     }
 };
 
@@ -95,8 +124,8 @@ const typeDescriptions = {
                                     placeholder="my_tool"
                                     required
                                 />
-                                <p v-if="form.errors.name" class="text-sm text-destructive">
-                                    {{ form.errors.name }}
+                                <p v-if="errors.name" class="text-sm text-destructive">
+                                    {{ errors.name }}
                                 </p>
                             </div>
 
@@ -203,8 +232,8 @@ async function execute(params) {
                     <Button variant="outline" type="button" as-child>
                         <Link href="/tools">Cancel</Link>
                     </Button>
-                    <Button type="submit" :disabled="form.processing">
-                        {{ form.processing ? 'Creating...' : 'Create Tool' }}
+                    <Button type="submit" :disabled="processing">
+                        {{ processing ? 'Creating...' : 'Create Tool' }}
                     </Button>
                 </div>
             </form>

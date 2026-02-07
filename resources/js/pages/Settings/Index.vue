@@ -226,28 +226,28 @@ const formatDate = (date: string | null) => {
 
 <template>
     <AppLayout title="Settings">
-        <div class="space-y-4 max-w-4xl">
+        <div class="space-y-4 mx-auto max-w-4xl">
             <div>
-                <h1 class="text-xl font-semibold">Settings</h1>
-                <p class="text-sm text-muted-foreground">Manage your account settings and preferences</p>
+                <h1 class="font-semibold text-xl">Settings</h1>
+                <p class="text-muted-foreground text-sm">Manage your account settings and preferences</p>
             </div>
 
             <Tabs v-model="activeTab" class="w-full">
-                <TabsList class="grid w-full grid-cols-4">
+                <TabsList class="grid grid-cols-4 w-full">
                     <TabsTrigger value="profile" class="flex items-center gap-2">
-                        <User class="h-4 w-4" />
+                        <User class="w-4 h-4" />
                         <span class="hidden sm:inline">Profile</span>
                     </TabsTrigger>
                     <TabsTrigger value="password" class="flex items-center gap-2">
-                        <Lock class="h-4 w-4" />
+                        <Lock class="w-4 h-4" />
                         <span class="hidden sm:inline">Password</span>
                     </TabsTrigger>
                     <TabsTrigger value="tokens" class="flex items-center gap-2">
-                        <Terminal class="h-4 w-4" />
+                        <Terminal class="w-4 h-4" />
                         <span class="hidden sm:inline">API Tokens</span>
                     </TabsTrigger>
                     <TabsTrigger value="two-factor" class="flex items-center gap-2">
-                        <ShieldCheck class="h-4 w-4" />
+                        <ShieldCheck class="w-4 h-4" />
                         <span class="hidden sm:inline">2FA</span>
                     </TabsTrigger>
                 </TabsList>
@@ -270,7 +270,7 @@ const formatDate = (date: string | null) => {
                                         required
                                         autocomplete="name"
                                     />
-                                    <p v-if="profileForm.errors.name" class="text-sm text-destructive">
+                                    <p v-if="profileForm.errors.name" class="text-destructive text-sm">
                                         {{ profileForm.errors.name }}
                                     </p>
                                 </div>
@@ -284,7 +284,7 @@ const formatDate = (date: string | null) => {
                                         required
                                         autocomplete="email"
                                     />
-                                    <p v-if="profileForm.errors.email" class="text-sm text-destructive">
+                                    <p v-if="profileForm.errors.email" class="text-destructive text-sm">
                                         {{ profileForm.errors.email }}
                                     </p>
                                 </div>
@@ -317,7 +317,7 @@ const formatDate = (date: string | null) => {
                                         required
                                         autocomplete="current-password"
                                     />
-                                    <p v-if="passwordForm.errors.current_password" class="text-sm text-destructive">
+                                    <p v-if="passwordForm.errors.current_password" class="text-destructive text-sm">
                                         {{ passwordForm.errors.current_password }}
                                     </p>
                                 </div>
@@ -331,7 +331,7 @@ const formatDate = (date: string | null) => {
                                         required
                                         autocomplete="new-password"
                                     />
-                                    <p v-if="passwordForm.errors.password" class="text-sm text-destructive">
+                                    <p v-if="passwordForm.errors.password" class="text-destructive text-sm">
                                         {{ passwordForm.errors.password }}
                                     </p>
                                 </div>
@@ -358,22 +358,22 @@ const formatDate = (date: string | null) => {
                 </TabsContent>
 
                 <!-- API Tokens Tab -->
-                <TabsContent value="tokens" class="mt-4 space-y-4">
+                <TabsContent value="tokens" class="space-y-4 mt-4">
                     <!-- New Token Alert -->
-                    <Alert v-if="newToken" class="border-green-500 bg-green-50 dark:bg-green-950">
-                        <Key class="h-4 w-4 text-green-600" />
+                    <Alert v-if="newToken" class="bg-green-50 dark:bg-green-950 border-green-500">
+                        <Key class="w-4 h-4 text-green-600" />
                         <AlertTitle class="text-green-800 dark:text-green-200">Token Created Successfully</AlertTitle>
                         <AlertDescription class="mt-2">
-                            <p class="text-green-700 dark:text-green-300 mb-2">
+                            <p class="mb-2 text-green-700 dark:text-green-300">
                                 Make sure to copy your token now. You won't be able to see it again!
                             </p>
                             <div class="flex items-center gap-2">
-                                <code class="flex-1 p-2 bg-white dark:bg-gray-900 rounded border font-mono text-sm break-all">
+                                <code class="flex-1 bg-white dark:bg-gray-900 p-2 border rounded font-mono text-sm break-all">
                                     {{ newToken }}
                                 </code>
                                 <Button variant="outline" size="icon" @click="copyToken">
-                                    <Check v-if="copied" class="h-4 w-4 text-green-600" />
-                                    <Copy v-else class="h-4 w-4" />
+                                    <Check v-if="copied" class="w-4 h-4 text-green-600" />
+                                    <Copy v-else class="w-4 h-4" />
                                 </Button>
                             </div>
                             <Button variant="ghost" size="sm" class="mt-2" @click="dismissToken">
@@ -384,7 +384,7 @@ const formatDate = (date: string | null) => {
 
                     <Card>
                         <CardHeader>
-                            <div class="flex items-center justify-between">
+                            <div class="flex justify-between items-center">
                                 <div>
                                     <CardTitle>API Tokens</CardTitle>
                                     <CardDescription>
@@ -394,7 +394,7 @@ const formatDate = (date: string | null) => {
                                 <Dialog v-model:open="createDialogOpen">
                                     <DialogTrigger as-child>
                                         <Button>
-                                            <Plus class="h-4 w-4 mr-2" />
+                                            <Plus class="mr-2 w-4 h-4" />
                                             Create Token
                                         </Button>
                                     </DialogTrigger>
@@ -412,7 +412,7 @@ const formatDate = (date: string | null) => {
                                                     placeholder="My API Token"
                                                     required
                                                 />
-                                                <p v-if="tokenForm.errors.name" class="text-sm text-destructive">
+                                                <p v-if="tokenForm.errors.name" class="text-destructive text-sm">
                                                     {{ tokenForm.errors.name }}
                                                 </p>
                                             </div>
@@ -436,12 +436,12 @@ const formatDate = (date: string | null) => {
                                         <TableHead class="text-xs uppercase tracking-wide">Name</TableHead>
                                         <TableHead class="text-xs uppercase tracking-wide">Last Used</TableHead>
                                         <TableHead class="text-xs uppercase tracking-wide">Created</TableHead>
-                                        <TableHead class="text-xs uppercase tracking-wide text-right">Actions</TableHead>
+                                        <TableHead class="text-xs text-right uppercase tracking-wide">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     <TableRow v-if="tokens.length === 0">
-                                        <TableCell colspan="4" class="text-center text-muted-foreground py-8">
+                                        <TableCell colspan="4" class="py-8 text-muted-foreground text-center">
                                             No API tokens yet. Create your first token.
                                         </TableCell>
                                     </TableRow>
@@ -456,7 +456,7 @@ const formatDate = (date: string | null) => {
                                                 @click="deleteToken(token)"
                                                 class="text-destructive hover:text-destructive"
                                             >
-                                                <Trash2 class="h-4 w-4" />
+                                                <Trash2 class="w-4 h-4" />
                                             </Button>
                                         </TableCell>
                                     </TableRow>
@@ -467,21 +467,21 @@ const formatDate = (date: string | null) => {
                 </TabsContent>
 
                 <!-- Two-Factor Tab -->
-                <TabsContent value="two-factor" class="mt-4 space-y-4">
+                <TabsContent value="two-factor" class="space-y-4 mt-4">
                     <!-- Recovery Codes Alert -->
-                    <Alert v-if="recoveryCodes" class="border-yellow-500 bg-yellow-50 dark:bg-yellow-950">
-                        <Key class="h-4 w-4 text-yellow-600" />
+                    <Alert v-if="recoveryCodes" class="bg-yellow-50 dark:bg-yellow-950 border-yellow-500">
+                        <Key class="w-4 h-4 text-yellow-600" />
                         <AlertTitle class="text-yellow-800 dark:text-yellow-200">Recovery Codes</AlertTitle>
                         <AlertDescription class="mt-2">
-                            <p class="text-yellow-700 dark:text-yellow-300 mb-4">
+                            <p class="mb-4 text-yellow-700 dark:text-yellow-300">
                                 Store these recovery codes in a secure location. They can be used to recover
                                 access to your account if you lose your authenticator device.
                             </p>
-                            <div class="grid grid-cols-2 gap-2 mb-4">
+                            <div class="gap-2 grid grid-cols-2 mb-4">
                                 <code
                                     v-for="code in recoveryCodes"
                                     :key="code"
-                                    class="p-2 bg-white dark:bg-gray-900 rounded border font-mono text-sm text-center"
+                                    class="bg-white dark:bg-gray-900 p-2 border rounded font-mono text-sm text-center"
                                 >
                                     {{ code }}
                                 </code>
@@ -501,9 +501,9 @@ const formatDate = (date: string | null) => {
                                 ]">
                                     <ShieldCheck
                                         v-if="twoFactorEnabled && twoFactorConfirmed"
-                                        class="h-6 w-6 text-green-600"
+                                        class="w-6 h-6 text-green-600"
                                     />
-                                    <Shield v-else class="h-6 w-6 text-muted-foreground" />
+                                    <Shield v-else class="w-6 h-6 text-muted-foreground" />
                                 </div>
                                 <div>
                                     <CardTitle>
@@ -520,7 +520,7 @@ const formatDate = (date: string | null) => {
                         </CardHeader>
                         <CardContent>
                             <template v-if="!twoFactorEnabled">
-                                <p class="text-muted-foreground mb-4">
+                                <p class="mb-4 text-muted-foreground">
                                     When two-factor authentication is enabled, you will be prompted for a secure,
                                     random token during authentication. You can retrieve this token from your
                                     phone's authenticator application (Google Authenticator, Authy, etc.).
@@ -536,11 +536,11 @@ const formatDate = (date: string | null) => {
                                         Scan the QR code below with your authenticator app, then enter the code to confirm.
                                     </p>
 
-                                    <div v-if="qrCode" class="p-4 bg-white rounded-lg inline-block" v-html="qrCode" />
+                                    <div v-if="qrCode" class="inline-block bg-white p-4 rounded-lg" v-html="qrCode" />
 
                                     <div v-if="setupKey" class="space-y-2">
-                                        <p class="text-sm font-medium">Or enter this key manually:</p>
-                                        <code class="block p-2 bg-muted rounded font-mono text-sm">{{ setupKey }}</code>
+                                        <p class="font-medium text-sm">Or enter this key manually:</p>
+                                        <code class="block bg-muted p-2 rounded font-mono text-sm">{{ setupKey }}</code>
                                     </div>
 
                                     <form @submit.prevent="confirmTwoFactor" class="space-y-4">
@@ -555,7 +555,7 @@ const formatDate = (date: string | null) => {
                                                 required
                                                 autocomplete="one-time-code"
                                             />
-                                            <p v-if="confirmForm.errors.code" class="text-sm text-destructive">
+                                            <p v-if="confirmForm.errors.code" class="text-destructive text-sm">
                                                 {{ confirmForm.errors.code }}
                                             </p>
                                         </div>
@@ -569,11 +569,11 @@ const formatDate = (date: string | null) => {
                             <template v-else>
                                 <div class="flex flex-wrap gap-2">
                                     <Button variant="outline" @click="regenerateRecoveryCodes">
-                                        <Key class="h-4 w-4 mr-2" />
+                                        <Key class="mr-2 w-4 h-4" />
                                         Regenerate Recovery Codes
                                     </Button>
                                     <Button variant="destructive" @click="disableTwoFactor">
-                                        <ShieldOff class="h-4 w-4 mr-2" />
+                                        <ShieldOff class="mr-2 w-4 h-4" />
                                         Disable Two-Factor Authentication
                                     </Button>
                                 </div>

@@ -52,7 +52,7 @@ class AgentController extends Controller
     {
         $agents = $request->user()
             ->agents()
-            ->with('tools')
+            ->with(['tools', 'systemPrompts'])
             ->paginate($request->input('per_page', 15));
 
         return AgentResource::collection($agents);
@@ -120,7 +120,7 @@ class AgentController extends Controller
     {
         $this->authorize('view', $agent);
 
-        $agent->load(['tools']);
+        $agent->load(['tools', 'systemPrompts']);
 
         return (new AgentResource($agent))->response();
     }

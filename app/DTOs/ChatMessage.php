@@ -23,7 +23,8 @@ class ChatMessage
         public readonly ?array $toolCalls = null,
         public readonly ?string $toolCallId = null,
         public readonly ?array $images = null,
-        public readonly ?string $thinking = null
+        public readonly ?string $thinking = null,
+        public readonly ?string $name = null
     ) {}
 
     /**
@@ -57,9 +58,9 @@ class ChatMessage
     /**
      * Create a tool result message.
      */
-    public static function tool(string $content, string $toolCallId): self
+    public static function tool(string $content, string $toolCallId, ?string $name = null): self
     {
-        return new self(self::ROLE_TOOL, $content, toolCallId: $toolCallId);
+        return new self(self::ROLE_TOOL, $content, toolCallId: $toolCallId, name: $name);
     }
 
     /**
@@ -76,6 +77,7 @@ class ChatMessage
             'tool_call_id' => $this->toolCallId,
             'images' => $this->images,
             'thinking' => $this->thinking,
+            'name' => $this->name,
         ];
     }
 
@@ -92,7 +94,8 @@ class ChatMessage
             toolCalls: $data['tool_calls'] ?? null,
             toolCallId: $data['tool_call_id'] ?? null,
             images: $data['images'] ?? null,
-            thinking: $data['thinking'] ?? null
+            thinking: $data['thinking'] ?? null,
+            name: $data['name'] ?? null
         );
     }
 }

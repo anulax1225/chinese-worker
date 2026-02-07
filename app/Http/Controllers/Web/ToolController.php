@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\Tool;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -49,28 +48,6 @@ class ToolController extends Controller
     }
 
     /**
-     * Store a newly created tool.
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'type' => ['required', 'in:api,function,command'],
-            'config' => ['required', 'array'],
-        ]);
-
-        $tool = Tool::create([
-            'user_id' => $request->user()->id,
-            'name' => $validated['name'],
-            'type' => $validated['type'],
-            'config' => $validated['config'],
-        ]);
-
-        return redirect()->route('tools.show', $tool)
-            ->with('success', 'Tool created successfully.');
-    }
-
-    /**
      * Display the specified tool.
      */
     public function show(Request $request, Tool $tool): Response
@@ -94,37 +71,5 @@ class ToolController extends Controller
         return Inertia::render('Tools/Edit', [
             'tool' => $tool,
         ]);
-    }
-
-    /**
-     * Update the specified tool.
-     */
-    public function update(Request $request, Tool $tool): RedirectResponse
-    {
-        $this->authorize('update', $tool);
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'type' => ['required', 'in:api,function,command'],
-            'config' => ['required', 'array'],
-        ]);
-
-        $tool->update($validated);
-
-        return redirect()->route('tools.show', $tool)
-            ->with('success', 'Tool updated successfully.');
-    }
-
-    /**
-     * Remove the specified tool.
-     */
-    public function destroy(Request $request, Tool $tool): RedirectResponse
-    {
-        $this->authorize('delete', $tool);
-
-        $tool->delete();
-
-        return redirect()->route('tools.index')
-            ->with('success', 'Tool deleted successfully.');
     }
 }

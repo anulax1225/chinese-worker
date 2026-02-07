@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
 use App\Models\Conversation;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -59,61 +58,6 @@ class ConversationController extends Controller
     }
 
     /**
-     * Show the form for creating a new conversation.
-     */
-    public function create(Request $request): Response
-    {
-        $agents = Agent::where('user_id', $request->user()->id)
-            ->where('status', 'active')
-            ->get(['id', 'name', 'description']);
-
-        return Inertia::render('Conversations/Create', [
-            'agents' => $agents,
-            'breadcrumbs' => [
-                ['label' => 'Conversations', 'href' => '/conversations'],
-                ['label' => 'New'],
-            ],
-        ]);
-    }
-
-    /**
-     * Store a newly created conversation.
-     */
-    public function store(Request $request): RedirectResponse
-    {
-        $validated = $request->validate([
-            'agent_id' => ['required', 'exists:agents,id'],
-            'message' => ['nullable', 'string', 'max:10000'],
-        ]);
-
-        $agent = Agent::findOrFail($validated['agent_id']);
-        $this->authorize('view', $agent);
-
-        $messages = [];
-        if (! empty($validated['message'])) {
-            $messages[] = [
-                'role' => 'user',
-                'content' => $validated['message'],
-            ];
-        }
-
-        $conversation = Conversation::create([
-            'user_id' => $request->user()->id,
-            'agent_id' => $validated['agent_id'],
-            'status' => 'active',
-            'messages' => $messages,
-            'metadata' => [],
-            'turn_count' => 0,
-            'total_tokens' => 0,
-            'started_at' => now(),
-            'last_activity_at' => now(),
-            'client_type' => 'cli_web',
-        ]);
-
-        return redirect()->route('conversations.show', $conversation);
-    }
-
-    /**
      * Display the specified conversation (chat interface).
      */
     public function show(Request $request, Conversation $conversation): Response
@@ -129,18 +73,5 @@ class ConversationController extends Controller
                 ['label' => "#{$conversation->id}"],
             ],
         ]);
-    }
-
-    /**
-     * Remove the specified conversation.
-     */
-    public function destroy(Request $request, Conversation $conversation): RedirectResponse
-    {
-        $this->authorize('delete', $conversation);
-
-        $conversation->delete();
-
-        return redirect()->route('conversations.index')
-            ->with('success', 'Conversation deleted successfully.');
     }
 }

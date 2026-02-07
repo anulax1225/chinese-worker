@@ -31,6 +31,7 @@ import {
     Loader2,
     Wrench,
 } from 'lucide-vue-next';
+import { destroy } from '@/actions/App/Http/Controllers/Api/V1/AgentController';
 import type { Agent } from '@/types';
 
 interface Filters {
@@ -85,13 +86,32 @@ const clearFilters = () => {
     });
 };
 
-const deleteAgent = (agent: Agent, e: Event) => {
+const deleting = ref<number | null>(null);
+
+const deleteAgent = async (agent: Agent, e: Event) => {
     e.preventDefault();
     e.stopPropagation();
-    if (confirm(`Are you sure you want to delete "${agent.name}"?`)) {
-        router.delete(`/agents/${agent.id}`, {
-            preserveState: false,
+    if (!confirm(`Are you sure you want to delete "${agent.name}"?`)) {
+        return;
+    }
+
+    deleting.value = agent.id;
+    try {
+        const response = await fetch(destroy.url(agent.id), {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+                ),
+            },
         });
+
+        if (response.ok) {
+            router.reload({ only: ['agents', 'nextCursor'] });
+        }
+    } finally {
+        deleting.value = null;
     }
 };
 
@@ -246,9 +266,10 @@ watch(() => props.filters, (newFilters) => {
                                 <DropdownMenuItem
                                     @click="deleteAgent(agent, $event)"
                                     class="cursor-pointer text-destructive"
+                                    :disabled="deleting === agent.id"
                                 >
                                     <Trash2 class="mr-2 h-4 w-4" />
-                                    Delete
+                                    {{ deleting === agent.id ? 'Deleting...' : 'Delete' }}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

@@ -1,18 +1,20 @@
 <?php
 
 use App\Http\Controllers\Web\AgentController;
+use App\Http\Controllers\Web\AIBackendController;
 use App\Http\Controllers\Web\ConversationController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\FileController;
 use App\Http\Controllers\Web\SearchController;
 use App\Http\Controllers\Web\SettingsController;
+use App\Http\Controllers\Web\SystemPromptController;
 use App\Http\Controllers\Web\ToolController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Public routes
 Route::get('/', function () {
-    return auth()->check() ? redirect()->route('dashboard') : Inertia::render('Welcome');
+    return auth()->check() ? redirect()->route('conversations.index') : Inertia::render('Welcome');
 })->name('home');
 
 // Authenticated routes
@@ -20,11 +22,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Resource routes
-    Route::resource('agents', AgentController::class);
-    Route::resource('tools', ToolController::class);
-    Route::resource('files', FileController::class)->except(['update']);
-    Route::resource('conversations', ConversationController::class);
+    // Resource routes (read-only, CRUD operations via API)
+    Route::resource('agents', AgentController::class)->only(['index', 'create', 'show', 'edit']);
+    Route::resource('tools', ToolController::class)->only(['index', 'create', 'show', 'edit']);
+    Route::resource('system-prompts', SystemPromptController::class)->only(['index', 'create', 'show', 'edit']);
+    Route::resource('files', FileController::class)->only(['index', 'show']);
+    Route::resource('conversations', ConversationController::class)->only(['index', 'show']);
+
+    // AI Backends
+    Route::get('/ai-backends', [AIBackendController::class, 'index'])->name('ai-backends.index');
+    Route::get('/ai-backends/{backend}', [AIBackendController::class, 'show'])->name('ai-backends.show');
 
     // Search test page
     Route::get('/search', [SearchController::class, 'index'])->name('search');

@@ -14,6 +14,7 @@ use App\Models\Todo;
 use App\Services\AIBackendManager;
 use App\Services\ClientToolRegistry;
 use App\Services\ConversationEventBroadcaster;
+use App\Services\Prompts\PromptAssembler;
 use App\Services\Search\SearchService;
 use App\Services\ToolSchemaRegistry;
 use App\Services\ToolService;
@@ -98,12 +99,25 @@ class ProcessConversationTurn implements ShouldQueue
             $this->conversation->incrementTurn();
             $this->conversation->incrementRequestTurn();
 
-            // Prepare context with turn info
+            // Assemble system prompt using the new pipeline
+            $assembler = app(PromptAssembler::class);
+            $systemPrompt = $assembler->assemble($this->conversation->agent, $this->conversation);
+
+            // Store snapshot on first turn for debugging
+            if ($this->conversation->turn_count === 1) {
+                $this->conversation->update([
+                    'system_prompt_snapshot' => $systemPrompt,
+                    'prompt_context_snapshot' => $assembler->getLastContext(),
+                ]);
+            }
+
+            // Prepare context with turn info and assembled prompt
             $context = [
                 'messages' => $this->conversation->getMessages(),
                 'tools' => $this->getAllToolSchemas(),
                 'request_turn' => $this->conversation->getRequestTurnCount(),
                 'max_turns' => $this->conversation->getMaxTurns(),
+                'system_prompt' => $systemPrompt,
             ];
 
             Log::info('Tool schemas for AI request', [
@@ -196,6 +210,8 @@ class ProcessConversationTurn implements ShouldQueue
      */
     protected function processToolCalls(array $toolCalls, ToolService $toolService): void
     {
+        $broadcaster = app(ConversationEventBroadcaster::class);
+
         foreach ($toolCalls as $toolCall) {
             if ($this->isBuiltinTool($toolCall->name)) {
                 // Pause conversation and request tool execution from CLI
@@ -206,25 +222,36 @@ class ProcessConversationTurn implements ShouldQueue
                     'pending_tool_request' => $toolArray,
                 ]);
 
-                app(ConversationEventBroadcaster::class)->toolRequest($this->conversation, $toolArray);
+                $broadcaster->toolRequest($this->conversation, $toolArray);
 
                 return; // Exit - CLI will submit result and trigger next job
             }
 
+            // Broadcast that tool is executing
+            $broadcaster->toolExecuting($this->conversation, $toolCall->toArray());
+
             if ($this->isSystemTool($toolCall->name)) {
                 // Execute system tool on server
                 $result = $this->executeSystemTool($toolCall);
+                $resultContent = $result->output ?? $result->error ?? '';
 
                 // Add tool result to conversation
-                $toolMessage = ChatMessage::tool($result->output ?? $result->error ?? '', $toolCall->id);
+                $toolMessage = ChatMessage::tool($resultContent, $toolCall->id, $toolCall->name);
                 $this->conversation->addMessage($toolMessage->toArray());
+
+                // Broadcast tool completed with result content
+                $broadcaster->toolCompleted($this->conversation, $toolCall->id, $toolCall->name, $result->success, $resultContent);
             } else {
                 // Execute user tool on server
                 $result = $this->executeUserTool($toolCall, $toolService);
+                $resultContent = $result->output ?? $result->error ?? '';
 
                 // Add tool result to conversation
-                $toolMessage = ChatMessage::tool($result->output ?? $result->error ?? '', $toolCall->id);
+                $toolMessage = ChatMessage::tool($resultContent, $toolCall->id, $toolCall->name);
                 $this->conversation->addMessage($toolMessage->toArray());
+
+                // Broadcast tool completed with result content
+                $broadcaster->toolCompleted($this->conversation, $toolCall->id, $toolCall->name, $result->success, $resultContent);
             }
         }
 

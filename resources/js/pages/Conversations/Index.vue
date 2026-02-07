@@ -29,6 +29,7 @@ import {
     X,
     Loader2,
 } from 'lucide-vue-next';
+import { destroy } from '@/actions/App/Http/Controllers/Api/V1/ConversationController';
 import type { Conversation, Agent, SharedAgent } from '@/types';
 
 interface Filters {
@@ -60,6 +61,7 @@ const status = ref(props.filters.status || 'all');
 const agentId = ref(props.filters.agent_id || 'all');
 const showFilters = ref(false);
 const newConversationDialogOpen = ref(false);
+const deleting = ref<number | null>(null);
 
 const hasActiveFilters = computed(() => {
     return props.filters.search || props.filters.status || props.filters.agent_id;
@@ -104,13 +106,30 @@ const clearFilters = () => {
     });
 };
 
-const deleteConversation = (conversation: Conversation, e: Event) => {
+const deleteConversation = async (conversation: Conversation, e: Event) => {
     e.preventDefault();
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this conversation?')) {
-        router.delete(`/conversations/${conversation.id}`, {
-            preserveState: false,
+    if (!confirm('Are you sure you want to delete this conversation?')) {
+        return;
+    }
+
+    deleting.value = conversation.id;
+    try {
+        const response = await fetch(destroy.url(conversation.id), {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+                ),
+            },
         });
+
+        if (response.ok) {
+            router.reload({ only: ['conversations', 'nextCursor'] });
+        }
+    } finally {
+        deleting.value = null;
     }
 };
 
@@ -314,9 +333,10 @@ watch(() => props.filters, (newFilters) => {
                                     <DropdownMenuItem
                                         @click="deleteConversation(conversation, $event)"
                                         class="cursor-pointer text-destructive"
+                                        :disabled="deleting === conversation.id"
                                     >
                                         <Trash2 class="mr-2 h-4 w-4" />
-                                        Delete
+                                        {{ deleting === conversation.id ? 'Deleting...' : 'Delete' }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -371,9 +391,10 @@ watch(() => props.filters, (newFilters) => {
                                     <DropdownMenuItem
                                         @click="deleteConversation(conversation, $event)"
                                         class="cursor-pointer text-destructive"
+                                        :disabled="deleting === conversation.id"
                                     >
                                         <Trash2 class="mr-2 h-4 w-4" />
-                                        Delete
+                                        {{ deleting === conversation.id ? 'Deleting...' : 'Delete' }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -428,9 +449,10 @@ watch(() => props.filters, (newFilters) => {
                                     <DropdownMenuItem
                                         @click="deleteConversation(conversation, $event)"
                                         class="cursor-pointer text-destructive"
+                                        :disabled="deleting === conversation.id"
                                     >
                                         <Trash2 class="mr-2 h-4 w-4" />
-                                        Delete
+                                        {{ deleting === conversation.id ? 'Deleting...' : 'Delete' }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -485,9 +507,10 @@ watch(() => props.filters, (newFilters) => {
                                     <DropdownMenuItem
                                         @click="deleteConversation(conversation, $event)"
                                         class="cursor-pointer text-destructive"
+                                        :disabled="deleting === conversation.id"
                                     >
                                         <Trash2 class="mr-2 h-4 w-4" />
-                                        Delete
+                                        {{ deleting === conversation.id ? 'Deleting...' : 'Delete' }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -542,9 +565,10 @@ watch(() => props.filters, (newFilters) => {
                                     <DropdownMenuItem
                                         @click="deleteConversation(conversation, $event)"
                                         class="cursor-pointer text-destructive"
+                                        :disabled="deleting === conversation.id"
                                     >
                                         <Trash2 class="mr-2 h-4 w-4" />
-                                        Delete
+                                        {{ deleting === conversation.id ? 'Deleting...' : 'Delete' }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>

@@ -4,8 +4,16 @@ import type { ToolRequest } from '@/types';
 
 export type ConnectionState = 'idle' | 'connecting' | 'connected' | 'streaming' | 'waiting_tool' | 'completed' | 'failed' | 'error';
 
+export interface ToolExecution {
+    call_id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+}
+
 export interface StreamEventHandlers {
     onTextChunk?: (chunk: string, type: 'content' | 'thinking') => void;
+    onToolExecuting?: (tool: ToolExecution) => void;
+    onToolCompleted?: (callId: string, name: string, success: boolean, content: string) => void;
     onToolRequest?: (request: ToolRequest) => void;
     onCompleted?: (stats: { turns: number; tokens: number }) => void;
     onFailed?: (error: string) => void;
@@ -37,6 +45,26 @@ export function useConversationStream() {
                 handlers.onTextChunk?.(data.chunk || data.content || '', chunkType);
             } catch (e) {
                 console.error('Error parsing text_chunk event:', e);
+            }
+        });
+
+        es.addEventListener('tool_executing', (event) => {
+            connectionState.value = 'streaming';
+            try {
+                const data = JSON.parse(event.data);
+                handlers.onToolExecuting?.(data.tool);
+            } catch (e) {
+                console.error('Error parsing tool_executing event:', e);
+            }
+        });
+
+        es.addEventListener('tool_completed', (event) => {
+            connectionState.value = 'streaming';
+            try {
+                const data = JSON.parse(event.data);
+                handlers.onToolCompleted?.(data.call_id, data.name, data.success, data.content || '');
+            } catch (e) {
+                console.error('Error parsing tool_completed event:', e);
             }
         });
 

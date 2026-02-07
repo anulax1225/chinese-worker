@@ -1,6 +1,7 @@
 <?php
 
 use App\Contracts\AIBackendInterface;
+use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\Models\Agent;
 use App\Services\AIBackendManager;
@@ -89,6 +90,26 @@ describe('AIBackendManager', function () {
                     name: $data['name'] ?? '',
                     arguments: $data['arguments'] ?? []
                 );
+            }
+
+            public function supportsModelManagement(): bool
+            {
+                return false;
+            }
+
+            public function pullModel(string $modelName, callable $onProgress): void
+            {
+                // No-op for test
+            }
+
+            public function deleteModel(string $modelName): void
+            {
+                // No-op for test
+            }
+
+            public function showModel(string $modelName): AIModel
+            {
+                return new AIModel(name: $modelName);
             }
         };
 

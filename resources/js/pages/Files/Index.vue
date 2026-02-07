@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { router, useForm, WhenVisible } from '@inertiajs/vue3';
+import { router, WhenVisible } from '@inertiajs/vue3';
 import { ref, computed, watch } from 'vue';
 import { AppLayout } from '@/layouts';
+import { store, destroy } from '@/actions/App/Http/Controllers/Api/V1/FileController';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -62,11 +63,11 @@ const showFilters = ref(false);
 const uploadDialogOpen = ref(false);
 const uploadProgress = ref(0);
 const isUploading = ref(false);
+const deleting = ref<number | null>(null);
 
-const uploadForm = useForm({
-    file: null as globalThis.File | null,
-    type: 'input' as 'input' | 'output' | 'temp',
-});
+const uploadFile = ref<globalThis.File | null>(null);
+const uploadType = ref<'input' | 'output' | 'temp'>('input');
+const uploadErrors = ref<Record<string, string>>({});
 
 const hasActiveFilters = computed(() => {
     return props.filters.search || props.filters.type;
@@ -108,39 +109,92 @@ const clearFilters = () => {
 const handleFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement;
     if (target.files && target.files[0]) {
-        uploadForm.file = target.files[0];
+        uploadFile.value = target.files[0];
     }
 };
 
-const uploadFile = () => {
-    if (!uploadForm.file) return;
+const submitUpload = async () => {
+    if (!uploadFile.value) return;
 
     isUploading.value = true;
     uploadProgress.value = 0;
+    uploadErrors.value = {};
 
-    uploadForm.post('/files', {
-        forceFormData: true,
-        onProgress: (progress) => {
-            uploadProgress.value = progress.percentage || 0;
-        },
-        onSuccess: () => {
+    const formData = new FormData();
+    formData.append('file', uploadFile.value);
+    formData.append('type', uploadType.value);
+
+    try {
+        const xhr = new XMLHttpRequest();
+
+        const uploadPromise = new Promise<Response>((resolve, reject) => {
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    uploadProgress.value = Math.round((e.loaded / e.total) * 100);
+                }
+            });
+
+            xhr.addEventListener('load', () => {
+                resolve(new Response(xhr.response, {
+                    status: xhr.status,
+                    statusText: xhr.statusText,
+                }));
+            });
+
+            xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+            xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+            xhr.open('POST', store.url());
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('X-XSRF-TOKEN', decodeURIComponent(
+                document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+            ));
+            xhr.send(formData);
+        });
+
+        const response = await uploadPromise;
+
+        if (response.status === 201 || response.status === 200) {
             uploadDialogOpen.value = false;
-            uploadForm.reset();
+            uploadFile.value = null;
+            uploadType.value = 'input';
             uploadProgress.value = 0;
-        },
-        onFinish: () => {
-            isUploading.value = false;
-        },
-    });
+            router.reload({ only: ['files', 'nextCursor'] });
+        } else if (response.status === 422) {
+            const data = JSON.parse(xhr.responseText);
+            uploadErrors.value = data.errors || {};
+        }
+    } catch {
+        uploadErrors.value = { file: 'Upload failed. Please try again.' };
+    } finally {
+        isUploading.value = false;
+    }
 };
 
-const deleteFile = (file: File, e: Event) => {
+const deleteFile = async (file: File, e: Event) => {
     e.preventDefault();
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this file?')) {
-        router.delete(`/files/${file.id}`, {
-            preserveState: false,
+    if (!confirm('Are you sure you want to delete this file?')) {
+        return;
+    }
+
+    deleting.value = file.id;
+    try {
+        const response = await fetch(destroy.url(file.id), {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+                ),
+            },
         });
+
+        if (response.ok) {
+            router.reload({ only: ['files', 'nextCursor'] });
+        }
+    } finally {
+        deleting.value = null;
     }
 };
 
@@ -225,13 +279,13 @@ watch(() => props.filters, (newFilters) => {
                                         @change="handleFileSelect"
                                         :disabled="isUploading"
                                     />
-                                    <p v-if="uploadForm.errors.file" class="text-sm text-destructive">
-                                        {{ uploadForm.errors.file }}
+                                    <p v-if="uploadErrors.file" class="text-sm text-destructive">
+                                        {{ uploadErrors.file }}
                                     </p>
                                 </div>
                                 <div class="space-y-2">
                                     <Label for="type">Type</Label>
-                                    <Select v-model="uploadForm.type" :disabled="isUploading">
+                                    <Select v-model="uploadType" :disabled="isUploading">
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select type" />
                                         </SelectTrigger>
@@ -248,7 +302,7 @@ watch(() => props.filters, (newFilters) => {
                                 <Button variant="outline" @click="uploadDialogOpen = false" :disabled="isUploading">
                                     Cancel
                                 </Button>
-                                <Button @click="uploadFile" :disabled="!uploadForm.file || isUploading">
+                                <Button @click="submitUpload" :disabled="!uploadFile || isUploading">
                                     {{ isUploading ? `Uploading... ${uploadProgress}%` : 'Upload' }}
                                 </Button>
                             </DialogFooter>
@@ -345,9 +399,10 @@ watch(() => props.filters, (newFilters) => {
                                 <DropdownMenuItem
                                     @click="deleteFile(file, $event)"
                                     class="cursor-pointer text-destructive"
+                                    :disabled="deleting === file.id"
                                 >
                                     <Trash2 class="mr-2 h-4 w-4" />
-                                    Delete
+                                    {{ deleting === file.id ? 'Deleting...' : 'Delete' }}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

@@ -81,33 +81,33 @@ const sendMessage = () => {
 </script>
 
 <template>
-    <div class="fixed bottom-0 left-0 right-0 z-20 pb-4 pt-6 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
-        <div class="max-w-3xl mx-auto px-4 pointer-events-auto">
+    <div class="right-0 bottom-0 left-0 z-20 fixed bg-gradient-to-t from-background via-background to-transparent mx-auto pt-6 pb-4 pointer-events-none">
+        <div class="mx-auto px-4 max-w-3xl pointer-events-auto">
             <!-- Main floating card -->
-            <div class="bg-card border rounded-2xl shadow-lg overflow-hidden relative">
+            <div class="relative bg-card shadow-lg border rounded-2xl overflow-hidden">
                 <!-- Streaming indicator bar -->
                 <div
                     v-if="connectionState === 'streaming'"
-                    class="absolute top-0 left-0 right-0 h-0.5 streaming-bar"
+                    class="top-0 right-0 left-0 absolute h-0.5 streaming-bar"
                 />
 
                 <!-- Top row: Agent info + status -->
-                <div class="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
-                    <div class="flex items-center gap-2 text-sm min-w-0">
-                        <Avatar class="h-6 w-6 shrink-0">
+                <div class="flex justify-between items-center bg-muted/30 px-4 py-2 border-b">
+                    <div class="flex items-center gap-2 min-w-0 text-sm">
+                        <Avatar class="w-6 h-6 shrink-0">
                             <AvatarFallback class="bg-secondary text-secondary-foreground text-xs">
-                                <Bot class="h-3 w-3" />
+                                <Bot class="w-3 h-3" />
                             </AvatarFallback>
                         </Avatar>
                         <span class="font-medium truncate">{{ conversation.agent?.name || 'Agent' }}</span>
                         <div class="flex items-center gap-1.5 shrink-0">
                             <div :class="['h-1.5 w-1.5 rounded-full', connectionStatusColor]" />
-                            <span class="text-xs text-muted-foreground hidden sm:inline">{{ connectionStatusText }}</span>
+                            <span class="hidden sm:inline text-muted-foreground text-xs">{{ connectionStatusText }}</span>
                         </div>
                         <Badge
                             v-if="conversation.status !== 'active'"
                             variant="secondary"
-                            class="text-[10px] h-5 shrink-0"
+                            class="h-5 text-[10px] shrink-0"
                         >
                             {{ conversation.status }}
                         </Badge>
@@ -119,16 +119,16 @@ const sendMessage = () => {
                             v-if="isSubmitting"
                             variant="ghost"
                             size="sm"
-                            class="h-7 gap-1 text-xs"
+                            class="gap-1 h-7 text-xs"
                             @click="$emit('stop')"
                         >
-                            <Square class="h-3 w-3" />
+                            <Square class="w-3 h-3" />
                             <span class="hidden sm:inline">Stop</span>
                         </Button>
                         <DropdownMenu>
                             <DropdownMenuTrigger as-child>
-                                <Button variant="ghost" size="icon" class="h-7 w-7">
-                                    <MoreVertical class="h-4 w-4" />
+                                <Button variant="ghost" size="icon" class="w-7 h-7">
+                                    <MoreVertical class="w-4 h-4" />
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -136,7 +136,7 @@ const sendMessage = () => {
                                     @click="$emit('delete')"
                                     class="text-destructive cursor-pointer"
                                 >
-                                    <Trash2 class="h-4 w-4 mr-2" />
+                                    <Trash2 class="mr-2 w-4 h-4" />
                                     Delete conversation
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -149,7 +149,7 @@ const sendMessage = () => {
                     <Textarea
                         v-model="newMessage"
                         placeholder="Type a message..."
-                        class="min-h-11 max-h-40 resize-none flex-1 border-0 shadow-none focus-visible:ring-0 bg-transparent"
+                        class="flex-1 bg-transparent shadow-none border-0 focus-visible:ring-0 min-h-11 max-h-40 resize-none"
                         :disabled="isSubmitting || !canSendMessages"
                         @keydown="handleKeydown"
                         rows="1"
@@ -157,20 +157,20 @@ const sendMessage = () => {
                     <Button
                         type="button"
                         size="icon"
-                        class="h-10 w-10 rounded-xl shrink-0"
+                        class="rounded-xl w-10 h-10 shrink-0"
                         :disabled="!newMessage.trim() || isSubmitting || !canSendMessages"
                         @click="sendMessage"
                     >
-                        <Loader2 v-if="isSubmitting" class="h-4 w-4 animate-spin" />
-                        <Send v-else class="h-4 w-4" />
+                        <Loader2 v-if="isSubmitting" class="w-4 h-4 animate-spin" />
+                        <Send v-else class="w-4 h-4" />
                     </Button>
                 </div>
 
                 <!-- Bottom hint row -->
                 <div class="px-4 pb-2 text-[10px] text-muted-foreground text-right">
                     <template v-if="canSendMessages">
-                        <kbd class="px-1 py-0.5 bg-muted rounded">⌘</kbd>
-                        <kbd class="px-1 py-0.5 bg-muted rounded ml-0.5">↵</kbd>
+                        <kbd class="bg-muted px-1 py-0.5 rounded">⌘</kbd>
+                        <kbd class="bg-muted ml-0.5 px-1 py-0.5 rounded">↵</kbd>
                         <span class="ml-1">to send</span>
                     </template>
                     <template v-else>

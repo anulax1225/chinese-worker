@@ -23,8 +23,10 @@ class AgentResource extends JsonResource
             'config' => $this->config,
             'status' => $this->status,
             'ai_backend' => $this->ai_backend,
+            'context_variables' => $this->context_variables,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+            'system_prompts' => SystemPromptResource::collection($this->whenLoaded('systemPrompts')),
         ];
     }
 }

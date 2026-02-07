@@ -14,7 +14,8 @@ class AgentService
     {
         return DB::transaction(function () use ($data) {
             $toolIds = $data['tool_ids'] ?? [];
-            unset($data['tool_ids']);
+            $systemPromptIds = $data['system_prompt_ids'] ?? [];
+            unset($data['tool_ids'], $data['system_prompt_ids']);
 
             $agent = Agent::query()->create($data);
 
@@ -22,7 +23,11 @@ class AgentService
                 $agent->tools()->attach($toolIds);
             }
 
-            return $agent->load('tools');
+            if (! empty($systemPromptIds)) {
+                $this->syncSystemPrompts($agent, $systemPromptIds);
+            }
+
+            return $agent->load(['tools', 'systemPrompts']);
         });
     }
 
@@ -33,7 +38,8 @@ class AgentService
     {
         return DB::transaction(function () use ($agent, $data) {
             $toolIds = $data['tool_ids'] ?? null;
-            unset($data['tool_ids']);
+            $systemPromptIds = $data['system_prompt_ids'] ?? null;
+            unset($data['tool_ids'], $data['system_prompt_ids']);
 
             $agent->update($data);
 
@@ -41,7 +47,11 @@ class AgentService
                 $agent->tools()->sync($toolIds);
             }
 
-            return $agent->fresh(['tools']);
+            if ($systemPromptIds !== null) {
+                $this->syncSystemPrompts($agent, $systemPromptIds);
+            }
+
+            return $agent->fresh(['tools', 'systemPrompts']);
         });
     }
 
@@ -67,5 +77,19 @@ class AgentService
     public function detachTools(Agent $agent, array $toolIds): void
     {
         $agent->tools()->detach($toolIds);
+    }
+
+    /**
+     * Sync system prompts with order.
+     *
+     * @param  array<int>  $systemPromptIds  Array of system prompt IDs in order
+     */
+    public function syncSystemPrompts(Agent $agent, array $systemPromptIds): void
+    {
+        $pivotData = [];
+        foreach ($systemPromptIds as $order => $id) {
+            $pivotData[$id] = ['order' => $order];
+        }
+        $agent->systemPrompts()->sync($pivotData);
     }
 }

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\FileController;
+use App\Http\Controllers\Api\V1\SystemPromptController;
 use App\Http\Controllers\Api\V1\ToolController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,9 @@ Route::prefix('v1')->group(function (): void {
         // Tools
         Route::apiResource('tools', ToolController::class);
 
+        // System Prompts
+        Route::apiResource('system-prompts', SystemPromptController::class);
+
         // Files
         Route::apiResource('files', FileController::class)->except(['update']);
         Route::get('files/{file}/download', [FileController::class, 'download']);
@@ -46,5 +50,11 @@ Route::prefix('v1')->group(function (): void {
         // AI Backends
         Route::get('ai-backends', [AIBackendController::class, 'index']);
         Route::get('ai-backends/{backend}/models', [AIBackendController::class, 'models']);
+        Route::post('ai-backends/{backend}/models/pull', [AIBackendController::class, 'pullModel']);
+        Route::get('ai-backends/{backend}/models/pull/{pullId}/stream', [AIBackendController::class, 'streamPullProgress']);
+        Route::get('ai-backends/{backend}/models/{model}', [AIBackendController::class, 'showModel'])
+            ->where('model', '[a-zA-Z0-9_\-\.:\/]+');
+        Route::delete('ai-backends/{backend}/models/{model}', [AIBackendController::class, 'deleteModel'])
+            ->where('model', '[a-zA-Z0-9_\-\.:\/]+');
     });
 });

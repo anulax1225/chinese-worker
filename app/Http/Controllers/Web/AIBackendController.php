@@ -56,4 +56,51 @@ class AIBackendController extends Controller
             'defaultBackend' => $defaultBackend,
         ]);
     }
+
+    /**
+     * Display a specific AI backend.
+     */
+    public function show(Request $request, AIBackendManager $manager, string $backend): Response
+    {
+        $config = config("ai.backends.{$backend}");
+
+        if (! $config) {
+            abort(404, 'Backend not found');
+        }
+
+        $defaultBackend = config('ai.default');
+        $backendData = [
+            'name' => $backend,
+            'driver' => $config['driver'],
+            'is_default' => $backend === $defaultBackend,
+            'model' => $config['model'] ?? null,
+            'capabilities' => [],
+            'models' => [],
+            'status' => 'unknown',
+            'supports_model_management' => false,
+        ];
+
+        try {
+            $driver = $manager->driver($backend);
+            $backendData['capabilities'] = $driver->getCapabilities();
+            $backendData['status'] = 'connected';
+            $backendData['supports_model_management'] = $driver->supportsModelManagement();
+
+            // List models if supported
+            if ($driver->supportsModelManagement()) {
+                try {
+                    $backendData['models'] = $driver->listModels();
+                } catch (Throwable $e) {
+                    $backendData['models'] = [];
+                }
+            }
+        } catch (Throwable $e) {
+            $backendData['status'] = 'error';
+            $backendData['error'] = $e->getMessage();
+        }
+
+        return Inertia::render('AIBackends/Show', [
+            'backend' => $backendData,
+        ]);
+    }
 }

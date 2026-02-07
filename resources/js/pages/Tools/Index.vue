@@ -31,6 +31,7 @@ import {
     Loader2,
     Bot,
 } from 'lucide-vue-next';
+import { destroy } from '@/actions/App/Http/Controllers/Api/V1/ToolController';
 import type { Tool } from '@/types';
 
 interface Filters {
@@ -85,13 +86,32 @@ const clearFilters = () => {
     });
 };
 
-const deleteTool = (tool: Tool, e: Event) => {
+const deleting = ref<number | string | null>(null);
+
+const deleteTool = async (tool: Tool, e: Event) => {
     e.preventDefault();
     e.stopPropagation();
-    if (confirm(`Are you sure you want to delete "${tool.name}"?`)) {
-        router.delete(`/tools/${tool.id}`, {
-            preserveState: false,
+    if (!confirm(`Are you sure you want to delete "${tool.name}"?`)) {
+        return;
+    }
+
+    deleting.value = tool.id;
+    try {
+        const response = await fetch(destroy.url(tool.id), {
+            method: 'DELETE',
+            headers: {
+                'Accept': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+                ),
+            },
         });
+
+        if (response.ok) {
+            router.reload({ only: ['tools', 'nextCursor'] });
+        }
+    } finally {
+        deleting.value = null;
     }
 };
 
@@ -238,9 +258,10 @@ watch(() => props.filters, (newFilters) => {
                                 <DropdownMenuItem
                                     @click="deleteTool(tool, $event)"
                                     class="cursor-pointer text-destructive"
+                                    :disabled="deleting === tool.id"
                                 >
                                     <Trash2 class="mr-2 h-4 w-4" />
-                                    Delete
+                                    {{ deleting === tool.id ? 'Deleting...' : 'Delete' }}
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

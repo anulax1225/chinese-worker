@@ -21,6 +21,8 @@ import {
     PanelLeftClose,
     PanelLeft,
     Circle,
+    FileCog,
+    Cpu,
 } from 'lucide-vue-next';
 import AppHeader from '@/components/AppHeader.vue';
 import NewConversationDialog from '@/components/NewConversationDialog.vue';
@@ -41,7 +43,9 @@ const agents = computed(() => (page.props.agents || []) as Pick<Agent, 'id' | 'n
 const adminNavigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Agents', href: '/agents', icon: Bot },
+    { name: 'System Prompts', href: '/system-prompts', icon: FileCog },
     { name: 'Tools', href: '/tools', icon: Wrench },
+    { name: 'AI Backends', href: '/ai-backends', icon: Cpu },
     { name: 'Files', href: '/files', icon: FileText },
     { name: 'Search', href: '/search', icon: Search },
 ];
@@ -88,7 +92,7 @@ watch(
 </script>
 
 <template>
-    <div class="min-h-screen bg-background">
+    <div class="bg-background min-h-screen">
         <Head :title="title" />
         <Sonner />
 
@@ -98,7 +102,7 @@ watch(
         <!-- Mobile sidebar backdrop -->
         <div
             v-if="mobileMenuOpen"
-            class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+            class="lg:hidden z-40 fixed inset-0 bg-black/50"
             @click="mobileMenuOpen = false"
         />
 
@@ -113,18 +117,18 @@ watch(
         >
             <div class="flex flex-col h-full">
                 <!-- Mobile close button -->
-                <div class="flex items-center justify-end h-12 px-4 lg:hidden">
+                <div class="lg:hidden flex justify-end items-center px-4 h-12">
                     <Button
                         variant="ghost"
                         size="icon"
                         @click="mobileMenuOpen = false"
                     >
-                        <X class="h-5 w-5" />
+                        <X class="w-5 h-5" />
                     </Button>
                 </div>
 
                 <!-- Sidebar content -->
-                <nav class="flex-1 p-3 space-y-2 overflow-y-auto">
+                <nav class="flex-1 space-y-2 p-3 overflow-y-auto">
                     <!-- New Conversation Button -->
                     <Button
                         :class="[
@@ -136,7 +140,7 @@ watch(
                         :title="sidebarCollapsed ? 'New Conversation' : undefined"
                         @click="newConversationDialogOpen = true; mobileMenuOpen = false"
                     >
-                        <Plus class="h-4 w-4" />
+                        <Plus class="w-4 h-4" />
                         <span v-if="!sidebarCollapsed">New Conversation</span>
                     </Button>
 
@@ -144,7 +148,7 @@ watch(
 
                     <!-- Latest Chats Section -->
                     <div v-if="sidebarConversations.length > 0 && !sidebarCollapsed">
-                        <p class="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                        <p class="mb-2 px-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">
                             Latest Chats
                         </p>
                         <div class="space-y-1">
@@ -161,11 +165,11 @@ watch(
                                 @click="mobileMenuOpen = false"
                             >
                                 <Circle :class="['h-2 w-2 fill-current', getStatusColor(conversation.status)]" />
-                                <span class="truncate flex-1">{{ conversation.title }}</span>
+                                <span class="flex-1 truncate">{{ conversation.title }}</span>
                             </Link>
                             <Link
                                 href="/conversations"
-                                class="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                class="flex items-center gap-2 px-3 py-1.5 text-muted-foreground hover:text-foreground text-xs transition-colors"
                                 @click="mobileMenuOpen = false"
                             >
                                 More →
@@ -180,13 +184,13 @@ watch(
                         <button
                             v-if="!sidebarCollapsed"
                             type="button"
-                            class="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:text-foreground transition-colors"
+                            class="flex justify-between items-center px-3 py-2 w-full font-semibold text-muted-foreground hover:text-foreground text-xs uppercase tracking-wider transition-colors"
                             @click="toggleAdmin"
                         >
                             <span>Admin</span>
                             <component
                                 :is="adminExpanded ? ChevronDown : ChevronRight"
-                                class="h-4 w-4"
+                                class="w-4 h-4"
                             />
                         </button>
 
@@ -210,7 +214,7 @@ watch(
                                 :title="sidebarCollapsed ? item.name : undefined"
                                 @click="mobileMenuOpen = false"
                             >
-                                <component :is="item.icon" class="h-5 w-5" />
+                                <component :is="item.icon" class="w-5 h-5" />
                                 <span v-if="!sidebarCollapsed">{{ item.name }}</span>
                             </Link>
                         </div>
@@ -218,16 +222,16 @@ watch(
                 </nav>
 
                 <!-- Collapse Toggle (Desktop only) -->
-                <div class="hidden lg:flex items-center justify-end p-3 border-t">
+                <div class="hidden lg:flex justify-end items-center p-3 border-t">
                     <Button
                         variant="ghost"
                         size="icon"
-                        class="h-8 w-8"
+                        class="w-8 h-8"
                         :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
                         @click="toggleSidebar"
                     >
-                        <PanelLeftClose v-if="!sidebarCollapsed" class="h-4 w-4" />
-                        <PanelLeft v-else class="h-4 w-4" />
+                        <PanelLeftClose v-if="!sidebarCollapsed" class="w-4 h-4" />
+                        <PanelLeft v-else class="w-4 h-4" />
                     </Button>
                 </div>
             </div>
@@ -236,7 +240,7 @@ watch(
         <!-- Main content -->
         <div :class="['pt-14 transition-all duration-200', sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64']">
             <!-- Page content -->
-            <main class="p-4 max-w-7xl mx-auto">
+            <main class="px-8 py-4">
                 <slot />
             </main>
         </div>

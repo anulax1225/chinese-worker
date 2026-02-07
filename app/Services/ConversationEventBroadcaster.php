@@ -77,6 +77,37 @@ class ConversationEventBroadcaster
     }
 
     /**
+     * Broadcast tool executing event (for system/user tools that run on server).
+     *
+     * @param  array<string, mixed>  $toolCall
+     */
+    public function toolExecuting(Conversation $conversation, array $toolCall): void
+    {
+        $this->broadcast($conversation, 'tool_executing', [
+            'conversation_id' => $conversation->id,
+            'tool' => [
+                'call_id' => $toolCall['call_id'] ?? $toolCall['id'] ?? '',
+                'name' => $toolCall['name'] ?? '',
+                'arguments' => $toolCall['arguments'] ?? [],
+            ],
+        ]);
+    }
+
+    /**
+     * Broadcast tool completed event with result.
+     */
+    public function toolCompleted(Conversation $conversation, string $callId, string $name, bool $success, string $content = ''): void
+    {
+        $this->broadcast($conversation, 'tool_completed', [
+            'conversation_id' => $conversation->id,
+            'call_id' => $callId,
+            'name' => $name,
+            'success' => $success,
+            'content' => $content,
+        ]);
+    }
+
+    /**
      * Broadcast completion event.
      */
     public function completed(Conversation $conversation): void

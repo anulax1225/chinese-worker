@@ -2,8 +2,10 @@
 
 namespace App\Contracts;
 
+use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
+use App\DTOs\ModelPullProgress;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
 
@@ -56,4 +58,32 @@ interface AIBackendInterface
      * @param  array<string, mixed>  $data
      */
     public function parseToolCall(array $data): ToolCall;
+
+    /**
+     * Check if this backend supports model management operations.
+     */
+    public function supportsModelManagement(): bool;
+
+    /**
+     * Pull/download a model with streaming progress updates.
+     *
+     * @param  callable(ModelPullProgress): void  $onProgress
+     *
+     * @throws \RuntimeException If pull fails or not supported
+     */
+    public function pullModel(string $modelName, callable $onProgress): void;
+
+    /**
+     * Delete a model from the backend.
+     *
+     * @throws \RuntimeException If deletion fails or not supported
+     */
+    public function deleteModel(string $modelName): void;
+
+    /**
+     * Get detailed information about a specific model.
+     *
+     * @throws \RuntimeException If retrieval fails or not supported
+     */
+    public function showModel(string $modelName): AIModel;
 }

@@ -51,12 +51,20 @@ const md = new MarkdownIt({
 // SSE streaming composable
 const { connectionState, connect, disconnect } = useConversationStream();
 
+// Streaming phase types
+interface StreamingPhase {
+    type: 'thinking' | 'content' | 'tool_executing' | 'tool_completed';
+    content: string;
+    toolName?: string;
+    toolCallId?: string;
+    success?: boolean;
+}
+
 // State
 const messagesContainer = ref<HTMLElement | null>(null);
 const newMessage = ref('');
 const isSubmitting = ref(false);
-const streamingContent = ref('');
-const streamingThinking = ref('');
+const streamingPhases = ref<StreamingPhase[]>([]);
 const pendingToolRequest = ref<ToolRequest | null>(null);
 const toolDialogOpen = ref(false);
 const expandedThinking = ref<Set<number>>(new Set());
@@ -169,8 +177,7 @@ const scrollToBottomClick = () => {
 
 const triggerProcessing = async (content: string) => {
     isSubmitting.value = true;
-    streamingContent.value = '';
-    streamingThinking.value = '';
+    streamingPhases.value = [];
 
     try {
         const response = await fetch(sendMessageAction.url(props.conversation.id), {
@@ -218,12 +225,37 @@ const sendMessage = async (message: string) => {
 const connectToStream = () => {
     connect(props.conversation.id, {
         onTextChunk: (chunk, type) => {
-            if (type === 'thinking') {
-                streamingThinking.value += chunk;
+            const phases = streamingPhases.value;
+            const lastPhase = phases[phases.length - 1];
+
+            // If no phase or different type, start new phase
+            if (!lastPhase || lastPhase.type !== type) {
+                phases.push({ type, content: chunk });
             } else {
-                streamingContent.value += chunk;
+                // Append to existing phase
+                lastPhase.content += chunk;
             }
             scrollToBottom();
+        },
+        onToolExecuting: (tool) => {
+            streamingPhases.value.push({
+                type: 'tool_executing',
+                content: '',
+                toolName: tool.name,
+                toolCallId: tool.call_id,
+            });
+            scrollToBottom();
+        },
+        onToolCompleted: (callId, name, success, content) => {
+            // Find and update the tool_executing phase
+            const toolPhase = streamingPhases.value.find(
+                p => p.type === 'tool_executing' && p.toolCallId === callId
+            );
+            if (toolPhase) {
+                toolPhase.type = 'tool_completed';
+                toolPhase.success = success;
+                toolPhase.content = content;
+            }
         },
         onToolRequest: (request) => {
             pendingToolRequest.value = request;
@@ -233,8 +265,7 @@ const connectToStream = () => {
         onCompleted: () => {
             // Refresh conversation to get final state
             router.reload({ only: ['conversation'] });
-            streamingContent.value = '';
-            streamingThinking.value = '';
+            streamingPhases.value = [];
             isSubmitting.value = false;
         },
         onFailed: (error) => {
@@ -242,8 +273,7 @@ const connectToStream = () => {
                 role: 'system',
                 content: `Error: ${error}`,
             });
-            streamingContent.value = '';
-            streamingThinking.value = '';
+            streamingPhases.value = [];
             isSubmitting.value = false;
         },
         onStatusChanged: (status) => {
@@ -364,6 +394,7 @@ const formatTime = (date: string | null) => {
 // Get the appropriate tool result component based on tool name
 const getToolResultComponent = (toolName: string | undefined) => {
     const name = toolName?.toLowerCase() || '';
+    console.log("name", name);
     if (name === 'web_search') return WebSearchResult;
     if (name === 'web_fetch') return WebFetchResult;
     if (name === 'bash') return BashResult;
@@ -404,17 +435,17 @@ watch(() => props.conversation.status, (newStatus) => {
             <!-- Messages Area -->
             <div
                 ref="messagesContainer"
-                class="h-full overflow-y-auto px-4 py-4 pb-44 relative"
+                class="relative px-4 py-4 pb-44 h-full overflow-y-auto"
                 @scroll="handleScroll"
             >
                 <!-- Empty state -->
-                <div v-if="messages.length === 0" class="flex-1 flex items-center justify-center h-full">
-                    <div class="text-center max-w-md">
-                        <div class="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-                            <Sparkles class="h-8 w-8 text-primary" />
+                <div v-if="messages.length === 0" class="flex flex-1 justify-center items-center h-full">
+                    <div class="max-w-md text-center">
+                        <div class="flex justify-center items-center bg-primary/10 mx-auto mb-4 rounded-full w-16 h-16">
+                            <Sparkles class="w-8 h-8 text-primary" />
                         </div>
-                        <h3 class="text-lg font-medium mb-2">Start a conversation</h3>
-                        <p class="text-sm text-muted-foreground mb-6">
+                        <h3 class="mb-2 font-medium text-lg">Start a conversation</h3>
+                        <p class="mb-6 text-muted-foreground text-sm">
                             Send a message to {{ conversation.agent?.name || 'the agent' }} to begin.
                         </p>
                         <!-- Suggested prompts -->
@@ -423,7 +454,7 @@ watch(() => props.conversation.status, (newStatus) => {
                                 v-for="prompt in suggestedPrompts"
                                 :key="prompt"
                                 type="button"
-                                class="text-left px-4 py-3 rounded-lg border border-border bg-card hover:bg-accent hover:border-accent transition-colors text-sm"
+                                class="bg-card hover:bg-accent px-4 py-3 border border-border hover:border-accent rounded-lg text-sm text-left transition-colors"
                                 @click="newMessage = prompt"
                             >
                                 {{ prompt }}
@@ -432,28 +463,32 @@ watch(() => props.conversation.status, (newStatus) => {
                     </div>
                 </div>
 
-                <div v-else class="space-y-4 max-w-7xl mx-auto">
+                <div v-else class="space-y-4 mx-auto max-w-7xl">
                     <template v-for="(message, index) in messages" :key="index">
                         <!-- User message - Right aligned bubble -->
                         <div v-if="message.role === 'user'" class="flex justify-end">
                             <div class="max-w-[85%] md:max-w-[65%]">
-                                <div class="bg-primary text-primary-foreground rounded-2xl px-4 py-2.5 shadow-sm">
+                                <div class="bg-primary shadow-sm px-4 py-2.5 rounded-2xl text-primary-foreground">
                                     <div class="text-sm whitespace-pre-wrap">{{ message.content }}</div>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Tool message - Dynamic component based on tool type -->
-                        <component
-                            v-else-if="message.role === 'tool'"
-                            :is="getToolResultComponent(message.name)"
-                            :content="message.content"
-                            :tool-name="message.name"
-                        />
+                        <div v-else-if="message.role === 'tool'" class="flex gap-3">
+                            <div class="w-8 shrink-0" />
+                            <div class="bg-card shadow-sm px-4 py-2.5 border border-border rounded-2xl rounded-tl-md max-w-[85%] md:max-w-[65%]">
+                                <component
+                                    :is="getToolResultComponent(message.name)"
+                                    :content="message.content"
+                                    :tool-name="message.name"
+                                />
+                            </div>
+                        </div>
 
                         <!-- System message - Centered, muted -->
                         <div v-else-if="message.role === 'system'" class="flex justify-center">
-                            <p class="text-xs text-muted-foreground bg-muted/50 px-3 py-1 rounded-full">
+                            <p class="bg-muted/50 px-3 py-1 rounded-full text-muted-foreground text-xs">
                                 {{ message.content }}
                             </p>
                         </div>
@@ -464,33 +499,33 @@ watch(() => props.conversation.status, (newStatus) => {
                             class="flex gap-3"
                         >
                             <!-- Avatar: only show on first message in sequence -->
-                            <Avatar v-if="isFirstInSequence(index)" class="h-8 w-8 shrink-0">
+                            <Avatar v-if="isFirstInSequence(index)" class="w-8 h-8 shrink-0">
                                 <AvatarFallback class="bg-secondary text-secondary-foreground">
-                                    <Bot class="h-4 w-4" />
+                                    <Bot class="w-4 h-4" />
                                 </AvatarFallback>
                             </Avatar>
                             <div v-else class="w-8 shrink-0" />
-                            <div class="max-w-[85%] md:max-w-[65%] space-y-2">
+                            <div class="space-y-2 max-w-[85%] md:max-w-[65%]">
                                 <!-- Agent name: only show on first message in sequence -->
-                                <p v-if="isFirstInSequence(index)" class="text-xs font-medium text-muted-foreground">
+                                <p v-if="isFirstInSequence(index)" class="font-medium text-muted-foreground text-xs">
                                     {{ conversation.agent?.name || 'Assistant' }}
                                 </p>
 
                                 <!-- Thinking section (card redesign) -->
                                 <details v-if="message.thinking" class="group">
-                                    <summary class="text-xs text-muted-foreground cursor-pointer flex items-center gap-1.5 list-none hover:text-foreground transition-colors">
-                                        <Brain class="h-3.5 w-3.5 text-primary/60" />
+                                    <summary class="flex items-center gap-1.5 text-muted-foreground hover:text-foreground text-xs transition-colors cursor-pointer list-none">
+                                        <Brain class="w-3.5 h-3.5 text-primary/60" />
                                         <span>Thinking</span>
                                         <span class="text-muted-foreground/60">({{ countWords(message.thinking) }} words)</span>
-                                        <ChevronRight class="h-3 w-3 transition-transform group-open:rotate-90 ml-auto" />
+                                        <ChevronRight class="ml-auto w-3 h-3 group-open:rotate-90 transition-transform" />
                                     </summary>
-                                    <div class="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/10 text-sm text-muted-foreground markdown-content thinking-content">
+                                    <div class="bg-primary/5 mt-2 p-3 border border-primary/10 rounded-lg text-muted-foreground text-sm markdown-content thinking-content">
                                         <div v-html="renderMarkdown(message.thinking)" />
                                     </div>
                                 </details>
 
                                 <!-- Content bubble (only show if content exists) -->
-                                <div v-if="message.content?.trim()" class="bg-card border border-primary/30 rounded-2xl rounded-tl-md px-4 py-2.5 shadow-sm">
+                                <div v-if="message.content?.trim()" class="bg-card shadow-sm px-4 py-2.5 border border-primary/30 rounded-2xl rounded-tl-md">
                                     <div class="text-sm markdown-content" v-html="renderMarkdown(message.content)" />
                                 </div>
 
@@ -502,7 +537,7 @@ watch(() => props.conversation.status, (newStatus) => {
                                         variant="outline"
                                         class="text-xs"
                                     >
-                                        <Wrench class="h-3 w-3 mr-1" />
+                                        <Wrench class="mr-1 w-3 h-3" />
                                         {{ tool.function?.name || 'tool' }}
                                     </Badge>
                                 </div>
@@ -510,56 +545,78 @@ watch(() => props.conversation.status, (newStatus) => {
                         </div>
                     </template>
 
-                    <!-- Streaming message -->
-                    <div v-if="(streamingContent || streamingThinking) && isSubmitting" class="flex gap-3">
-                        <Avatar class="h-8 w-8 shrink-0">
+                    <!-- Streaming phases -->
+                    <div v-if="streamingPhases.length > 0 && isSubmitting" class="flex gap-3">
+                        <Avatar class="w-8 h-8 shrink-0">
                             <AvatarFallback class="bg-secondary text-secondary-foreground">
-                                <Bot class="h-4 w-4" />
+                                <Bot class="w-4 h-4" />
                             </AvatarFallback>
                         </Avatar>
-                        <div class="max-w-[85%] md:max-w-[65%] space-y-2">
-                            <p class="text-xs font-medium text-muted-foreground">
+                        <div class="space-y-2 max-w-[85%] md:max-w-[65%]">
+                            <p class="font-medium text-muted-foreground text-xs">
                                 {{ conversation.agent?.name || 'Assistant' }}
                             </p>
 
-                            <!-- Streaming thinking -->
-                            <details v-if="streamingThinking" class="group" open>
-                                <summary class="text-xs text-muted-foreground cursor-pointer flex items-center gap-1.5 list-none">
-                                    <Loader2 class="h-3.5 w-3.5 animate-spin text-primary/60" />
-                                    <span>Thinking</span>
-                                    <span class="text-muted-foreground/60">({{ countWords(streamingThinking) }} words)</span>
-                                </summary>
-                                <div class="mt-2 p-3 rounded-lg bg-primary/5 border border-primary/10 text-sm text-muted-foreground markdown-content thinking-content">
-                                    <div v-html="renderMarkdown(streamingThinking)" />
-                                </div>
-                            </details>
+                            <template v-for="(phase, idx) in streamingPhases" :key="idx">
+                                <!-- Thinking phase -->
+                                <details v-if="phase.type === 'thinking'" class="group" :open="idx === streamingPhases.length - 1">
+                                    <summary class="flex items-center gap-1.5 text-muted-foreground text-xs cursor-pointer list-none">
+                                        <Loader2 v-if="idx === streamingPhases.length - 1 && phase.type === 'thinking'" class="w-3.5 h-3.5 text-primary/60 animate-spin" />
+                                        <Brain v-else class="w-3.5 h-3.5 text-primary/60" />
+                                        <span>Thinking</span>
+                                        <span class="text-muted-foreground/60">({{ countWords(phase.content) }} words)</span>
+                                    </summary>
+                                    <div class="bg-primary/5 mt-2 p-3 border border-primary/10 rounded-lg text-muted-foreground text-sm markdown-content thinking-content">
+                                        <div v-html="renderMarkdown(phase.content)" />
+                                    </div>
+                                </details>
 
-                            <!-- Streaming content -->
-                            <div v-if="streamingContent" class="bg-card border-l-2 border-primary/30 rounded-2xl rounded-tl-md px-4 py-2.5 shadow-sm">
-                                <div class="text-sm markdown-content">
-                                    <span v-html="renderMarkdown(streamingContent)" />
-                                    <!-- Blinking cursor -->
-                                    <span class="streaming-cursor" />
+                                <!-- Tool executing phase -->
+                                <div v-else-if="phase.type === 'tool_executing'"
+                                     class="flex items-center gap-2 py-1">
+                                    <Badge variant="outline" class="text-xs">
+                                        <Loader2 class="mr-1 w-3 h-3 animate-spin" />
+                                        {{ phase.toolName }}
+                                    </Badge>
                                 </div>
-                            </div>
+
+                                <!-- Tool completed phase - render result component -->
+                                <div v-else-if="phase.type === 'tool_completed'"
+                                     class="bg-card shadow-sm px-4 py-2.5 border border-border rounded-2xl rounded-tl-md">
+                                    <component
+                                        :is="getToolResultComponent(phase.toolName)"
+                                        :content="phase.content"
+                                        :tool-name="phase.toolName"
+                                    />
+                                </div>
+
+                                <!-- Content phase -->
+                                <div v-else-if="phase.type === 'content' && phase.content?.trim()"
+                                     class="bg-card shadow-sm px-4 py-2.5 border-primary/30 border-l-2 rounded-2xl rounded-tl-md">
+                                    <div class="text-sm markdown-content">
+                                        <span v-html="renderMarkdown(phase.content)" />
+                                        <span v-if="idx === streamingPhases.length - 1" class="streaming-cursor" />
+                                    </div>
+                                </div>
+                            </template>
                         </div>
                     </div>
 
                     <!-- Loading indicator (no streaming yet) -->
-                    <div v-else-if="isSubmitting && !streamingContent && !streamingThinking" class="flex gap-3">
-                        <Avatar class="h-8 w-8 shrink-0">
+                    <div v-else-if="isSubmitting && streamingPhases.length === 0" class="flex gap-3">
+                        <Avatar class="w-8 h-8 shrink-0">
                             <AvatarFallback class="bg-secondary text-secondary-foreground">
-                                <Bot class="h-4 w-4" />
+                                <Bot class="w-4 h-4" />
                             </AvatarFallback>
                         </Avatar>
-                        <div class="bg-card border-l-2 border-primary/30 rounded-2xl rounded-tl-md px-4 py-3 shadow-sm">
+                        <div class="bg-card shadow-sm px-4 py-3 border-primary/30 border-l-2 rounded-2xl rounded-tl-md">
                             <div class="flex items-center gap-2">
                                 <div class="flex gap-1">
-                                    <div class="h-2 w-2 bg-primary/40 rounded-full animate-bounce" style="animation-delay: 0ms" />
-                                    <div class="h-2 w-2 bg-primary/40 rounded-full animate-bounce" style="animation-delay: 150ms" />
-                                    <div class="h-2 w-2 bg-primary/40 rounded-full animate-bounce" style="animation-delay: 300ms" />
+                                    <div class="bg-primary/40 rounded-full w-2 h-2 animate-bounce" style="animation-delay: 0ms" />
+                                    <div class="bg-primary/40 rounded-full w-2 h-2 animate-bounce" style="animation-delay: 150ms" />
+                                    <div class="bg-primary/40 rounded-full w-2 h-2 animate-bounce" style="animation-delay: 300ms" />
                                 </div>
-                                <span class="text-xs text-muted-foreground">Thinking...</span>
+                                <span class="text-muted-foreground text-xs">Thinking...</span>
                             </div>
                         </div>
                     </div>
@@ -575,10 +632,10 @@ watch(() => props.conversation.status, (newStatus) => {
                     <button
                         v-if="showScrollPill"
                         type="button"
-                        class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:bg-primary/90 transition-colors"
+                        class="bottom-4 left-1/2 absolute flex items-center gap-1.5 bg-primary hover:bg-primary/90 shadow-lg px-3 py-1.5 rounded-full font-medium text-primary-foreground text-xs transition-colors -translate-x-1/2"
                         @click="scrollToBottomClick"
                     >
-                        <ArrowDown class="h-3.5 w-3.5" />
+                        <ArrowDown class="w-3.5 h-3.5" />
                         New messages
                     </button>
                 </Transition>
