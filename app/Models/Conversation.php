@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\DTOs\TokenUsage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +27,10 @@ class Conversation extends Model
         'metadata',
         'turn_count',
         'total_tokens',
+        'prompt_tokens',
+        'completion_tokens',
+        'context_limit',
+        'estimated_context_usage',
         'started_at',
         'last_activity_at',
         'completed_at',
@@ -108,6 +113,48 @@ class Conversation extends Model
     public function addTokens(int $tokens): void
     {
         $this->increment('total_tokens', $tokens);
+    }
+
+    /**
+     * Add token usage with prompt/completion breakdown.
+     */
+    public function addTokenUsage(int $promptTokens, int $completionTokens): void
+    {
+        $this->increment('prompt_tokens', $promptTokens);
+        $this->increment('completion_tokens', $completionTokens);
+        $this->increment('total_tokens', $promptTokens + $completionTokens);
+    }
+
+    /**
+     * Get the token usage for this conversation.
+     */
+    public function getTokenUsage(): TokenUsage
+    {
+        return new TokenUsage(
+            promptTokens: $this->prompt_tokens ?? 0,
+            completionTokens: $this->completion_tokens ?? 0,
+            totalTokens: $this->total_tokens ?? 0,
+            contextLimit: $this->context_limit,
+        );
+    }
+
+    /**
+     * Check if conversation is approaching context limit.
+     */
+    public function isApproachingContextLimit(float $threshold = 0.8): bool
+    {
+        return $this->getTokenUsage()->isApproachingLimit($threshold);
+    }
+
+    /**
+     * Recalculate estimated context usage from message token counts.
+     */
+    public function recalculateContextUsage(): void
+    {
+        $total = collect($this->getMessages())
+            ->sum(fn (array $message) => $message['token_count'] ?? 0);
+
+        $this->update(['estimated_context_usage' => $total]);
     }
 
     /**

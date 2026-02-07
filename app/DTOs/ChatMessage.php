@@ -24,7 +24,9 @@ class ChatMessage
         public readonly ?string $toolCallId = null,
         public readonly ?array $images = null,
         public readonly ?string $thinking = null,
-        public readonly ?string $name = null
+        public readonly ?string $name = null,
+        public readonly ?int $tokenCount = null,
+        public readonly ?string $countedAt = null
     ) {}
 
     /**
@@ -78,6 +80,8 @@ class ChatMessage
             'images' => $this->images,
             'thinking' => $this->thinking,
             'name' => $this->name,
+            'token_count' => $this->tokenCount,
+            'counted_at' => $this->countedAt,
         ];
     }
 
@@ -95,7 +99,27 @@ class ChatMessage
             toolCallId: $data['tool_call_id'] ?? null,
             images: $data['images'] ?? null,
             thinking: $data['thinking'] ?? null,
-            name: $data['name'] ?? null
+            name: $data['name'] ?? null,
+            tokenCount: $data['token_count'] ?? null,
+            countedAt: $data['counted_at'] ?? null
+        );
+    }
+
+    /**
+     * Create a new instance with token count information.
+     */
+    public function withTokenCount(int $tokenCount, ?string $countedAt = null): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            toolCalls: $this->toolCalls,
+            toolCallId: $this->toolCallId,
+            images: $this->images,
+            thinking: $this->thinking,
+            name: $this->name,
+            tokenCount: $tokenCount,
+            countedAt: $countedAt ?? now()->toISOString()
         );
     }
 }

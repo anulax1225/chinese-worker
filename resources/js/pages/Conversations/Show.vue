@@ -471,6 +471,9 @@ watch(() => props.conversation.status, (newStatus) => {
                                 <div class="bg-primary shadow-sm px-4 py-2.5 rounded-2xl text-primary-foreground">
                                     <div class="text-sm whitespace-pre-wrap">{{ message.content }}</div>
                                 </div>
+                                <div v-if="message.token_count" class="mt-1 text-[10px] text-muted-foreground/50 text-right">
+                                    {{ message.token_count }} tokens
+                                </div>
                             </div>
                         </div>
 
@@ -540,6 +543,11 @@ watch(() => props.conversation.status, (newStatus) => {
                                         <Wrench class="mr-1 w-3 h-3" />
                                         {{ tool.function?.name || 'tool' }}
                                     </Badge>
+                                </div>
+
+                                <!-- Token count -->
+                                <div v-if="message.token_count" class="text-[10px] text-muted-foreground/50">
+                                    {{ message.token_count }} tokens
                                 </div>
                             </div>
                         </div>

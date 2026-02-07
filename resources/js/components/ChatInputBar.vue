@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -18,6 +18,7 @@ import {
     Trash2,
     Loader2,
 } from 'lucide-vue-next';
+import TokenUsageIndicator from '@/components/TokenUsageIndicator.vue';
 import type { Conversation } from '@/types';
 import type { ConnectionState } from '@/composables/useConversationStream';
 
@@ -113,34 +114,45 @@ const sendMessage = () => {
                         </Badge>
                     </div>
 
-                    <!-- Actions -->
-                    <div class="flex items-center gap-1 shrink-0">
-                        <Button
-                            v-if="isSubmitting"
-                            variant="ghost"
-                            size="sm"
-                            class="gap-1 h-7 text-xs"
-                            @click="$emit('stop')"
-                        >
-                            <Square class="w-3 h-3" />
-                            <span class="hidden sm:inline">Stop</span>
-                        </Button>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger as-child>
-                                <Button variant="ghost" size="icon" class="w-7 h-7">
-                                    <MoreVertical class="w-4 h-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                    @click="$emit('delete')"
-                                    class="text-destructive cursor-pointer"
-                                >
-                                    <Trash2 class="mr-2 w-4 h-4" />
-                                    Delete conversation
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                    <!-- Token usage + Actions -->
+                    <div class="flex items-center gap-3 shrink-0">
+                        <!-- Token Usage Indicator -->
+                        <TokenUsageIndicator
+                            v-if="conversation.token_usage"
+                            :token-usage="conversation.token_usage"
+                            compact
+                            class="hidden sm:flex"
+                        />
+
+                        <!-- Actions -->
+                        <div class="flex items-center gap-1">
+                            <Button
+                                v-if="isSubmitting"
+                                variant="ghost"
+                                size="sm"
+                                class="gap-1 h-7 text-xs"
+                                @click="$emit('stop')"
+                            >
+                                <Square class="w-3 h-3" />
+                                <span class="hidden sm:inline">Stop</span>
+                            </Button>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger as-child>
+                                    <Button variant="ghost" size="icon" class="w-7 h-7">
+                                        <MoreVertical class="w-4 h-4" />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        @click="$emit('delete')"
+                                        class="text-destructive cursor-pointer"
+                                    >
+                                        <Trash2 class="mr-2 w-4 h-4" />
+                                        Delete conversation
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
                     </div>
                 </div>
 

@@ -116,6 +116,16 @@ describe('AIBackendManager', function () {
             {
                 return new AIModel(name: $modelName);
             }
+
+            public function countTokens(string $text): int
+            {
+                return (int) ceil(mb_strlen($text) / 4);
+            }
+
+            public function getContextLimit(): int
+            {
+                return 4096;
+            }
         };
 
         $manager = app(AIBackendManager::class);

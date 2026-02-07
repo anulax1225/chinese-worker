@@ -93,4 +93,19 @@ interface AIBackendInterface
      * @throws \RuntimeException If retrieval fails or not supported
      */
     public function showModel(string $modelName): AIModel;
+
+    /**
+     * Count the number of tokens in a text string.
+     *
+     * @param  string  $text  The text to tokenize
+     * @return int The number of tokens
+     */
+    public function countTokens(string $text): int;
+
+    /**
+     * Get the context limit (max tokens) for the current model.
+     *
+     * @return int The maximum context length in tokens
+     */
+    public function getContextLimit(): int;
 }

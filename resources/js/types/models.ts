@@ -144,6 +144,15 @@ export interface ModelPullResponse {
     stream_url: string;
 }
 
+export interface TokenUsage {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    context_limit: number | null;
+    estimated_context_usage: number;
+    usage_percentage: number | null;
+}
+
 export interface Conversation {
     id: number;
     agent_id: number;
@@ -153,6 +162,7 @@ export interface Conversation {
     metadata: Record<string, unknown>;
     turn_count: number;
     total_tokens: number;
+    token_usage: TokenUsage;
     started_at: string | null;
     last_activity_at: string | null;
     completed_at: string | null;
@@ -173,6 +183,8 @@ export interface ChatMessage {
     tool_call_id?: string;
     tool_calls?: ToolCall[];
     name?: string;
+    token_count?: number;
+    counted_at?: string;
 }
 
 export interface ToolRequest {

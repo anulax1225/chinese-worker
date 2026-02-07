@@ -417,4 +417,89 @@ describe('OllamaBackend', function () {
             ->and($lastMessage->content)->toBe('What do you see?')
             ->and($lastMessage->images)->toBe(['base64_encoded_image_data']);
     });
+
+    test('can count tokens using tokenize API', function () {
+        $mockResponse = json_encode([
+            'tokens' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        ]);
+
+        $mock = new MockHandler([
+            new Response(200, ['Content-Type' => 'application/json'], $mockResponse),
+        ]);
+
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack]);
+
+        $config = config('ai.backends.ollama');
+        $backend = new OllamaBackend($config);
+
+        $reflection = new ReflectionClass($backend);
+        $property = $reflection->getProperty('client');
+        $property->setAccessible(true);
+        $property->setValue($backend, $client);
+
+        // Use unique text to avoid cache
+        $text = 'Hello, how are you today?'.uniqid();
+        $tokenCount = $backend->countTokens($text);
+
+        expect($tokenCount)->toBe(10);
+    });
+
+    test('returns zero tokens for empty text', function () {
+        $config = config('ai.backends.ollama');
+        $backend = new OllamaBackend($config);
+
+        expect($backend->countTokens(''))->toBe(0);
+    });
+
+    test('falls back to character estimate when tokenize API fails', function () {
+        $mock = new MockHandler([
+            new Response(500, [], 'Internal Server Error'),
+        ]);
+
+        $handlerStack = HandlerStack::create($mock);
+        $client = new Client(['handler' => $handlerStack]);
+
+        $config = config('ai.backends.ollama');
+        $backend = new OllamaBackend($config);
+
+        $reflection = new ReflectionClass($backend);
+        $property = $reflection->getProperty('client');
+        $property->setAccessible(true);
+        $property->setValue($backend, $client);
+
+        // Use unique text to avoid cache
+        $text = 'Test text'.uniqid();
+        $tokenCount = $backend->countTokens($text);
+
+        // Fallback is ceil(strlen / 4)
+        expect($tokenCount)->toBe((int) ceil(mb_strlen($text) / 4));
+    });
+
+    test('returns default context limit', function () {
+        $config = config('ai.backends.ollama');
+        $backend = new OllamaBackend($config);
+
+        expect($backend->getContextLimit())->toBe(4096);
+    });
+
+    test('returns context limit from normalized config', function () {
+        $config = config('ai.backends.ollama');
+        $backend = new OllamaBackend($config);
+
+        $normalizedConfig = new \App\DTOs\NormalizedModelConfig(
+            model: 'llama3.1',
+            temperature: 0.7,
+            topP: 0.9,
+            topK: 40,
+            contextLength: 8192,
+            maxTokens: 2048,
+            timeout: 120,
+            validationWarnings: []
+        );
+
+        $configuredBackend = $backend->withConfig($normalizedConfig);
+
+        expect($configuredBackend->getContextLimit())->toBe(8192);
+    });
 });

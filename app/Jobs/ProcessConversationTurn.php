@@ -147,8 +147,10 @@ class ProcessConversationTurn implements ShouldQueue
                 }
             );
 
-            // Track tokens
-            $this->conversation->addTokens($response->tokensUsed);
+            // Track tokens with prompt/completion breakdown
+            $promptTokens = $response->metadata['prompt_eval_count'] ?? 0;
+            $completionTokens = $response->metadata['eval_count'] ?? 0;
+            $this->conversation->addTokenUsage($promptTokens, $completionTokens);
 
             Log::info('AI response received', [
                 'conversation_id' => $this->conversation->id,
@@ -162,12 +164,12 @@ class ProcessConversationTurn implements ShouldQueue
             // Filter to only valid, known tool calls
             $validToolCalls = $this->filterValidToolCalls($response->toolCalls);
 
-            // Add AI response to conversation (complete message for DB storage and polling)
+            // Add AI response to conversation with token count
             $assistantMessage = ChatMessage::assistant(
                 $response->content,
                 array_map(fn (ToolCall $tc) => $tc->toArray(), $validToolCalls),
                 $response->thinking
-            );
+            )->withTokenCount($completionTokens);
             $this->conversation->addMessage($assistantMessage->toArray());
 
             // If no valid tool calls, conversation turn is complete

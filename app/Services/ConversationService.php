@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Log;
 class ConversationService
 {
     public function __construct(
-        protected ConversationEventBroadcaster $broadcaster
+        protected ConversationEventBroadcaster $broadcaster,
+        protected AIBackendManager $backendManager
     ) {}
 
     /**
@@ -25,8 +26,18 @@ class ConversationService
         ?array $images = null
     ): ConversationState {
         try {
-            // Add user message to conversation
-            $userMessage = ChatMessage::user($message, $images);
+            // Tokenize user message
+            $result = $this->backendManager->forAgent($conversation->agent);
+            $backend = $result['backend'];
+            $tokenCount = $backend->countTokens($message);
+
+            // Set context limit on first message
+            if ($conversation->context_limit === null) {
+                $conversation->update(['context_limit' => $backend->getContextLimit()]);
+            }
+
+            // Add user message to conversation with token count
+            $userMessage = ChatMessage::user($message, $images)->withTokenCount($tokenCount);
             $conversation->addMessage($userMessage->toArray());
             $conversation->update(['status' => 'active']);
             $conversation->markAsStarted();
@@ -65,10 +76,16 @@ class ConversationService
         ToolResult $result
     ): ConversationState {
         try {
-            // Add tool result to conversation
+            // Add tool result to conversation with token count
             // Use error as content when output is empty (refusal/failure cases)
             $content = $result->output !== '' ? $result->output : ($result->error ?? '');
-            $toolMessage = ChatMessage::tool($content, $callId);
+
+            // Tokenize tool result
+            $backendResult = $this->backendManager->forAgent($conversation->agent);
+            $backend = $backendResult['backend'];
+            $tokenCount = $backend->countTokens($content);
+
+            $toolMessage = ChatMessage::tool($content, $callId)->withTokenCount($tokenCount);
             $conversation->addMessage($toolMessage->toArray());
 
             // Check if user refused tool execution or tool failed - stop the loop and wait for new input

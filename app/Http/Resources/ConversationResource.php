@@ -25,6 +25,16 @@ class ConversationResource extends JsonResource
             'metadata' => $this->metadata,
             'turn_count' => $this->turn_count,
             'total_tokens' => $this->total_tokens,
+            'token_usage' => [
+                'prompt_tokens' => $this->prompt_tokens ?? 0,
+                'completion_tokens' => $this->completion_tokens ?? 0,
+                'total_tokens' => $this->total_tokens ?? 0,
+                'context_limit' => $this->context_limit,
+                'estimated_context_usage' => $this->estimated_context_usage ?? 0,
+                'usage_percentage' => $this->context_limit
+                    ? round(($this->estimated_context_usage / $this->context_limit) * 100, 1)
+                    : null,
+            ],
             'started_at' => $this->started_at,
             'last_activity_at' => $this->last_activity_at,
             'completed_at' => $this->completed_at,

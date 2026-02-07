@@ -338,6 +338,73 @@ describe('Conversation Management', function () {
             $conversation->refresh();
             expect($conversation->total_tokens)->toBe(150);
         });
+
+        test('can add token usage with breakdown', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'total_tokens' => 0,
+                'prompt_tokens' => 0,
+                'completion_tokens' => 0,
+            ]);
+
+            $conversation->addTokenUsage(100, 50);
+
+            $conversation->refresh();
+            expect($conversation->prompt_tokens)->toBe(100)
+                ->and($conversation->completion_tokens)->toBe(50)
+                ->and($conversation->total_tokens)->toBe(150);
+        });
+
+        test('can get token usage', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'total_tokens' => 150,
+                'prompt_tokens' => 100,
+                'completion_tokens' => 50,
+                'context_limit' => 4096,
+            ]);
+
+            $tokenUsage = $conversation->getTokenUsage();
+
+            expect($tokenUsage->promptTokens)->toBe(100)
+                ->and($tokenUsage->completionTokens)->toBe(50)
+                ->and($tokenUsage->totalTokens)->toBe(150)
+                ->and($tokenUsage->contextLimit)->toBe(4096);
+        });
+
+        test('can check if approaching context limit', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'total_tokens' => 3500,
+                'context_limit' => 4096,
+            ]);
+
+            expect($conversation->isApproachingContextLimit(0.8))->toBeTrue();
+
+            $conversation->update(['total_tokens' => 2000]);
+            expect($conversation->isApproachingContextLimit(0.8))->toBeFalse();
+        });
+
+        test('can recalculate context usage from messages', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'messages' => [
+                    ['role' => 'user', 'content' => 'Hello', 'token_count' => 10],
+                    ['role' => 'assistant', 'content' => 'Hi there!', 'token_count' => 15],
+                    ['role' => 'user', 'content' => 'How are you?', 'token_count' => 12],
+                ],
+                'estimated_context_usage' => 0,
+            ]);
+
+            $conversation->recalculateContextUsage();
+
+            $conversation->refresh();
+            expect($conversation->estimated_context_usage)->toBe(37);
+        });
     });
 
 });

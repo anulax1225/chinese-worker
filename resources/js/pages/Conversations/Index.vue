@@ -198,6 +198,13 @@ const getInitials = (name: string | undefined) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 };
 
+const formatTokens = (count: number): string => {
+    if (count >= 1000) {
+        return `${(count / 1000).toFixed(1)}K`;
+    }
+    return count.toString();
+};
+
 // Sync filter refs when props change (after navigation)
 watch(() => props.filters, (newFilters) => {
     search.value = newFilters.search || '';
@@ -355,6 +362,10 @@ watch(() => props.filters, (newFilters) => {
                                     </div>
                                     <div class="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{{ conversation.turn_count }} turns</span>
+                                        <template v-if="conversation.token_usage?.total_tokens">
+                                            <span>·</span>
+                                            <span>{{ formatTokens(conversation.token_usage.total_tokens) }} tokens</span>
+                                        </template>
                                         <span>·</span>
                                         <span>{{ formatTime(conversation.last_activity_at) }}</span>
                                     </div>
@@ -413,6 +424,10 @@ watch(() => props.filters, (newFilters) => {
                                     </div>
                                     <div class="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{{ conversation.turn_count }} turns</span>
+                                        <template v-if="conversation.token_usage?.total_tokens">
+                                            <span>·</span>
+                                            <span>{{ formatTokens(conversation.token_usage.total_tokens) }} tokens</span>
+                                        </template>
                                         <span>·</span>
                                         <span>{{ formatTime(conversation.last_activity_at) }}</span>
                                     </div>
@@ -471,6 +486,10 @@ watch(() => props.filters, (newFilters) => {
                                     </div>
                                     <div class="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{{ conversation.turn_count }} turns</span>
+                                        <template v-if="conversation.token_usage?.total_tokens">
+                                            <span>·</span>
+                                            <span>{{ formatTokens(conversation.token_usage.total_tokens) }} tokens</span>
+                                        </template>
                                         <span>·</span>
                                         <span>{{ formatTime(conversation.last_activity_at) }}</span>
                                     </div>
@@ -529,6 +548,10 @@ watch(() => props.filters, (newFilters) => {
                                     </div>
                                     <div class="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{{ conversation.turn_count }} turns</span>
+                                        <template v-if="conversation.token_usage?.total_tokens">
+                                            <span>·</span>
+                                            <span>{{ formatTokens(conversation.token_usage.total_tokens) }} tokens</span>
+                                        </template>
                                         <span>·</span>
                                         <span>{{ formatTime(conversation.last_activity_at) }}</span>
                                     </div>
@@ -587,6 +610,10 @@ watch(() => props.filters, (newFilters) => {
                                     </div>
                                     <div class="flex items-center gap-2 text-xs text-muted-foreground">
                                         <span>{{ conversation.turn_count }} turns</span>
+                                        <template v-if="conversation.token_usage?.total_tokens">
+                                            <span>·</span>
+                                            <span>{{ formatTokens(conversation.token_usage.total_tokens) }} tokens</span>
+                                        </template>
                                         <span>·</span>
                                         <span>{{ formatTime(conversation.last_activity_at) }}</span>
                                     </div>
