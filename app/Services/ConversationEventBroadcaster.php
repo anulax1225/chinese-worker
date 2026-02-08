@@ -124,8 +124,8 @@ class ConversationEventBroadcaster
             ],
         ];
 
-        if ($lastMessage && $lastMessage['role'] === 'assistant') {
-            $data['messages'] = [$lastMessage];
+        if ($lastMessage && $lastMessage->role === 'assistant') {
+            $data['messages'] = [$lastMessage->toArray()];
         }
 
         $this->broadcast($conversation, 'completed', $data);

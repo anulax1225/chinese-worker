@@ -17,6 +17,8 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
  * @group Agent Management
  *
  * APIs for managing AI agents
+ *
+ * @authenticated
  */
 class AgentController extends Controller
 {
@@ -30,24 +32,9 @@ class AgentController extends Controller
      * @queryParam page integer Page number for pagination. Example: 1
      * @queryParam per_page integer Number of items per page. Example: 15
      *
-     * @response 200 {
-     *   "data": [
-     *     {
-     *       "id": 1,
-     *       "user_id": 1,
-     *       "name": "Code Assistant",
-     *       "description": "Helps with coding tasks",
-     *       "code": "// Agent code here",
-     *       "config": {"temperature": 0.7},
-     *       "status": "active",
-     *       "ai_backend": "ollama",
-     *       "created_at": "2026-01-26T10:00:00.000000Z",
-     *       "updated_at": "2026-01-26T10:00:00.000000Z"
-     *     }
-     *   ],
-     *   "links": {},
-     *   "meta": {}
-     * }
+     * @apiResourceCollection App\Http\Resources\AgentResource
+     *
+     * @apiResourceModel App\Models\Agent with=tools,systemPrompts paginate=15
      */
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -72,19 +59,13 @@ class AgentController extends Controller
      * @bodyParam ai_backend string The AI backend to use. Must be one of: ollama, anthropic, openai. Example: ollama
      * @bodyParam tool_ids array List of tool IDs to attach to the agent. Example: [1, 2, 3]
      *
-     * @response 201 {
-     *   "id": 1,
-     *   "user_id": 1,
-     *   "name": "Code Assistant",
-     *   "description": "Helps with coding tasks",
-     *   "code": "// Agent code here",
-     *   "config": {"temperature": 0.7},
-     *   "status": "active",
-     *   "ai_backend": "ollama",
-     *   "created_at": "2026-01-26T10:00:00.000000Z",
-     *   "updated_at": "2026-01-26T10:00:00.000000Z",
-     *   "tools": []
-     * }
+     * @apiResource App\Http\Resources\AgentResource
+     *
+     * @apiResourceModel App\Models\Agent with=tools,systemPrompts
+     *
+     * @apiResourceAdditional status=201
+     *
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"name": ["The name field is required."]}}
      */
     public function store(StoreAgentRequest $request): JsonResponse
     {
@@ -103,19 +84,12 @@ class AgentController extends Controller
      *
      * @urlParam agent integer required The agent ID. Example: 1
      *
-     * @response 200 {
-     *   "id": 1,
-     *   "user_id": 1,
-     *   "name": "Code Assistant",
-     *   "description": "Helps with coding tasks",
-     *   "code": "// Agent code here",
-     *   "config": {"temperature": 0.7},
-     *   "status": "active",
-     *   "ai_backend": "ollama",
-     *   "created_at": "2026-01-26T10:00:00.000000Z",
-     *   "updated_at": "2026-01-26T10:00:00.000000Z",
-     *   "tools": []
-     * }
+     * @apiResource App\Http\Resources\AgentResource
+     *
+     * @apiResourceModel App\Models\Agent with=tools,systemPrompts
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
      */
     public function show(Agent $agent): JsonResponse
     {
@@ -141,19 +115,13 @@ class AgentController extends Controller
      * @bodyParam ai_backend string The AI backend to use. Must be one of: ollama, anthropic, openai. Example: anthropic
      * @bodyParam tool_ids array List of tool IDs to sync with the agent. Example: [1, 3]
      *
-     * @response 200 {
-     *   "id": 1,
-     *   "user_id": 1,
-     *   "name": "Updated Code Assistant",
-     *   "description": "Updated description",
-     *   "code": "// Updated agent code",
-     *   "config": {"temperature": 0.8},
-     *   "status": "inactive",
-     *   "ai_backend": "anthropic",
-     *   "created_at": "2026-01-26T10:00:00.000000Z",
-     *   "updated_at": "2026-01-26T11:00:00.000000Z",
-     *   "tools": []
-     * }
+     * @apiResource App\Http\Resources\AgentResource
+     *
+     * @apiResourceModel App\Models\Agent with=tools,systemPrompts
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"name": ["The name must be a string."]}}
      */
     public function update(UpdateAgentRequest $request, Agent $agent): JsonResponse
     {
@@ -171,7 +139,9 @@ class AgentController extends Controller
      *
      * @urlParam agent integer required The agent ID. Example: 1
      *
-     * @response 204
+     * @response 204 scenario="Success"
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
      */
     public function destroy(Agent $agent): JsonResponse
     {
@@ -191,14 +161,9 @@ class AgentController extends Controller
      *
      * @bodyParam tool_ids array required List of tool IDs to attach. Example: [4, 5]
      *
-     * @response 200 {
-     *   "message": "Tools attached successfully",
-     *   "agent": {
-     *     "id": 1,
-     *     "name": "Code Assistant",
-     *     "tools": []
-     *   }
-     * }
+     * @response 200 {"message": "Tools attached successfully", "agent": {"id": 1, "name": "Code Assistant", "tools": []}}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"tool_ids": ["The tool_ids field is required."]}}
      */
     public function attachTools(AttachToolsRequest $request, Agent $agent): JsonResponse
     {
@@ -218,9 +183,9 @@ class AgentController extends Controller
      * @urlParam agent integer required The agent ID. Example: 1
      * @urlParam tool integer required The tool ID. Example: 2
      *
-     * @response 200 {
-     *   "message": "Tool detached successfully"
-     * }
+     * @response 200 {"message": "Tool detached successfully"}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
      */
     public function detachTool(Agent $agent, int $toolId): JsonResponse
     {

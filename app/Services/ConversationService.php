@@ -2,11 +2,14 @@
 
 namespace App\Services;
 
+use App\Contracts\TokenEstimator;
 use App\DTOs\ChatMessage;
 use App\DTOs\ConversationState;
 use App\DTOs\ToolResult;
+use App\Events\ContextFiltered;
 use App\Jobs\ProcessConversationTurn;
 use App\Models\Conversation;
+use App\Services\ContextFilter\ContextFilterManager;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -14,8 +17,87 @@ class ConversationService
 {
     public function __construct(
         protected ConversationEventBroadcaster $broadcaster,
-        protected AIBackendManager $backendManager
+        protected AIBackendManager $backendManager,
+        protected ContextFilterManager $contextFilterManager,
+        protected TokenEstimator $tokenEstimator,
     ) {}
+
+    /**
+     * Get messages for AI, applying context filtering if needed.
+     *
+     * @return array<int, ChatMessage>
+     */
+    public function getMessagesForAI(
+        Conversation $conversation,
+        bool $forceFilter = false,
+        bool $skipFilter = false,
+        int $maxOutputTokens = 4096,
+        int $toolDefinitionTokens = 0,
+    ): array {
+        $messages = $conversation->getMessages();
+
+        if ($skipFilter) {
+            return $messages;
+        }
+
+        $threshold = $conversation->agent?->context_threshold
+            ?? config('ai.context_filter.default_threshold', 0.8);
+
+        $shouldFilter = $forceFilter || $conversation->isApproachingContextLimit($threshold);
+
+        if (! $shouldFilter) {
+            return $messages;
+        }
+
+        $usageBefore = $conversation->getContextUsagePercentage();
+
+        $result = $this->contextFilterManager->filterForConversation(
+            conversation: $conversation,
+            maxOutputTokens: $maxOutputTokens,
+            toolDefinitionTokens: $toolDefinitionTokens,
+        );
+
+        // Calculate usage after filtering
+        $usageAfter = $this->estimateFilteredUsage($result->messages, $conversation);
+
+        // Emit observability event
+        event(new ContextFiltered(
+            conversationId: $conversation->id,
+            strategyUsed: $result->strategyUsed,
+            originalCount: $result->originalCount,
+            filteredCount: $result->filteredCount,
+            removedMessageIds: $result->removedMessageIds,
+            contextUsageBefore: $usageBefore,
+            contextUsageAfter: $usageAfter,
+            durationMs: $result->durationMs,
+        ));
+
+        Log::info("[ContextFilter] Filtered conversation {$conversation->id}: {$result->originalCount} → {$result->filteredCount} messages using {$result->strategyUsed} in {$result->durationMs}ms");
+
+        return $result->messages;
+    }
+
+    /**
+     * Estimate context usage for filtered messages.
+     *
+     * @param  array<int, ChatMessage>  $messages
+     */
+    protected function estimateFilteredUsage(array $messages, Conversation $conversation): float
+    {
+        $totalTokens = 0;
+
+        foreach ($messages as $message) {
+            $totalTokens += $message->tokenCount ?? $this->tokenEstimator->estimate($message);
+        }
+
+        $contextLimit = $conversation->context_limit ?? 128000;
+
+        if ($contextLimit === 0) {
+            return 0.0;
+        }
+
+        return ($totalTokens / $contextLimit) * 100;
+    }
 
     /**
      * Process a user message by dispatching a job.
@@ -38,7 +120,7 @@ class ConversationService
 
             // Add user message to conversation with token count
             $userMessage = ChatMessage::user($message, $images)->withTokenCount($tokenCount);
-            $conversation->addMessage($userMessage->toArray());
+            $conversation->addMessage($userMessage);
             $conversation->update(['status' => 'active']);
             $conversation->markAsStarted();
 
@@ -80,7 +162,7 @@ class ConversationService
         $tokenCount = $backend->countTokens($message);
 
         $userMessage = ChatMessage::user($message, $images)->withTokenCount($tokenCount);
-        $conversation->addMessage($userMessage->toArray());
+        $conversation->addMessage($userMessage);
     }
 
     /**
@@ -134,7 +216,7 @@ class ConversationService
             $tokenCount = $backend->countTokens($content);
 
             $toolMessage = ChatMessage::tool($content, $callId)->withTokenCount($tokenCount);
-            $conversation->addMessage($toolMessage->toArray());
+            $conversation->addMessage($toolMessage);
 
             // Check if user refused tool execution or tool failed - stop the loop and wait for new input
             if ($this->isToolRefused($result) || $this->isToolFailed($result)) {

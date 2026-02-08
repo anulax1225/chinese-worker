@@ -16,6 +16,44 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Context Filter Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These options control how conversation context is filtered when
+    | approaching model context limits. The default strategy and options
+    | are used when an agent doesn't specify its own configuration.
+    |
+    */
+
+    'context_filter' => [
+        'default_strategy' => 'token_budget',
+        'default_options' => [
+            'budget_percentage' => 0.8,
+            'reserve_tokens' => 0,
+        ],
+        'default_threshold' => 0.8,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Token Estimation Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These options control how tokens are estimated for messages.
+    | Different content types have different tokenization ratios.
+    |
+    */
+
+    'token_estimation' => [
+        'default_chars_per_token' => 4.0,
+        'json_chars_per_token' => 2.5,
+        'code_chars_per_token' => 3.0,
+        'safety_margin' => 0.9,
+        'cache_on_message' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | AI Backend Configurations
     |--------------------------------------------------------------------------
     |

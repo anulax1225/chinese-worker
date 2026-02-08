@@ -18,7 +18,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * @group AI Backend Management
  *
- * APIs for querying available AI backends and their capabilities
+ * APIs for querying available AI backends and their capabilities.
+ *
+ * @authenticated
  */
 class AIBackendController extends Controller
 {
@@ -114,26 +116,18 @@ class AIBackendController extends Controller
      *
      * @urlParam backend string required The backend name (ollama, claude, openai). Example: ollama
      *
-     * @response 200 {
-     *   "models": [
-     *     {
-     *       "name": "llama3.1:latest",
-     *       "size": 4700000000,
-     *       "modified": "2026-01-26T10:00:00.000000Z"
-     *     },
-     *     {
-     *       "name": "codellama:latest",
-     *       "size": 3800000000,
-     *       "modified": "2026-01-25T15:30:00.000000Z"
-     *     }
-     *   ]
-     * }
+     * @queryParam detailed boolean Fetch detailed model information including capabilities and context length. Default: false. Example: true
+     *
+     * @response 200 scenario="Basic" {"models": [{"name": "llama3.1:latest", "size": 4700000000, "modified_at": "2026-01-26T10:00:00Z"}]}
+     * @response 200 scenario="Detailed" {"models": [{"name": "llama3.1:latest", "size": 4700000000, "capabilities": ["completion"], "context_length": 8192, "family": "llama", "parameter_size": "8B"}]}
+     * @response 500 scenario="Backend Error" {"error": "Unable to retrieve models for this backend", "message": "Connection refused"}
      */
-    public function models(string $backend): JsonResponse
+    public function models(Request $request, string $backend): JsonResponse
     {
         try {
             $driver = $this->backendManager->driver($backend);
-            $models = $driver->listModels();
+            $detailed = $request->boolean('detailed', false);
+            $models = $driver->listModels($detailed);
 
             return response()->json(['models' => $models]);
         } catch (\Exception $e) {
@@ -148,8 +142,16 @@ class AIBackendController extends Controller
      * Pull Model
      *
      * Start pulling/downloading a model. Returns a pull ID for tracking progress.
+     * Requires `manage-ai-models` gate permission.
      *
      * @urlParam backend string required The backend name. Example: ollama
+     *
+     * @bodyParam model string required The model name to pull. Example: llama3.1:latest
+     *
+     * @response 202 scenario="Queued" {"pull_id": "550e8400-e29b-41d4-a716-446655440000", "model": "llama3.1:latest", "backend": "ollama", "status": "queued", "stream_url": "/api/v1/ai-backends/ollama/models/pull/550e8400-e29b-41d4-a716-446655440000/stream"}
+     * @response 400 scenario="Unsupported" {"error": "This backend does not support model management"}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 500 scenario="Error" {"error": "Failed to initiate model pull", "message": "Connection refused"}
      */
     public function pullModel(PullModelRequest $request, string $backend): JsonResponse
     {
@@ -192,7 +194,12 @@ class AIBackendController extends Controller
     /**
      * Stream Pull Progress
      *
-     * SSE stream for model pull progress updates.
+     * Server-Sent Events stream for model pull progress updates.
+     *
+     * @urlParam backend string required The backend name. Example: ollama
+     * @urlParam pullId string required The pull ID from pullModel response. Example: 550e8400-e29b-41d4-a716-446655440000
+     *
+     * @response 200 scenario="SSE Stream" {"event": "progress", "data": {"status": "downloading", "completed": 50, "total": 100}}
      */
     public function streamPullProgress(Request $request, string $backend, string $pullId): StreamedResponse
     {
@@ -240,6 +247,15 @@ class AIBackendController extends Controller
      * Show Model Details
      *
      * Get detailed information about a specific model.
+     * Requires `manage-ai-models` gate permission.
+     *
+     * @urlParam backend string required The backend name. Example: ollama
+     * @urlParam model string required The model name. Example: llama3.1:latest
+     *
+     * @response 200 {"name": "llama3.1:latest", "family": "llama", "parameter_size": "8B", "quantization_level": "Q4_K_M", "capabilities": ["completion"], "context_length": 8192, "size": 4700000000, "size_human": "4.38 GB"}
+     * @response 400 scenario="Unsupported" {"error": "This backend does not support model management"}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 500 scenario="Error" {"error": "Failed to get model info", "message": "Model not found"}
      */
     public function showModel(string $backend, string $model): JsonResponse
     {
@@ -270,6 +286,15 @@ class AIBackendController extends Controller
      * Delete Model
      *
      * Delete a model from the backend.
+     * Requires `manage-ai-models` gate permission.
+     *
+     * @urlParam backend string required The backend name. Example: ollama
+     * @urlParam model string required The model name to delete. Example: llama3.1:latest
+     *
+     * @response 200 {"message": "Model deleted successfully"}
+     * @response 400 scenario="Unsupported" {"error": "This backend does not support model management"}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 500 scenario="Error" {"error": "Failed to delete model", "message": "Model not found"}
      */
     public function deleteModel(string $backend, string $model): JsonResponse
     {

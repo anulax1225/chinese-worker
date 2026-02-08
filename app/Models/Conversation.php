@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\DTOs\ChatMessage;
 use App\DTOs\TokenUsage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Conversation extends Model
 {
@@ -88,6 +90,14 @@ class Conversation extends Model
     }
 
     /**
+     * Get the messages for the conversation (relational).
+     */
+    public function conversationMessages(): HasMany
+    {
+        return $this->hasMany(Message::class)->orderBy('position');
+    }
+
+    /**
      * Check if conversation has any attached documents.
      */
     public function hasDocuments(): bool
@@ -107,23 +117,78 @@ class Conversation extends Model
 
     /**
      * Add a message to the conversation.
+     *
+     * @param  array<string, mixed>|ChatMessage  $message
      */
-    public function addMessage(array $message): void
+    public function addMessage(array|ChatMessage $message): Message
     {
-        $messages = $this->messages ?? [];
-        $messages[] = $message;
+        $dto = $message instanceof ChatMessage ? $message : ChatMessage::fromArray($message);
 
-        $this->messages = $messages;
+        $position = $this->conversationMessages()->max('position') ?? -1;
+        $position++;
+
+        $messageModel = $this->conversationMessages()->create([
+            'position' => $position,
+            'role' => $dto->role,
+            'name' => $dto->name,
+            'content' => $dto->content,
+            'thinking' => $dto->thinking,
+            'token_count' => $dto->tokenCount,
+            'tool_call_id' => $dto->toolCallId,
+            'counted_at' => $dto->countedAt,
+        ]);
+
+        // Create tool calls if present
+        if ($dto->toolCalls) {
+            foreach ($dto->toolCalls as $index => $toolCall) {
+                $messageModel->toolCalls()->create([
+                    'id' => $toolCall['call_id'] ?? $toolCall['id'] ?? uniqid('call_'),
+                    'function_name' => $toolCall['name'],
+                    'arguments' => $toolCall['arguments'] ?? [],
+                    'position' => $index,
+                ]);
+            }
+        }
+
+        // Create attachments for images if present
+        if ($dto->images) {
+            foreach ($dto->images as $imagePath) {
+                $messageModel->attachments()->create([
+                    'type' => 'image',
+                    'mime_type' => 'image/png',
+                    'storage_path' => $imagePath,
+                ]);
+            }
+        }
+
         $this->last_activity_at = now();
         $this->save();
+
+        return $messageModel;
     }
 
     /**
-     * Get all messages in the conversation.
+     * Get all messages in the conversation as ChatMessage DTOs.
+     *
+     * @return array<ChatMessage>
      */
     public function getMessages(): array
     {
-        return $this->messages ?? [];
+        return $this->conversationMessages()
+            ->with(['toolCalls', 'attachments'])
+            ->get()
+            ->map(fn (Message $m) => $m->toChatMessage())
+            ->all();
+    }
+
+    /**
+     * Get all messages as arrays (for backward compatibility).
+     *
+     * @return array<array<string, mixed>>
+     */
+    public function getMessagesAsArrays(): array
+    {
+        return array_map(fn (ChatMessage $m) => $m->toArray(), $this->getMessages());
     }
 
     /**
@@ -175,12 +240,19 @@ class Conversation extends Model
     }
 
     /**
+     * Get the context usage percentage.
+     */
+    public function getContextUsagePercentage(): float
+    {
+        return $this->getTokenUsage()->getUsagePercentage() ?? 0.0;
+    }
+
+    /**
      * Recalculate estimated context usage from message token counts.
      */
     public function recalculateContextUsage(): void
     {
-        $total = collect($this->getMessages())
-            ->sum(fn (array $message) => $message['token_count'] ?? 0);
+        $total = $this->conversationMessages()->sum('token_count');
 
         $this->update(['estimated_context_usage' => $total]);
     }

@@ -13,6 +13,7 @@ A self-hosted AI agent framework built with Laravel 12. Create intelligent agent
 - **Real-Time Streaming** - Server-Sent Events for live response streaming
 - **System Prompt Templating** - Blade-based prompts with variable substitution
 - **Queue Processing** - Background job processing with Horizon monitoring
+- **Context Filter** - Automatic context management to prevent overflow with pluggable strategies
 - **Modern Frontend** - Vue 3 + Inertia.js SPA with Tailwind CSS
 
 ## Quick Start
@@ -74,6 +75,7 @@ All documentation is in the [`docs/guide/`](docs/guide/) directory:
 - [Document Ingestion](docs/guide/document-ingestion.md) - PDF, DOCX, images with OCR
 - [Search & Web Fetch](docs/guide/search-and-webfetch.md) - Web search and content extraction
 - [Queues & Jobs](docs/guide/queues-and-jobs.md) - Background processing with Horizon
+- [Context Filter](docs/guide/context-filter.md) - Context management and filtering strategies
 
 ### Operations
 - [Production](docs/guide/production.md) - Production deployment and optimization

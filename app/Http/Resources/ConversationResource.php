@@ -21,7 +21,7 @@ class ConversationResource extends JsonResource
             'agent' => $this->whenLoaded('agent'),
             'user' => $this->whenLoaded('user'),
             'status' => $this->status,
-            'messages' => $this->messages,
+            'messages' => $this->getMessagesAsArrays(),
             'metadata' => $this->metadata,
             'turn_count' => $this->turn_count,
             'total_tokens' => $this->total_tokens,

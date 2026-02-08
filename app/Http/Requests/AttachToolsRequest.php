@@ -15,7 +15,7 @@ class AttachToolsRequest extends FormRequest
     {
         $agent = $this->route('agent');
 
-        return $agent instanceof Agent && $this->user()->can('update', $agent);
+        return $agent instanceof Agent && $this->user()?->can('update', $agent);
     }
 
     /**
@@ -29,7 +29,7 @@ class AttachToolsRequest extends FormRequest
             'tool_ids' => ['required', 'array'],
             'tool_ids.*' => [
                 'integer',
-                Rule::exists('tools', 'id')->where('user_id', $this->user()->id),
+                Rule::exists('tools', 'id')->where('user_id', $this->user()?->id),
             ],
         ];
     }

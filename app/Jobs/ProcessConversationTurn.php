@@ -182,7 +182,7 @@ class ProcessConversationTurn implements ShouldQueue
                 array_map(fn (ToolCall $tc) => $tc->toArray(), $validToolCalls),
                 $response->thinking
             )->withTokenCount($completionTokens);
-            $this->conversation->addMessage($assistantMessage->toArray());
+            $this->conversation->addMessage($assistantMessage);
 
             // If no valid tool calls, conversation turn is complete
             if (empty($validToolCalls)) {
@@ -274,7 +274,7 @@ class ProcessConversationTurn implements ShouldQueue
 
                 // Add tool result to conversation
                 $toolMessage = ChatMessage::tool($resultContent, $toolCall->id, $toolCall->name);
-                $this->conversation->addMessage($toolMessage->toArray());
+                $this->conversation->addMessage($toolMessage);
 
                 // Broadcast tool completed with result content
                 $broadcaster->toolCompleted($this->conversation, $toolCall->id, $toolCall->name, $result->success, $resultContent);
@@ -285,7 +285,7 @@ class ProcessConversationTurn implements ShouldQueue
 
                 // Add tool result to conversation
                 $toolMessage = ChatMessage::tool($resultContent, $toolCall->id, $toolCall->name);
-                $this->conversation->addMessage($toolMessage->toArray());
+                $this->conversation->addMessage($toolMessage);
 
                 // Broadcast tool completed with result content
                 $broadcaster->toolCompleted($this->conversation, $toolCall->id, $toolCall->name, $result->success, $resultContent);

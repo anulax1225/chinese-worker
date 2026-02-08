@@ -15,7 +15,9 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * @group File Management
  *
- * APIs for managing files used in agent executions
+ * APIs for managing files used in agent executions.
+ *
+ * @authenticated
  */
 class FileController extends Controller
 {
@@ -30,7 +32,9 @@ class FileController extends Controller
      * @queryParam per_page integer Number of items per page. Example: 15
      * @queryParam type string Filter by file type. Example: input
      *
-     * @response 200 {"data": [{"id": 1, "user_id": 1, "path": "files/input/document.pdf", "type": "input", "size": 1024, "mime_type": "application/pdf", "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}]}
+     * @apiResourceCollection App\Http\Resources\FileResource
+     *
+     * @apiResourceModel App\Models\File paginate=15
      */
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -53,7 +57,13 @@ class FileController extends Controller
      * @bodyParam file file required The file to upload. Max 10MB.
      * @bodyParam type string required The file type. Must be one of: input, output, temp. Example: input
      *
-     * @response 201 {"id": 1, "user_id": 1, "path": "files/input/document.pdf", "type": "input", "size": 1024, "mime_type": "application/pdf", "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}
+     * @apiResource App\Http\Resources\FileResource
+     *
+     * @apiResourceModel App\Models\File
+     *
+     * @apiResourceAdditional status=201
+     *
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"file": ["The file field is required."]}}
      */
     public function store(UploadFileRequest $request): JsonResponse
     {
@@ -73,7 +83,12 @@ class FileController extends Controller
      *
      * @urlParam file integer required The file ID. Example: 1
      *
-     * @response 200 {"id": 1, "user_id": 1, "path": "files/input/document.pdf", "type": "input", "size": 1024, "mime_type": "application/pdf", "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}
+     * @apiResource App\Http\Resources\FileResource
+     *
+     * @apiResourceModel App\Models\File
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\File] 1"}
      */
     public function show(File $file): JsonResponse
     {
@@ -89,7 +104,9 @@ class FileController extends Controller
      *
      * @urlParam file integer required The file ID. Example: 1
      *
-     * @response 200 (binary file content)
+     * @response 200 scenario="Success" file Binary file content
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\File] 1"}
      */
     public function download(File $file): StreamedResponse
     {
@@ -105,7 +122,9 @@ class FileController extends Controller
      *
      * @urlParam file integer required The file ID. Example: 1
      *
-     * @response 204
+     * @response 204 scenario="Success"
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\File] 1"}
      */
     public function destroy(File $file): JsonResponse
     {

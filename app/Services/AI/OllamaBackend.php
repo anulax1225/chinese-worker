@@ -220,21 +220,38 @@ class OllamaBackend implements AIBackendInterface
         ];
     }
 
-    public function listModels(): array
+    public function listModels(bool $detailed = false): array
     {
         try {
             $response = $this->client->get('/api/tags');
             $data = json_decode($response->getBody()->getContents(), true);
+            $models = $data['models'] ?? [];
 
-            return array_map(
-                fn ($model) => [
-                    'name' => $model['name'],
-                    'modified_at' => $model['modified_at'] ?? null,
-                    'size' => $model['size'] ?? null,
-                    'digest' => $model['digest'] ?? null,
-                ],
-                $data['models'] ?? []
-            );
+            if (! $detailed) {
+                // Return basic list using AIModel DTO for consistency
+                return array_map(
+                    fn ($model) => AIModel::fromOllamaTag($model)->toArray(),
+                    $models
+                );
+            }
+
+            // Fetch detailed info for each model via /api/show
+            return array_map(function ($model) {
+                try {
+                    $showResponse = $this->client->post('/api/show', [
+                        'json' => ['name' => $model['name']],
+                    ]);
+                    $showData = json_decode($showResponse->getBody()->getContents(), true);
+
+                    // Merge tag data (has size) with show data (has details)
+                    return AIModel::fromOllamaShowWithTag($showData, $model)->toArray();
+                } catch (GuzzleException $e) {
+                    // Fallback to basic info on error
+                    Log::warning("Failed to fetch details for model {$model['name']}: {$e->getMessage()}");
+
+                    return AIModel::fromOllamaTag($model)->toArray();
+                }
+            }, $models);
         } catch (GuzzleException $e) {
             throw new RuntimeException(
                 "Failed to list Ollama models: {$e->getMessage()}",

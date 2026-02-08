@@ -86,12 +86,16 @@ class ChatMessage
     }
 
     /**
-     * Create a ChatMessage from an array.
+     * Create a ChatMessage from an array or return existing ChatMessage.
      *
-     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>|self  $data
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array|self $data): self
     {
+        if ($data instanceof self) {
+            return $data;
+        }
+
         return new self(
             role: $data['role'],
             content: $data['content'] ?? '',

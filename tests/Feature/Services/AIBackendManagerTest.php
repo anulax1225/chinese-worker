@@ -73,7 +73,7 @@ describe('AIBackendManager', function () {
                 return [];
             }
 
-            public function listModels(): array
+            public function listModels(bool $detailed = false): array
             {
                 return [];
             }

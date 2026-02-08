@@ -40,7 +40,7 @@ class UpdateAgentRequest extends FormRequest
             'tool_ids' => ['nullable', 'array'],
             'tool_ids.*' => [
                 'integer',
-                Rule::exists('tools', 'id')->where('user_id', $this->user()->id),
+                Rule::exists('tools', 'id')->where('user_id', $this->user()?->id),
             ],
             'system_prompt_ids' => ['nullable', 'array'],
             'system_prompt_ids.*' => ['integer', 'exists:system_prompts,id'],

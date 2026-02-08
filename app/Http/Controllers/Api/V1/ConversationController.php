@@ -28,6 +28,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * @group Conversation Management
  *
  * APIs for managing AI agent conversations
+ *
+ * @authenticated
  */
 class ConversationController extends Controller
 {
@@ -45,18 +47,14 @@ class ConversationController extends Controller
      * @bodyParam title string Optional title for the conversation. Example: Debug authentication issue
      * @bodyParam metadata object Optional metadata. Example: {}
      *
-     * @response 201 {
-     *   "conversation": {
-     *     "id": 123,
-     *     "agent_id": 1,
-     *     "user_id": 1,
-     *     "status": "active",
-     *     "messages": [],
-     *     "turn_count": 0,
-     *     "total_tokens": 0,
-     *     "created_at": "2026-01-27T10:00:00.000000Z"
-     *   }
-     * }
+     * @apiResource App\Http\Resources\ConversationResource
+     *
+     * @apiResourceModel App\Models\Conversation with=agent
+     *
+     * @apiResourceAdditional status=201
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Agent Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
      */
     public function store(StoreConversationRequest $request, Agent $agent): JsonResponse
     {
@@ -88,11 +86,11 @@ class ConversationController extends Controller
      * @bodyParam images array Optional base64-encoded images for vision. Example: []
      * @bodyParam document_ids array Optional document IDs to attach. Example: [1, 2]
      *
-     * @response 202 {
-     *   "status": "processing",
-     *   "conversation_id": 123,
-     *   "check_url": "/api/v1/conversations/123/status"
-     * }
+     * @response 202 {"status": "processing", "conversation_id": 123, "check_url": "/api/v1/conversations/123/status"}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Conversation] 123"}
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"content": ["The content field is required."]}}
+     * @response 500 scenario="Processing Error" {"status": "failed", "conversation_id": 123, "error": "AI backend error"}
      */
     public function sendMessage(SendMessageRequest $request, Conversation $conversation): JsonResponse
     {
@@ -147,17 +145,11 @@ class ConversationController extends Controller
      *
      * @urlParam conversation integer required The conversation ID. Example: 123
      *
-     * @response 200 {
-     *   "status": "completed",
-     *   "conversation_id": 123,
-     *   "messages": [
-     *     {"role": "assistant", "content": "I found 2 files in /tmp..."}
-     *   ],
-     *   "stats": {
-     *     "turns": 5,
-     *     "tokens": 450
-     *   }
-     * }
+     * @response 200 {"status": "completed", "conversation_id": 123, "messages": [{"role": "assistant", "content": "I found 2 files in /tmp..."}], "stats": {"turns": 5, "tokens": 450}}
+     * @response 200 scenario="Processing" {"status": "processing", "conversation_id": 123, "stats": {"turns": 2, "tokens": 150}}
+     * @response 200 scenario="Waiting for Tool" {"status": "waiting_for_tool", "conversation_id": 123, "tool_request": {"name": "bash", "arguments": {"command": "ls /tmp"}}, "submit_url": "/api/v1/conversations/123/tool-results"}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Conversation] 123"}
      */
     public function status(Conversation $conversation): JsonResponse
     {
@@ -193,8 +185,8 @@ class ConversationController extends Controller
             $messages = $conversation->getMessages();
             $lastMessage = end($messages);
 
-            if ($lastMessage && $lastMessage['role'] === 'assistant') {
-                $response['messages'] = [$lastMessage];
+            if ($lastMessage && $lastMessage->role === 'assistant') {
+                $response['messages'] = [$lastMessage->toArray()];
             }
         }
 
@@ -208,10 +200,10 @@ class ConversationController extends Controller
      *
      * @urlParam conversation integer required The conversation ID. Example: 123
      *
-     * @response 200 {
-     *   "status": "cancelled",
-     *   "conversation_id": 123
-     * }
+     * @response 200 {"status": "cancelled", "conversation_id": 123}
+     * @response 200 scenario="Not Running" {"status": "completed", "message": "Conversation is not running"}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Conversation] 123"}
      */
     public function stop(Conversation $conversation): JsonResponse
     {
@@ -248,10 +240,12 @@ class ConversationController extends Controller
      * @bodyParam output string The tool output (if successful). Example: file1.txt\nfile2.txt
      * @bodyParam error string The error message (if failed). Example: File not found
      *
-     * @response 200 {
-     *   "status": "processing",
-     *   "conversation_id": 123
-     * }
+     * @response 200 {"status": "processing", "conversation_id": 123}
+     * @response 200 scenario="Waiting for Another Tool" {"status": "waiting_for_tool", "conversation_id": 123, "tool_request": {"name": "read", "arguments": {"file_path": "/tmp/file1.txt"}}}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Conversation] 123"}
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"call_id": ["The call_id field is required."]}}
+     * @response 500 scenario="Processing Error" {"status": "failed", "conversation_id": 123, "error": "AI backend error"}
      */
     public function submitToolResult(SubmitToolResultRequest $request, Conversation $conversation): JsonResponse
     {
@@ -292,13 +286,13 @@ class ConversationController extends Controller
      * Stream Conversation Events
      *
      * Open a Server-Sent Events stream for real-time conversation updates.
+     * Returns SSE events: `connected`, `tool_request`, `completed`, `failed`, `cancelled`.
      *
      * @urlParam conversation integer required The conversation ID. Example: 123
      *
-     * @response 200 {
-     *   "event": "tool_request",
-     *   "data": {"status": "waiting_for_tool", "tool_request": {...}}
-     * }
+     * @response 200 scenario="SSE Stream" {"event": "connected", "data": {"conversation_id": 123, "status": "connected"}}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Conversation] 123"}
      */
     public function stream(Conversation $conversation): StreamedResponse
     {
@@ -344,8 +338,8 @@ class ConversationController extends Controller
                             'tokens' => $conversation->total_tokens,
                         ],
                     ];
-                    if ($lastMessage && $lastMessage['role'] === 'assistant') {
-                        $data['messages'] = [$lastMessage];
+                    if ($lastMessage && $lastMessage->role === 'assistant') {
+                        $data['messages'] = [$lastMessage->toArray()];
                     }
                     $this->sendSSEEvent('completed', $data);
 
@@ -440,18 +434,12 @@ class ConversationController extends Controller
      *
      * @urlParam conversation integer required The conversation ID. Example: 123
      *
-     * @response 200 {
-     *   "conversation": {
-     *     "id": 123,
-     *     "agent": {"id": 1, "name": "Code Assistant"},
-     *     "status": "active",
-     *     "messages": [...],
-     *     "turn_count": 5,
-     *     "total_tokens": 1250,
-     *     "started_at": "2026-01-27T10:00:00.000000Z",
-     *     "last_activity_at": "2026-01-27T10:30:00.000000Z"
-     *   }
-     * }
+     * @apiResource App\Http\Resources\ConversationResource
+     *
+     * @apiResourceModel App\Models\Conversation with=agent
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Conversation] 123"}
      */
     public function show(Conversation $conversation): ConversationResource
     {
@@ -471,11 +459,9 @@ class ConversationController extends Controller
      * @queryParam status string Filter by status. Example: active
      * @queryParam per_page integer Items per page. Example: 15
      *
-     * @response 200 {
-     *   "data": [...],
-     *   "links": {...},
-     *   "meta": {...}
-     * }
+     * @apiResourceCollection App\Http\Resources\ConversationResource
+     *
+     * @apiResourceModel App\Models\Conversation with=agent paginate=15
      */
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -504,7 +490,9 @@ class ConversationController extends Controller
      *
      * @urlParam conversation integer required The conversation ID. Example: 123
      *
-     * @response 204
+     * @response 204 scenario="Success"
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Conversation] 123"}
      */
     public function destroy(Conversation $conversation): JsonResponse
     {

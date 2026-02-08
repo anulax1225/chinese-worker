@@ -14,7 +14,9 @@ use Illuminate\Http\Request;
 /**
  * @group Tool Management
  *
- * APIs for managing tools that agents can use
+ * APIs for managing tools that agents can use.
+ *
+ * @authenticated
  */
 class ToolController extends Controller
 {
@@ -33,7 +35,7 @@ class ToolController extends Controller
      * @queryParam include_builtin boolean Include builtin tools in the response. Default: true. Example: true
      * @queryParam type string Filter by tool type (api, function, command, builtin). Example: builtin
      *
-     * @response 200 {"data": [{"id": 1, "user_id": 1, "name": "API Tool", "type": "api", "config": {"url": "https://api.example.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}]}
+     * @response 200 {"data": [{"id": 1, "user_id": 1, "name": "API Tool", "type": "api", "config": {"url": "https://api.example.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}], "meta": {"current_page": 1, "per_page": 15, "total": 10, "last_page": 1}}
      */
     public function index(Request $request): JsonResponse
     {
@@ -104,7 +106,13 @@ class ToolController extends Controller
      * @bodyParam type string required The tool type. Must be one of: api, function, command. Example: api
      * @bodyParam config object required The tool's configuration. Example: {"url": "https://api.weather.com", "method": "GET"}
      *
-     * @response 201 {"id": 1, "user_id": 1, "name": "Weather API", "type": "api", "config": {"url": "https://api.weather.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}
+     * @apiResource App\Http\Resources\ToolResource
+     *
+     * @apiResourceModel App\Models\Tool
+     *
+     * @apiResourceAdditional status=201
+     *
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"name": ["The name field is required."]}}
      */
     public function store(StoreToolRequest $request): JsonResponse
     {
@@ -123,7 +131,12 @@ class ToolController extends Controller
      *
      * @urlParam tool integer required The tool ID. Example: 1
      *
-     * @response 200 {"id": 1, "user_id": 1, "name": "Weather API", "type": "api", "config": {"url": "https://api.weather.com"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T10:00:00.000000Z"}
+     * @apiResource App\Http\Resources\ToolResource
+     *
+     * @apiResourceModel App\Models\Tool
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Tool] 1"}
      */
     public function show(Tool $tool): JsonResponse
     {
@@ -143,7 +156,13 @@ class ToolController extends Controller
      * @bodyParam type string The tool type. Must be one of: api, function, command. Example: api
      * @bodyParam config object The tool's configuration. Example: {"url": "https://api.weather.com/v2"}
      *
-     * @response 200 {"id": 1, "user_id": 1, "name": "Updated Weather API", "type": "api", "config": {"url": "https://api.weather.com/v2"}, "created_at": "2026-01-26T10:00:00.000000Z", "updated_at": "2026-01-26T11:00:00.000000Z"}
+     * @apiResource App\Http\Resources\ToolResource
+     *
+     * @apiResourceModel App\Models\Tool
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Tool] 1"}
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"type": ["The selected type is invalid."]}}
      */
     public function update(UpdateToolRequest $request, Tool $tool): JsonResponse
     {
@@ -161,7 +180,9 @@ class ToolController extends Controller
      *
      * @urlParam tool integer required The tool ID. Example: 1
      *
-     * @response 204
+     * @response 204 scenario="Success"
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Tool] 1"}
      */
     public function destroy(Tool $tool): JsonResponse
     {

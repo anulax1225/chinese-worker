@@ -43,9 +43,10 @@ interface AIBackendInterface
     /**
      * List available models for this backend.
      *
+     * @param  bool  $detailed  If true, fetch detailed model information (slower)
      * @return array<int, array<string, mixed>>
      */
-    public function listModels(): array;
+    public function listModels(bool $detailed = false): array;
 
     /**
      * Disconnect and cleanup any open connections.

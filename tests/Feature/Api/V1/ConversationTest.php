@@ -2,6 +2,7 @@
 
 use App\Models\Agent;
 use App\Models\Conversation;
+use App\Models\Message;
 use App\Models\User;
 use Laravel\Sanctum\Sanctum;
 
@@ -337,8 +338,8 @@ describe('Conversation Management', function () {
             $conversation->addMessage($message);
 
             $conversation->refresh();
-            expect($conversation->messages)->toHaveCount(1);
-            expect($conversation->messages[0]['content'])->toBe('Hello');
+            expect($conversation->conversationMessages)->toHaveCount(1);
+            expect($conversation->conversationMessages->first()->content)->toBe('Hello');
         });
 
         test('can check if waiting for tool', function () {
@@ -488,12 +489,30 @@ describe('Conversation Management', function () {
             $conversation = Conversation::factory()->create([
                 'user_id' => $this->user->id,
                 'agent_id' => $this->agent->id,
-                'messages' => [
-                    ['role' => 'user', 'content' => 'Hello', 'token_count' => 10],
-                    ['role' => 'assistant', 'content' => 'Hi there!', 'token_count' => 15],
-                    ['role' => 'user', 'content' => 'How are you?', 'token_count' => 12],
-                ],
                 'estimated_context_usage' => 0,
+            ]);
+
+            // Create messages using the relational table
+            Message::factory()->create([
+                'conversation_id' => $conversation->id,
+                'position' => 0,
+                'role' => 'user',
+                'content' => 'Hello',
+                'token_count' => 10,
+            ]);
+            Message::factory()->create([
+                'conversation_id' => $conversation->id,
+                'position' => 1,
+                'role' => 'assistant',
+                'content' => 'Hi there!',
+                'token_count' => 15,
+            ]);
+            Message::factory()->create([
+                'conversation_id' => $conversation->id,
+                'position' => 2,
+                'role' => 'user',
+                'content' => 'How are you?',
+                'token_count' => 12,
             ]);
 
             $conversation->recalculateContextUsage();

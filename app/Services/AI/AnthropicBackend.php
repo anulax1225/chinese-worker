@@ -711,19 +711,77 @@ class AnthropicBackend implements AIBackendInterface
         return false;
     }
 
-    public function listModels(): array
+    public function listModels(bool $detailed = false): array
     {
-        // Anthropic doesn't have a models endpoint - return known models
-        return [
-            ['name' => 'claude-opus-4-6', 'description' => 'Most intelligent, latest Opus'],
-            ['name' => 'claude-sonnet-4-5-20250929', 'description' => 'Best balance of intelligence and speed'],
-            ['name' => 'claude-haiku-4-5', 'description' => 'Fastest and most compact'],
-            ['name' => 'claude-sonnet-4-20250514', 'description' => 'Claude 4 Sonnet'],
-            ['name' => 'claude-3-7-sonnet-latest', 'description' => 'Claude 3.7 Sonnet latest'],
-            ['name' => 'claude-3-5-haiku-latest', 'description' => 'Claude 3.5 Haiku latest'],
-            ['name' => 'claude-3-opus-20240229', 'description' => 'Claude 3 Opus'],
-            ['name' => 'claude-3-haiku-20240307', 'description' => 'Claude 3 Haiku'],
+        // Anthropic doesn't have a models endpoint - return known models with mock data
+        $models = [
+            [
+                'name' => 'claude-opus-4-6',
+                'description' => 'Most intelligent, latest Opus',
+                'family' => 'claude-4',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
+            [
+                'name' => 'claude-sonnet-4-5-20250929',
+                'description' => 'Best balance of intelligence and speed',
+                'family' => 'claude-4',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
+            [
+                'name' => 'claude-haiku-4-5',
+                'description' => 'Fastest and most compact',
+                'family' => 'claude-4',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
+            [
+                'name' => 'claude-sonnet-4-20250514',
+                'description' => 'Claude 4 Sonnet',
+                'family' => 'claude-4',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
+            [
+                'name' => 'claude-3-7-sonnet-latest',
+                'description' => 'Claude 3.7 Sonnet latest',
+                'family' => 'claude-3.7',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
+            [
+                'name' => 'claude-3-5-haiku-latest',
+                'description' => 'Claude 3.5 Haiku latest',
+                'family' => 'claude-3.5',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
+            [
+                'name' => 'claude-3-opus-20240229',
+                'description' => 'Claude 3 Opus',
+                'family' => 'claude-3',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
+            [
+                'name' => 'claude-3-haiku-20240307',
+                'description' => 'Claude 3 Haiku',
+                'family' => 'claude-3',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 200000,
+            ],
         ];
+
+        if (! $detailed) {
+            // Return minimal info for backward compatibility
+            return array_map(fn ($m) => [
+                'name' => $m['name'],
+                'description' => $m['description'],
+            ], $models);
+        }
+
+        return $models;
     }
 
     public function pullModel(string $modelName, callable $onProgress): void

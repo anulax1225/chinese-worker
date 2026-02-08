@@ -684,27 +684,107 @@ class OpenAIBackend implements AIBackendInterface
         return false;
     }
 
-    public function listModels(): array
+    public function listModels(bool $detailed = false): array
     {
+        // Known model metadata for enrichment
+        $knownModels = [
+            'gpt-4o' => [
+                'description' => 'Latest multimodal model',
+                'family' => 'gpt-4o',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 128000,
+            ],
+            'gpt-4o-mini' => [
+                'description' => 'Smaller, faster GPT-4o variant',
+                'family' => 'gpt-4o',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 128000,
+            ],
+            'gpt-4-turbo' => [
+                'description' => 'Faster GPT-4 variant',
+                'family' => 'gpt-4',
+                'capabilities' => ['completion', 'vision', 'tool_use'],
+                'context_length' => 128000,
+            ],
+            'gpt-4' => [
+                'description' => 'Standard GPT-4',
+                'family' => 'gpt-4',
+                'capabilities' => ['completion', 'tool_use'],
+                'context_length' => 8192,
+            ],
+            'gpt-3.5-turbo' => [
+                'description' => 'Fast, economical',
+                'family' => 'gpt-3.5',
+                'capabilities' => ['completion', 'tool_use'],
+                'context_length' => 16385,
+            ],
+            'o1' => [
+                'description' => 'Advanced reasoning model',
+                'family' => 'o1',
+                'capabilities' => ['completion'],
+                'context_length' => 200000,
+            ],
+            'o1-mini' => [
+                'description' => 'Smaller reasoning model',
+                'family' => 'o1',
+                'capabilities' => ['completion'],
+                'context_length' => 128000,
+            ],
+        ];
+
         try {
             $response = $this->client->get('models');
             $data = json_decode($response->getBody()->getContents(), true);
+            $apiModels = $data['data'] ?? [];
 
-            return array_map(function ($model) {
-                return [
-                    'name' => $model['id'],
+            return array_map(function ($model) use ($detailed, $knownModels) {
+                $name = $model['id'];
+                $known = $knownModels[$name] ?? null;
+
+                $result = [
+                    'name' => $name,
                     'owned_by' => $model['owned_by'] ?? null,
                     'created' => $model['created'] ?? null,
                 ];
-            }, $data['data'] ?? []);
+
+                if ($detailed && $known) {
+                    $result = array_merge($result, [
+                        'description' => $known['description'],
+                        'family' => $known['family'],
+                        'capabilities' => $known['capabilities'],
+                        'context_length' => $known['context_length'],
+                    ]);
+                } elseif ($detailed) {
+                    // Unknown model, provide minimal detailed info
+                    $result['capabilities'] = ['completion'];
+                    $result['context_length'] = null;
+                }
+
+                return $result;
+            }, $apiModels);
         } catch (GuzzleException $e) {
             // Return known models as fallback
-            return [
-                ['name' => 'gpt-4o', 'description' => 'Latest multimodal, 128K context'],
-                ['name' => 'gpt-4-turbo', 'description' => 'Faster GPT-4'],
-                ['name' => 'gpt-4', 'description' => 'Standard GPT-4'],
-                ['name' => 'gpt-3.5-turbo', 'description' => 'Fast, economical'],
-            ];
+            if (! $detailed) {
+                return [
+                    ['name' => 'gpt-4o', 'description' => 'Latest multimodal, 128K context'],
+                    ['name' => 'gpt-4-turbo', 'description' => 'Faster GPT-4'],
+                    ['name' => 'gpt-4', 'description' => 'Standard GPT-4'],
+                    ['name' => 'gpt-3.5-turbo', 'description' => 'Fast, economical'],
+                ];
+            }
+
+            // Return detailed fallback
+            return array_map(function ($name) use ($knownModels) {
+                $known = $knownModels[$name];
+
+                return [
+                    'name' => $name,
+                    'description' => $known['description'],
+                    'family' => $known['family'],
+                    'capabilities' => $known['capabilities'],
+                    'context_length' => $known['context_length'],
+                ];
+            }, ['gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo']);
         }
     }
 

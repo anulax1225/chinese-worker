@@ -19,7 +19,9 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 /**
  * @group Document Management
  *
- * APIs for managing documents in the ingestion pipeline
+ * APIs for managing documents in the ingestion pipeline.
+ *
+ * @authenticated
  */
 class DocumentController extends Controller
 {
@@ -34,6 +36,10 @@ class DocumentController extends Controller
      * @queryParam per_page integer Number of items per page. Example: 15
      * @queryParam status string Filter by document status. Example: ready
      * @queryParam search string Search documents by title. Example: report
+     *
+     * @apiResourceCollection App\Http\Resources\DocumentResource
+     *
+     * @apiResourceModel App\Models\Document paginate=15
      */
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -62,6 +68,14 @@ class DocumentController extends Controller
      * @bodyParam file file required_if:source_type=upload The file to upload.
      * @bodyParam url string required_if:source_type=url The URL to fetch. Example: https://example.com/doc.pdf
      * @bodyParam text string required_if:source_type=paste The text content.
+     *
+     * @apiResource App\Http\Resources\DocumentResource
+     *
+     * @apiResourceModel App\Models\Document
+     *
+     * @apiResourceAdditional status=201
+     *
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"source_type": ["The source type field is required."]}}
      */
     public function store(StoreDocumentRequest $request): JsonResponse
     {
@@ -92,6 +106,13 @@ class DocumentController extends Controller
      * Get details of a specific document.
      *
      * @urlParam document integer required The document ID. Example: 1
+     *
+     * @apiResource App\Http\Resources\DocumentResource
+     *
+     * @apiResourceModel App\Models\Document with=file
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Document] 1"}
      */
     public function show(Document $document): JsonResponse
     {
@@ -108,6 +129,13 @@ class DocumentController extends Controller
      * @urlParam document integer required The document ID. Example: 1
      *
      * @queryParam full_content boolean Return full content instead of preview. Example: false
+     *
+     * @apiResourceCollection App\Http\Resources\DocumentStageResource
+     *
+     * @apiResourceModel App\Models\DocumentStage
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Document] 1"}
      */
     public function stages(Request $request, Document $document): AnonymousResourceCollection
     {
@@ -127,6 +155,13 @@ class DocumentController extends Controller
      *
      * @queryParam page integer Page number for pagination. Example: 1
      * @queryParam per_page integer Number of items per page. Example: 50
+     *
+     * @apiResourceCollection App\Http\Resources\DocumentChunkResource
+     *
+     * @apiResourceModel App\Models\DocumentChunk paginate=50
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Document] 1"}
      */
     public function chunks(Request $request, Document $document): AnonymousResourceCollection
     {
@@ -145,6 +180,10 @@ class DocumentController extends Controller
      * Get a preview comparison of document processing stages.
      *
      * @urlParam document integer required The document ID. Example: 1
+     *
+     * @response 200 {"document": {}, "original_preview": "...", "cleaned_preview": "...", "sample_chunks": [], "total_chunks": 10, "total_tokens": 1500}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Document] 1"}
      */
     public function preview(Document $document): JsonResponse
     {
@@ -170,6 +209,13 @@ class DocumentController extends Controller
      * Re-run the processing pipeline on an existing document.
      *
      * @urlParam document integer required The document ID. Example: 1
+     *
+     * @apiResource App\Http\Resources\DocumentResource
+     *
+     * @apiResourceModel App\Models\Document
+     *
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Document] 1"}
      */
     public function reprocess(Document $document): JsonResponse
     {
@@ -186,6 +232,10 @@ class DocumentController extends Controller
      * Delete a document and all its associated data.
      *
      * @urlParam document integer required The document ID. Example: 1
+     *
+     * @response 204 scenario="Success"
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Document] 1"}
      */
     public function destroy(Document $document): JsonResponse
     {
@@ -200,6 +250,8 @@ class DocumentController extends Controller
      * Get Supported MIME Types
      *
      * Get a list of MIME types supported for document ingestion.
+     *
+     * @response 200 {"supported_types": ["application/pdf", "text/plain", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]}
      */
     public function supportedTypes(): JsonResponse
     {
