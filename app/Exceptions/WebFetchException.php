@@ -101,4 +101,20 @@ class WebFetchException extends RuntimeException
     {
         return new self('Server returned an empty response');
     }
+
+    /**
+     * Create exception for blocked host.
+     */
+    public static function blockedHost(string $host): self
+    {
+        return new self("Blocked host: {$host}");
+    }
+
+    /**
+     * Create exception for blocked private IP (SSRF protection).
+     */
+    public static function blockedPrivateIp(string $host, string $ip): self
+    {
+        return new self("SSRF protection: {$host} resolves to private IP {$ip}");
+    }
 }

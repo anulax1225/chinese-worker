@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useForm, router, usePage } from '@inertiajs/vue3';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
+import DOMPurify from 'dompurify';
 import { AppLayout } from '@/layouts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -143,6 +144,16 @@ const confirming = ref(false);
 const qrCode = ref<string | null>(null);
 const setupKey = ref<string | null>(null);
 const recoveryCodes = ref<string[] | null>(null);
+
+// Sanitize QR code SVG to prevent XSS attacks
+const sanitizedQrCode = computed(() => {
+    if (!qrCode.value) return null;
+    return DOMPurify.sanitize(qrCode.value, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ['svg', 'path', 'rect', 'g'],
+        ADD_ATTR: ['viewBox', 'd', 'fill', 'xmlns'],
+    });
+});
 
 const confirmForm = useForm({
     code: '',
@@ -536,7 +547,7 @@ const formatDate = (date: string | null) => {
                                         Scan the QR code below with your authenticator app, then enter the code to confirm.
                                     </p>
 
-                                    <div v-if="qrCode" class="inline-block bg-white p-4 rounded-lg" v-html="qrCode" />
+                                    <div v-if="sanitizedQrCode" class="inline-block bg-white p-4 rounded-lg" v-html="sanitizedQrCode" />
 
                                     <div v-if="setupKey" class="space-y-2">
                                         <p class="font-medium text-sm">Or enter this key manually:</p>

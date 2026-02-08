@@ -5,20 +5,27 @@ namespace App\Services\WebFetch;
 use App\Contracts\WebFetchClientInterface;
 use App\DTOs\WebFetch\FetchRequest;
 use App\Exceptions\WebFetchException;
+use App\Services\Security\UrlSecurityValidator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use InvalidArgumentException;
 
 class HttpFetchClient implements WebFetchClientInterface
 {
+    protected ?UrlSecurityValidator $urlValidator = null;
+
     /**
      * @param  array<string>  $allowedContentTypes
+     * @param  array<string>  $blockedHosts
      */
     public function __construct(
         protected int $timeout = 15,
         protected int $maxSize = 5242880,
         protected string $userAgent = 'ChineseWorker/1.0',
         protected array $allowedContentTypes = [],
+        protected bool $blockPrivateIps = false,
+        protected array $blockedHosts = [],
     ) {
         if (empty($this->allowedContentTypes)) {
             $this->allowedContentTypes = [
@@ -30,6 +37,11 @@ class HttpFetchClient implements WebFetchClientInterface
                 'application/xhtml+xml',
             ];
         }
+
+        $this->urlValidator = new UrlSecurityValidator(
+            blockPrivateIps: $this->blockPrivateIps,
+            blockedHosts: $this->blockedHosts,
+        );
     }
 
     /**
@@ -40,6 +52,9 @@ class HttpFetchClient implements WebFetchClientInterface
         if (! $request->isValid()) {
             throw WebFetchException::invalidUrl($request->url);
         }
+
+        // Check SSRF protection (blocked hosts are always checked, private IPs only when enabled)
+        $this->validateUrlSecurity($request->url);
 
         $timeout = $request->timeout ?? $this->timeout;
         $maxSize = $request->maxSize ?? $this->maxSize;
@@ -143,6 +158,35 @@ class HttpFetchClient implements WebFetchClientInterface
     }
 
     /**
+     * Validate URL security (SSRF protection).
+     *
+     * @throws WebFetchException When URL resolves to a blocked IP or host
+     */
+    protected function validateUrlSecurity(string $url): void
+    {
+        try {
+            $this->urlValidator->validate($url);
+        } catch (InvalidArgumentException $e) {
+            $message = $e->getMessage();
+
+            if (str_contains($message, 'Blocked host')) {
+                $host = parse_url($url, PHP_URL_HOST) ?? '';
+                throw WebFetchException::blockedHost($host);
+            }
+
+            if (str_contains($message, 'SSRF protection')) {
+                $host = parse_url($url, PHP_URL_HOST) ?? '';
+                // Extract IP from message like "SSRF protection: host resolves to private IP x.x.x.x"
+                preg_match('/private IP ([0-9.]+)/', $message, $matches);
+                $ip = $matches[1] ?? 'unknown';
+                throw WebFetchException::blockedPrivateIp($host, $ip);
+            }
+
+            throw WebFetchException::invalidUrl($url);
+        }
+    }
+
+    /**
      * Create instance from config.
      */
     public static function fromConfig(): self
@@ -152,6 +196,8 @@ class HttpFetchClient implements WebFetchClientInterface
             maxSize: config('webfetch.max_size', 5242880),
             userAgent: config('webfetch.user_agent', 'ChineseWorker/1.0'),
             allowedContentTypes: config('webfetch.allowed_content_types', []),
+            blockPrivateIps: config('webfetch.security.block_private_ips', false),
+            blockedHosts: config('webfetch.security.blocked_hosts', []),
         );
     }
 }

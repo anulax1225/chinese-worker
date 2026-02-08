@@ -3,22 +3,18 @@
 namespace App\Jobs;
 
 use App\DTOs\ChatMessage;
-use App\DTOs\Search\SearchQuery;
 use App\DTOs\ToolCall;
 use App\DTOs\ToolResult;
-use App\DTOs\WebFetch\FetchRequest;
-use App\Exceptions\SearchException;
-use App\Exceptions\WebFetchException;
 use App\Models\Conversation;
-use App\Models\Todo;
 use App\Services\AIBackendManager;
 use App\Services\ClientToolRegistry;
 use App\Services\ConversationEventBroadcaster;
 use App\Services\Prompts\PromptAssembler;
-use App\Services\Search\SearchService;
+use App\Services\Tools\TodoToolHandler;
+use App\Services\Tools\ToolArgumentValidator;
+use App\Services\Tools\WebToolHandler;
 use App\Services\ToolSchemaRegistry;
 use App\Services\ToolService;
-use App\Services\WebFetch\WebFetchService;
 use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -237,6 +233,17 @@ class ProcessConversationTurn implements ShouldQueue
         $broadcaster = app(ConversationEventBroadcaster::class);
 
         foreach ($toolCalls as $toolCall) {
+            // Check for cancellation before each tool execution
+            $this->conversation->refresh();
+            if ($this->conversation->isCancelled()) {
+                Log::info('Tool processing cancelled', [
+                    'conversation_id' => $this->conversation->id,
+                    'pending_tool' => $toolCall->name,
+                ]);
+
+                return;
+            }
+
             if ($this->isBuiltinTool($toolCall->name)) {
                 // Pause conversation and request tool execution from CLI
                 $toolArray = $toolCall->toArray();
@@ -279,6 +286,16 @@ class ProcessConversationTurn implements ShouldQueue
             }
         }
 
+        // Check for cancellation before dispatching next turn
+        $this->conversation->refresh();
+        if ($this->conversation->isCancelled()) {
+            Log::info('Next turn dispatch cancelled', [
+                'conversation_id' => $this->conversation->id,
+            ]);
+
+            return;
+        }
+
         // All tools executed (system/user), dispatch next turn
         self::dispatch($this->conversation);
     }
@@ -295,12 +312,11 @@ class ProcessConversationTurn implements ShouldQueue
 
     /**
      * Check if a tool name is a known user tool for this agent.
+     * Uses the eager-loaded tools collection to avoid N+1 queries.
      */
     protected function isUserTool(string $toolName): bool
     {
-        return $this->conversation->agent->tools()
-            ->where('name', $toolName)
-            ->exists();
+        return $this->conversation->agent->tools->contains('name', $toolName);
     }
 
     /**
@@ -318,7 +334,7 @@ class ProcessConversationTurn implements ShouldQueue
     }
 
     /**
-     * Filter tool calls to only include valid, known tools.
+     * Filter tool calls to only include valid, known tools with valid arguments.
      *
      * @param  array<ToolCall>  $toolCalls
      * @return array<ToolCall>
@@ -326,17 +342,37 @@ class ProcessConversationTurn implements ShouldQueue
     protected function filterValidToolCalls(array $toolCalls): array
     {
         $validCalls = [];
+        $validator = app(ToolArgumentValidator::class);
+        $schemas = $this->getAllToolSchemas();
 
         foreach ($toolCalls as $toolCall) {
-            if ($this->isKnownTool($toolCall->name)) {
-                $validCalls[] = $toolCall;
-            } else {
-                Log::warning('Filtered out invalid/unknown tool call', [
+            if (! $this->isKnownTool($toolCall->name)) {
+                Log::warning('Filtered out unknown tool call', [
                     'conversation_id' => $this->conversation->id,
                     'tool_name' => $toolCall->name,
                     'tool_id' => $toolCall->id,
                 ]);
+
+                continue;
             }
+
+            // Validate arguments against schema
+            $schema = $validator->findSchema($toolCall->name, $schemas);
+            if ($schema) {
+                $validation = $validator->validate($toolCall, $schema);
+                if (! $validation['valid']) {
+                    Log::warning('Filtered out tool call with invalid arguments', [
+                        'conversation_id' => $this->conversation->id,
+                        'tool_name' => $toolCall->name,
+                        'tool_id' => $toolCall->id,
+                        'errors' => $validation['errors'],
+                    ]);
+
+                    continue;
+                }
+            }
+
+            $validCalls[] = $toolCall;
         }
 
         return $validCalls;
@@ -345,21 +381,24 @@ class ProcessConversationTurn implements ShouldQueue
     protected function executeSystemTool(ToolCall $toolCall): ToolResult
     {
         try {
-            return match ($toolCall->name) {
-                'todo_add' => $this->todoAdd($toolCall->arguments),
-                'todo_list' => $this->todoList(),
-                'todo_complete' => $this->todoComplete($toolCall->arguments),
-                'todo_update' => $this->todoUpdate($toolCall->arguments),
-                'todo_delete' => $this->todoDelete($toolCall->arguments),
-                'todo_clear' => $this->todoClear(),
-                'web_search' => $this->webSearch($toolCall->arguments),
-                'web_fetch' => $this->webFetch($toolCall->arguments),
-                default => new ToolResult(
-                    success: false,
-                    output: '',
-                    error: "Unknown system tool: {$toolCall->name}"
-                ),
-            };
+            // Route to appropriate handler based on tool prefix
+            if (str_starts_with($toolCall->name, 'todo_')) {
+                $handler = new TodoToolHandler($this->conversation);
+
+                return $handler->execute($toolCall->name, $toolCall->arguments);
+            }
+
+            if (str_starts_with($toolCall->name, 'web_')) {
+                $handler = app(WebToolHandler::class);
+
+                return $handler->execute($toolCall->name, $toolCall->arguments);
+            }
+
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: "Unknown system tool: {$toolCall->name}"
+            );
         } catch (Exception $e) {
             return new ToolResult(
                 success: false,
@@ -372,9 +411,8 @@ class ProcessConversationTurn implements ShouldQueue
     protected function executeUserTool(ToolCall $toolCall, ToolService $toolService): ToolResult
     {
         try {
-            $tool = $this->conversation->agent->tools()
-                ->where('name', $toolCall->name)
-                ->first();
+            // Use eager-loaded collection to avoid N+1 query
+            $tool = $this->conversation->agent->tools->firstWhere('name', $toolCall->name);
 
             if (! $tool) {
                 return new ToolResult(
@@ -402,216 +440,5 @@ class ProcessConversationTurn implements ShouldQueue
     protected function getAllToolSchemas(): array
     {
         return app(ToolSchemaRegistry::class)->getToolsForConversation($this->conversation);
-    }
-
-    // Todo system tool implementations
-
-    protected function todoAdd(array $args): ToolResult
-    {
-        $todo = Todo::create([
-            'agent_id' => $this->conversation->agent_id,
-            'conversation_id' => $this->conversation->id,
-            'content' => $args['item'],
-            'priority' => $args['priority'] ?? 'medium',
-        ]);
-
-        return new ToolResult(
-            success: true,
-            output: "Added todo #{$todo->id}: {$args['item']} (priority: {$todo->priority})",
-            error: null
-        );
-    }
-
-    protected function todoList(): ToolResult
-    {
-        $todos = Todo::where('agent_id', $this->conversation->agent_id)
-            ->orderByRaw("FIELD(priority, 'high', 'medium', 'low')")
-            ->orderBy('created_at')
-            ->get();
-
-        if ($todos->isEmpty()) {
-            return new ToolResult(
-                success: true,
-                output: 'No todos found.',
-                error: null
-            );
-        }
-
-        $output = "Todos:\n";
-        foreach ($todos as $todo) {
-            $status = match ($todo->status) {
-                'completed' => '[✓]',
-                'in_progress' => '[~]',
-                default => '[ ]',
-            };
-            $output .= "{$status} #{$todo->id}: {$todo->content} ({$todo->priority})\n";
-        }
-
-        return new ToolResult(
-            success: true,
-            output: trim($output),
-            error: null
-        );
-    }
-
-    protected function todoComplete(array $args): ToolResult
-    {
-        $id = is_numeric($args['id']) ? (int) $args['id'] : $args['id'];
-
-        $todo = Todo::where('agent_id', $this->conversation->agent_id)
-            ->where('id', $id)
-            ->first();
-
-        if (! $todo) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: "Todo not found: {$args['id']}"
-            );
-        }
-
-        $todo->markAsCompleted();
-
-        return new ToolResult(
-            success: true,
-            output: "Marked todo #{$todo->id} as complete",
-            error: null
-        );
-    }
-
-    protected function todoUpdate(array $args): ToolResult
-    {
-        $id = is_numeric($args['id']) ? (int) $args['id'] : $args['id'];
-
-        $todo = Todo::where('agent_id', $this->conversation->agent_id)
-            ->where('id', $id)
-            ->first();
-
-        if (! $todo) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: "Todo not found: {$args['id']}"
-            );
-        }
-
-        $todo->update(['content' => $args['item']]);
-
-        return new ToolResult(
-            success: true,
-            output: "Updated todo #{$todo->id}",
-            error: null
-        );
-    }
-
-    protected function todoDelete(array $args): ToolResult
-    {
-        $id = is_numeric($args['id']) ? (int) $args['id'] : $args['id'];
-
-        $todo = Todo::where('agent_id', $this->conversation->agent_id)
-            ->where('id', $id)
-            ->first();
-
-        if (! $todo) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: "Todo not found: {$args['id']}"
-            );
-        }
-
-        $todo->delete();
-
-        return new ToolResult(
-            success: true,
-            output: "Deleted todo #{$args['id']}",
-            error: null
-        );
-    }
-
-    protected function todoClear(): ToolResult
-    {
-        $count = Todo::where('agent_id', $this->conversation->agent_id)->count();
-
-        Todo::where('agent_id', $this->conversation->agent_id)->delete();
-
-        return new ToolResult(
-            success: true,
-            output: "Cleared {$count} todos",
-            error: null
-        );
-    }
-
-    // Web search system tool
-
-    protected function webSearch(array $args): ToolResult
-    {
-        $query = new SearchQuery(
-            query: $args['query'] ?? '',
-            maxResults: $args['max_results'] ?? 5,
-        );
-
-        if (! $query->isValid()) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: 'Search query cannot be empty'
-            );
-        }
-
-        try {
-            $results = app(SearchService::class)->search($query);
-
-            if ($results->isEmpty()) {
-                return new ToolResult(
-                    success: true,
-                    output: 'No results found for: '.$query->query,
-                    error: null
-                );
-            }
-
-            return new ToolResult(
-                success: true,
-                output: $results->toJson(),
-                error: null
-            );
-        } catch (SearchException $e) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: 'Web search failed: '.$e->getMessage()
-            );
-        }
-    }
-
-    // Web fetch system tool
-
-    protected function webFetch(array $args): ToolResult
-    {
-        $request = new FetchRequest(url: $args['url'] ?? '');
-
-        if (! $request->isValid()) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: 'Invalid or missing URL'
-            );
-        }
-
-        try {
-            $document = app(WebFetchService::class)->fetch($request);
-
-            return new ToolResult(
-                success: true,
-                output: $document->toJson(),
-                error: null
-            );
-        } catch (WebFetchException $e) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: 'Web fetch failed: '.$e->getMessage()
-            );
-        }
     }
 }

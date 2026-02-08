@@ -1,4 +1,4 @@
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, onScopeDispose } from 'vue';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -34,6 +34,9 @@ export function useTheme() {
         applyTheme(newTheme);
     };
 
+    // Store cleanup function for event listener
+    let cleanup: (() => void) | null = null;
+
     onMounted(() => {
         // Load saved theme from localStorage
         const saved = localStorage.getItem('theme') as Theme | null;
@@ -50,6 +53,14 @@ export function useTheme() {
             }
         };
         mediaQuery.addEventListener('change', handleChange);
+
+        // Store cleanup function
+        cleanup = () => mediaQuery.removeEventListener('change', handleChange);
+    });
+
+    // Clean up event listener when composable scope is disposed
+    onScopeDispose(() => {
+        cleanup?.();
     });
 
     return {

@@ -68,3 +68,127 @@ test('renders empty string for empty template', function () {
 
     expect($result)->toBe('');
 });
+
+describe('template sanitization', function () {
+    test('strips @php directive blocks', function () {
+        $template = 'Hello @php echo "dangerous"; @endphp World';
+
+        $result = $this->renderer->render($template);
+
+        expect($result)->toBe('Hello  World');
+        expect($result)->not->toContain('dangerous');
+    });
+
+    test('strips @include directive', function () {
+        $template = 'Hello @include("some.view") World';
+
+        $result = $this->renderer->render($template);
+
+        expect($result)->toBe('Hello  World');
+    });
+
+    test('strips @inject directive', function () {
+        $template = 'Hello @inject("service", "App\\Service") World';
+
+        $result = $this->renderer->render($template);
+
+        expect($result)->toBe('Hello  World');
+    });
+
+    test('strips unescaped output syntax', function () {
+        $template = 'Hello {!! $dangerous !!} World';
+
+        $result = $this->renderer->render($template, ['dangerous' => '<script>alert("xss")</script>']);
+
+        expect($result)->toBe('Hello  World');
+        expect($result)->not->toContain('script');
+    });
+
+    test('strips raw PHP tags', function () {
+        $template = 'Hello <?php echo "bad"; ?> World';
+
+        $result = $this->renderer->render($template);
+
+        expect($result)->toBe('Hello  World');
+    });
+
+    test('strips short PHP tags', function () {
+        $template = 'Hello <?= "bad" ?> World';
+
+        $result = $this->renderer->render($template);
+
+        expect($result)->toBe('Hello  World');
+    });
+
+    test('allows safe directives like @if and @foreach', function () {
+        $template = '@if($show)Visible @endif';
+
+        $result = $this->renderer->render($template, [
+            'show' => true,
+        ]);
+
+        expect($result)->toContain('Visible');
+    });
+
+    test('allows foreach directive', function () {
+        $template = '@foreach($items as $item){{ $item }} @endforeach';
+
+        $result = $this->renderer->render($template, [
+            'items' => ['a', 'b'],
+        ]);
+
+        expect($result)->toContain('a');
+        expect($result)->toContain('b');
+    });
+
+    test('preserves escaped output syntax', function () {
+        $template = 'Hello {{ $name }} World';
+
+        $result = $this->renderer->render($template, ['name' => 'Claude']);
+
+        expect($result)->toBe('Hello Claude World');
+    });
+});
+
+describe('detectDangerousDirectives', function () {
+    test('detects @php directive', function () {
+        $template = 'Hello @php echo "test"; @endphp';
+
+        $dangerous = $this->renderer->detectDangerousDirectives($template);
+
+        expect($dangerous)->toContain('@php');
+        expect($dangerous)->toContain('@endphp');
+    });
+
+    test('detects @include directive', function () {
+        $template = '@include("view.name")';
+
+        $dangerous = $this->renderer->detectDangerousDirectives($template);
+
+        expect($dangerous)->toContain('@include');
+    });
+
+    test('detects unescaped output', function () {
+        $template = 'Hello {!! $var !!}';
+
+        $dangerous = $this->renderer->detectDangerousDirectives($template);
+
+        expect($dangerous)->toContain('{!! !!}');
+    });
+
+    test('detects raw PHP tags', function () {
+        $template = '<?php echo "test"; ?>';
+
+        $dangerous = $this->renderer->detectDangerousDirectives($template);
+
+        expect($dangerous)->toContain('<?php');
+    });
+
+    test('returns empty array for safe template', function () {
+        $template = 'Hello {{ $name }} @if($show)Visible@endif';
+
+        $dangerous = $this->renderer->detectDangerousDirectives($template);
+
+        expect($dangerous)->toBeEmpty();
+    });
+});

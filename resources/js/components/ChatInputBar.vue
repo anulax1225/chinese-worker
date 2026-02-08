@@ -162,7 +162,7 @@ const sendMessage = () => {
                         v-model="newMessage"
                         placeholder="Type a message..."
                         class="flex-1 bg-transparent shadow-none border-0 focus-visible:ring-0 min-h-11 max-h-40 resize-none"
-                        :disabled="isSubmitting || !canSendMessages"
+                        :disabled="isSubmitting"
                         @keydown="handleKeydown"
                         rows="1"
                     />

@@ -81,4 +81,24 @@ return [
         'remove_styles' => true,
         'remove_navigation' => true,
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Security Settings
+    |--------------------------------------------------------------------------
+    |
+    | Configure security restrictions for URL fetching.
+    |
+    */
+
+    'security' => [
+        // Block requests to private/internal IP addresses (SSRF protection)
+        // Disabled by default for local development, enable in production
+        'block_private_ips' => env('WEBFETCH_BLOCK_PRIVATE_IPS', false),
+
+        // Additional blocked hosts (domains or IPs)
+        'blocked_hosts' => [
+            // 'internal.example.com',
+        ],
+    ],
 ];

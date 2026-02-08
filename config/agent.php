@@ -103,4 +103,24 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Tool Security
+    |--------------------------------------------------------------------------
+    |
+    | Security settings for API-type tools that make HTTP requests.
+    |
+    */
+
+    'api_tools' => [
+        // Block requests to private/internal IP addresses (SSRF protection)
+        // Disabled by default for local development, enable in production
+        'block_private_ips' => env('TOOLS_BLOCK_PRIVATE_IPS', false),
+
+        // Additional blocked hosts (domains or IPs)
+        'blocked_hosts' => [
+            // 'internal.example.com',
+        ],
+    ],
+
 ];
