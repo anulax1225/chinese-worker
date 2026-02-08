@@ -418,33 +418,6 @@ describe('OllamaBackend', function () {
             ->and($lastMessage->images)->toBe(['base64_encoded_image_data']);
     });
 
-    test('can count tokens using tokenize API', function () {
-        $mockResponse = json_encode([
-            'tokens' => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-        ]);
-
-        $mock = new MockHandler([
-            new Response(200, ['Content-Type' => 'application/json'], $mockResponse),
-        ]);
-
-        $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
-
-        $config = config('ai.backends.ollama');
-        $backend = new OllamaBackend($config);
-
-        $reflection = new ReflectionClass($backend);
-        $property = $reflection->getProperty('client');
-        $property->setAccessible(true);
-        $property->setValue($backend, $client);
-
-        // Use unique text to avoid cache
-        $text = 'Hello, how are you today?'.uniqid();
-        $tokenCount = $backend->countTokens($text);
-
-        expect($tokenCount)->toBe(10);
-    });
-
     test('returns zero tokens for empty text', function () {
         $config = config('ai.backends.ollama');
         $backend = new OllamaBackend($config);
@@ -452,27 +425,14 @@ describe('OllamaBackend', function () {
         expect($backend->countTokens(''))->toBe(0);
     });
 
-    test('falls back to character estimate when tokenize API fails', function () {
-        $mock = new MockHandler([
-            new Response(500, [], 'Internal Server Error'),
-        ]);
-
-        $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
-
+    test('estimates tokens using character count', function () {
         $config = config('ai.backends.ollama');
         $backend = new OllamaBackend($config);
 
-        $reflection = new ReflectionClass($backend);
-        $property = $reflection->getProperty('client');
-        $property->setAccessible(true);
-        $property->setValue($backend, $client);
-
-        // Use unique text to avoid cache
-        $text = 'Test text'.uniqid();
+        $text = 'Hello, how are you today?';
         $tokenCount = $backend->countTokens($text);
 
-        // Fallback is ceil(strlen / 4)
+        // Estimation is ceil(strlen / 4)
         expect($tokenCount)->toBe((int) ceil(mb_strlen($text) / 4));
     });
 

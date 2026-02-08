@@ -49,7 +49,7 @@ const md = new MarkdownIt({
 });
 
 // SSE streaming composable
-const { connectionState, connect, disconnect } = useConversationStream();
+const { connectionState, connect, disconnect, stop } = useConversationStream();
 
 // Streaming phase types
 interface StreamingPhase {
@@ -350,6 +350,12 @@ const handleToolDialogClose = () => {
     toolDialogOpen.value = false;
 };
 
+const handleStop = async () => {
+    await stop(props.conversation.id);
+    streamingPhases.value = [];
+    isSubmitting.value = false;
+};
+
 const deleteConversation = () => {
     if (confirm('Are you sure you want to delete this conversation?')) {
         router.delete(`/conversations/${props.conversation.id}`);
@@ -403,21 +409,13 @@ const getToolResultComponent = (toolName: string | undefined) => {
     return ToolResultDefault;
 };
 
-// On mount: check if there's a pending user message that needs processing
+// On mount: auto-connect to stream if conversation is running
 onMounted(async () => {
     scrollToBottom();
 
-    if (props.conversation.status === 'active') {
-        const lastMessage = messages.value[messages.value.length - 1];
-        if (lastMessage?.role === 'user') {
-            const hasAssistantResponse = messages.value.length > 1 &&
-                messages.value.some((m, i) => i > 0 && m.role === 'assistant');
-
-            if (!hasAssistantResponse) {
-                await triggerProcessing(lastMessage.content);
-            }
-        }
-    } else if (props.conversation.status === 'waiting_tool') {
+    // Connect to stream if conversation is active or waiting for tool
+    if (props.conversation.status === 'active' || props.conversation.status === 'waiting_tool') {
+        isSubmitting.value = true;
         connectToStream();
     }
 });
@@ -659,7 +657,7 @@ watch(() => props.conversation.status, (newStatus) => {
             :connection-state="connectionState"
             :input-disabled-reason="inputDisabledReason"
             @send="sendMessage"
-            @stop="disconnect(); isSubmitting = false;"
+            @stop="handleStop"
             @delete="deleteConversation"
         />
 

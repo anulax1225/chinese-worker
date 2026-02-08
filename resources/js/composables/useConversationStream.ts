@@ -17,6 +17,7 @@ export interface StreamEventHandlers {
     onToolRequest?: (request: ToolRequest) => void;
     onCompleted?: (stats: { turns: number; tokens: number }) => void;
     onFailed?: (error: string) => void;
+    onCancelled?: (stats: { turns: number; tokens: number }) => void;
     onStatusChanged?: (status: string) => void;
 }
 
@@ -102,6 +103,17 @@ export function useConversationStream() {
             es.close();
         });
 
+        es.addEventListener('cancelled', (event) => {
+            connectionState.value = 'idle';
+            try {
+                const data = JSON.parse(event.data);
+                handlers.onCancelled?.(data.stats || { turns: 0, tokens: 0 });
+            } catch (e) {
+                console.error('Error parsing cancelled event:', e);
+            }
+            es.close();
+        });
+
         es.addEventListener('status_changed', (event) => {
             try {
                 const data = JSON.parse(event.data);
@@ -128,6 +140,31 @@ export function useConversationStream() {
         connectionState.value = 'idle';
     }
 
+    async function stop(conversationId: number) {
+        // Close stream first
+        if (eventSource.value) {
+            eventSource.value.close();
+            eventSource.value = null;
+        }
+
+        // Call stop API
+        try {
+            await fetch(`/api/v1/conversations/${conversationId}/stop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-XSRF-TOKEN': getCsrfToken(),
+                },
+                credentials: 'include',
+            });
+        } catch (e) {
+            console.error('Error stopping conversation:', e);
+        }
+
+        connectionState.value = 'idle';
+    }
+
     // Clean up on unmount
     onUnmounted(() => {
         disconnect();
@@ -137,5 +174,11 @@ export function useConversationStream() {
         connectionState,
         connect,
         disconnect,
+        stop,
     };
+}
+
+function getCsrfToken(): string {
+    const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
 }

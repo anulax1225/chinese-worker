@@ -43,6 +43,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('conversations/{conversation}', [ConversationController::class, 'show']);
         Route::post('conversations/{conversation}/messages', [ConversationController::class, 'sendMessage']);
         Route::get('conversations/{conversation}/status', [ConversationController::class, 'status']);
+        Route::post('conversations/{conversation}/stop', [ConversationController::class, 'stop']);
         Route::get('conversations/{conversation}/stream', [ConversationController::class, 'stream']);
         Route::post('conversations/{conversation}/tool-results', [ConversationController::class, 'submitToolResult']);
         Route::delete('conversations/{conversation}', [ConversationController::class, 'destroy']);

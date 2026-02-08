@@ -283,6 +283,8 @@ def conversations(api_url: str, agent_id: Optional[int], status: Optional[str]):
                 status_str = f"[blue]{status_val}[/blue]"
             elif status_val == "failed":
                 status_str = f"[red]{status_val}[/red]"
+            elif status_val == "cancelled":
+                status_str = f"[yellow]{status_val}[/yellow]"
             else:
                 status_str = status_val
 
@@ -300,6 +302,69 @@ def conversations(api_url: str, agent_id: Optional[int], status: Optional[str]):
 
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to list conversations: {str(e)}")
+        raise click.Abort()
+
+
+@main.command("stop")
+@click.argument("conversation_id", type=int)
+@click.option("--api-url", default=get_default_api_url(), help="API base URL")
+def stop_conversation(conversation_id: int, api_url: str):
+    """Stop a running conversation."""
+    if not AuthManager.is_authenticated():
+        console.print("[yellow]![/yellow] You are not logged in")
+        console.print("Run 'cw login' to authenticate")
+        return
+
+    client = APIClient(api_url)
+
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task("Stopping conversation...", total=None)
+            result = client.stop_conversation(conversation_id)
+
+        status = result.get("status", "unknown")
+        if status == "cancelled":
+            console.print(f"[green]✓[/green] Conversation {conversation_id} stopped")
+        else:
+            console.print(f"[yellow]![/yellow] {result.get('message', 'Conversation was not running')}")
+
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to stop conversation: {str(e)}")
+        raise click.Abort()
+
+
+@main.command("delete")
+@click.argument("conversation_id", type=int)
+@click.option("--api-url", default=get_default_api_url(), help="API base URL")
+@click.option("--force", "-f", is_flag=True, help="Skip confirmation")
+def delete_conversation_cmd(conversation_id: int, api_url: str, force: bool):
+    """Delete a conversation."""
+    if not AuthManager.is_authenticated():
+        console.print("[yellow]![/yellow] You are not logged in")
+        console.print("Run 'cw login' to authenticate")
+        return
+
+    client = APIClient(api_url)
+
+    if not force:
+        confirm = Prompt.ask(
+            f"[yellow]Delete conversation {conversation_id}?[/yellow]",
+            choices=["y", "n"],
+            default="n"
+        )
+        if confirm != "y":
+            console.print("[dim]Cancelled[/dim]")
+            return
+
+    try:
+        client.delete_conversation(conversation_id)
+        console.print(f"[green]✓[/green] Conversation {conversation_id} deleted")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Failed to delete conversation: {str(e)}")
         raise click.Abort()
 
 
@@ -392,7 +457,20 @@ def chat(agent_id: int, api_url: str, poll_interval: int, conversation_id: Optio
                 console.print()  # Add spacing before next prompt
 
             except KeyboardInterrupt:
-                console.print("\n\n[yellow]Chat interrupted. Type 'exit' to end or continue chatting[/yellow]\n")
+                # Ask if user wants to stop the conversation
+                console.print()
+                choice = Prompt.ask(
+                    "\n[yellow]Interrupt received. Stop conversation?[/yellow]",
+                    choices=["y", "n"],
+                    default="n"
+                )
+                if choice == "y":
+                    try:
+                        client.stop_conversation(conversation_id)
+                        console.print("[yellow]Conversation stopped[/yellow]")
+                    except Exception:
+                        pass  # Ignore errors - conversation may already be stopped
+                console.print("[dim]Type 'exit' to end chat or continue chatting[/dim]\n")
                 continue
             except EOFError:
                 # Ctrl+D pressed
@@ -702,7 +780,9 @@ def handle_sse_events(
         accumulated_thinking = ""
         pending_tool_request = None
         final_event = None
+        final_stats = None
         error_msg = None
+        current_tool = None
 
         try:
             # PHASE 1: Live display for streaming ONLY - no user interaction here
@@ -721,11 +801,21 @@ def handle_sse_events(
                             accumulated_content += chunk
 
                         # Build and update the live display
-                        live.update(build_streaming_display(accumulated_thinking, accumulated_content))
+                        live.update(build_streaming_display(accumulated_thinking, accumulated_content, current_tool))
 
                     elif event_type == "status_changed":
                         # Status update (e.g., processing)
                         pass
+
+                    elif event_type == "tool_executing":
+                        # Server-side tool started (web_search, web_fetch, etc.)
+                        current_tool = data.get("tool", {})
+                        live.update(build_streaming_display(accumulated_thinking, accumulated_content, current_tool))
+
+                    elif event_type == "tool_completed":
+                        # Server-side tool finished
+                        current_tool = None
+                        live.update(build_streaming_display(accumulated_thinking, accumulated_content, None))
 
                     elif event_type == "tool_request":
                         # Store tool request, handle AFTER Live context exits
@@ -735,11 +825,18 @@ def handle_sse_events(
 
                     elif event_type == "completed":
                         final_event = "completed"
+                        final_stats = data.get("stats")
                         break
 
                     elif event_type == "failed":
                         final_event = "failed"
                         error_msg = data.get("error", "Unknown error")
+                        final_stats = data.get("stats")
+                        break
+
+                    elif event_type == "cancelled":
+                        final_event = "cancelled"
+                        final_stats = data.get("stats")
                         break
         finally:
             # Always close SSE connection to release resources
@@ -768,11 +865,26 @@ def handle_sse_events(
             continue
 
         elif final_event == "completed":
+            # Show stats if available
+            if final_stats:
+                turns = final_stats.get("turns", 0)
+                tokens = final_stats.get("tokens", 0)
+                if turns or tokens:
+                    console.print(f"\n[dim]Completed: {turns} turns, {tokens} tokens[/dim]")
             return "completed"
 
         elif final_event == "failed":
             console.print(f"\n[red]Error:[/red] {error_msg}")
             return "error"
+
+        elif final_event == "cancelled":
+            console.print("\n[yellow]Conversation cancelled[/yellow]")
+            if final_stats:
+                turns = final_stats.get("turns", 0)
+                tokens = final_stats.get("tokens", 0)
+                if turns or tokens:
+                    console.print(f"[dim]{turns} turns, {tokens} tokens[/dim]")
+            return "cancelled"
 
         # No event received (connection closed without event), break
         break
@@ -780,7 +892,7 @@ def handle_sse_events(
     return "completed"
 
 
-def build_streaming_display(thinking: str, content: str) -> Group:
+def build_streaming_display(thinking: str, content: str, current_tool: Optional[Dict[str, Any]] = None) -> Group:
     """Build a Rich renderable for streaming display."""
     parts = []
 
@@ -797,6 +909,39 @@ def build_streaming_display(thinking: str, content: str) -> Group:
             parts.append(Markdown(content))
         else:
             parts.append(Text(content))
+
+    if current_tool:
+        tool_name = current_tool.get("name", "unknown")
+        args = current_tool.get("arguments", {})
+
+        if tool_name == "web_search":
+            query = args.get("query", "...")
+            tool_panel = Panel(
+                Text(f"🔍 {query}", style="cyan"),
+                title="[bold cyan]Web Search[/bold cyan]",
+                border_style="cyan",
+                padding=(0, 1),
+            )
+            parts.append(tool_panel)
+        elif tool_name == "web_fetch":
+            url = args.get("url", "...")
+            prompt = args.get("prompt", "")
+            fetch_content = Text()
+            fetch_content.append("🌐 ", style="blue")
+            fetch_content.append(url, style="blue underline")
+            if prompt:
+                fetch_content.append(f"\n📝 {prompt[:60]}{'...' if len(prompt) > 60 else ''}", style="dim")
+            tool_panel = Panel(
+                fetch_content,
+                title="[bold blue]Web Fetch[/bold blue]",
+                border_style="blue",
+                padding=(0, 1),
+            )
+            parts.append(tool_panel)
+        else:
+            # Default display for other tools
+            tool_text = Text(f"  → Running {tool_name}...", style="dim cyan")
+            parts.append(tool_text)
 
     if not parts:
         return Group(Text("..."))

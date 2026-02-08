@@ -78,6 +78,16 @@ class ProcessConversationTurn implements ShouldQueue
 
     public function handle(AIBackendManager $aiBackendManager, ToolService $toolService): void
     {
+        // Check if cancelled before starting
+        $this->conversation->refresh();
+        if ($this->conversation->isCancelled()) {
+            Log::info('Job skipped - conversation cancelled', [
+                'conversation_id' => $this->conversation->id,
+            ]);
+
+            return;
+        }
+
         // Eager load relationships to prevent N+1 queries
         $this->conversation->load(['agent.tools']);
 

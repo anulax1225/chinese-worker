@@ -13,7 +13,6 @@ use App\Models\Agent;
 use App\Models\Tool;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use RuntimeException;
@@ -40,7 +39,7 @@ class OllamaBackend implements AIBackendInterface
 
         $this->baseUrl = $config['base_url'];
         $this->model = $config['model'];
-        $this->timeout = $config['timeout'] ?? 5 * 60 * 60 * 60;
+        $this->timeout = $config['timeout'] ?? 300; // 5 minutes default
         $this->options = $config['options'] ?? [];
 
         $this->client = new Client([
@@ -690,9 +689,10 @@ class OllamaBackend implements AIBackendInterface
     }
 
     /**
-     * Count the number of tokens in a text string using Ollama's tokenize API.
+     * Estimate the number of tokens in a text string.
      *
-     * Results are cached for 24 hours to avoid repeated API calls for the same text.
+     * Uses character-based estimation since Ollama doesn't provide a tokenize API.
+     * Actual token counts for AI responses come from response metadata.
      */
     public function countTokens(string $text): int
     {
@@ -700,28 +700,8 @@ class OllamaBackend implements AIBackendInterface
             return 0;
         }
 
-        $cacheKey = 'tokens:'.hash('xxh3', $this->model.':'.$text);
-
-        return Cache::remember($cacheKey, 86400, function () use ($text) {
-            try {
-                $response = $this->client->post('/api/tokenize', [
-                    'json' => [
-                        'model' => $this->model,
-                        'prompt' => $text,
-                    ],
-                    'timeout' => 30,
-                ]);
-
-                $data = json_decode($response->getBody()->getContents(), true);
-
-                return count($data['tokens'] ?? []);
-            } catch (GuzzleException $e) {
-                Log::warning("Failed to tokenize text: {$e->getMessage()}");
-
-                // Fallback: rough estimate of ~4 characters per token
-                return (int) ceil(mb_strlen($text) / 4);
-            }
-        });
+        // Rough estimate: ~4 characters per token (standard for most LLMs)
+        return (int) ceil(mb_strlen($text) / 4);
     }
 
     /**

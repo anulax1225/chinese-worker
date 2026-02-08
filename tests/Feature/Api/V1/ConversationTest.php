@@ -225,6 +225,74 @@ describe('Conversation Management', function () {
         });
     });
 
+    describe('Stop Conversation', function () {
+        test('user can stop an active conversation', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'status' => 'active',
+            ]);
+
+            $response = $this->postJson("/api/v1/conversations/{$conversation->id}/stop");
+
+            $response->assertStatus(200)
+                ->assertJson([
+                    'status' => 'cancelled',
+                    'conversation_id' => $conversation->id,
+                ]);
+
+            $conversation->refresh();
+            expect($conversation->status)->toBe('cancelled');
+            expect($conversation->completed_at)->not->toBeNull();
+        });
+
+        test('user can stop a paused conversation', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'status' => 'paused',
+            ]);
+
+            $response = $this->postJson("/api/v1/conversations/{$conversation->id}/stop");
+
+            $response->assertStatus(200)
+                ->assertJson([
+                    'status' => 'cancelled',
+                    'conversation_id' => $conversation->id,
+                ]);
+        });
+
+        test('stopping a completed conversation returns current status', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'status' => 'completed',
+            ]);
+
+            $response = $this->postJson("/api/v1/conversations/{$conversation->id}/stop");
+
+            $response->assertStatus(200)
+                ->assertJson([
+                    'status' => 'completed',
+                    'message' => 'Conversation is not running',
+                ]);
+        });
+
+        test('user cannot stop another users conversation', function () {
+            $otherUser = User::factory()->create();
+            $otherAgent = Agent::factory()->create(['user_id' => $otherUser->id]);
+            $conversation = Conversation::factory()->create([
+                'user_id' => $otherUser->id,
+                'agent_id' => $otherAgent->id,
+                'status' => 'active',
+            ]);
+
+            $response = $this->postJson("/api/v1/conversations/{$conversation->id}/stop");
+
+            $response->assertStatus(403);
+        });
+    });
+
     describe('Delete Conversation', function () {
         test('user can delete their conversation', function () {
             $conversation = Conversation::factory()->create([
@@ -311,6 +379,34 @@ describe('Conversation Management', function () {
             $conversation->refresh();
             expect($conversation->status)->toBe('completed');
             expect($conversation->completed_at)->not->toBeNull();
+        });
+
+        test('can check if cancelled', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'status' => 'cancelled',
+            ]);
+
+            expect($conversation->isCancelled())->toBeTrue();
+
+            $conversation->update(['status' => 'active']);
+            expect($conversation->isCancelled())->toBeFalse();
+        });
+
+        test('can mark as cancelled', function () {
+            $conversation = Conversation::factory()->create([
+                'user_id' => $this->user->id,
+                'agent_id' => $this->agent->id,
+                'status' => 'active',
+            ]);
+
+            $conversation->markAsCancelled();
+
+            $conversation->refresh();
+            expect($conversation->status)->toBe('cancelled');
+            expect($conversation->completed_at)->not->toBeNull();
+            expect($conversation->last_activity_at)->not->toBeNull();
         });
 
         test('can increment turn count', function () {

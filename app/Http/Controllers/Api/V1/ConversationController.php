@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
 use App\Models\Conversation;
+use App\Services\ConversationEventBroadcaster;
 use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -194,6 +195,41 @@ class ConversationController extends Controller
     }
 
     /**
+     * Stop Conversation
+     *
+     * Stop a running conversation and mark it as cancelled.
+     *
+     * @urlParam conversation integer required The conversation ID. Example: 123
+     *
+     * @response 200 {
+     *   "status": "cancelled",
+     *   "conversation_id": 123
+     * }
+     */
+    public function stop(Conversation $conversation): JsonResponse
+    {
+        $this->authorize('view', $conversation);
+
+        // Only stop if conversation is actively processing
+        if (! in_array($conversation->status, ['active', 'paused'])) {
+            return response()->json([
+                'status' => $conversation->status,
+                'message' => 'Conversation is not running',
+            ]);
+        }
+
+        $conversation->markAsCancelled();
+
+        // Broadcast cancellation event to SSE stream
+        app(ConversationEventBroadcaster::class)->cancelled($conversation);
+
+        return response()->json([
+            'status' => 'cancelled',
+            'conversation_id' => $conversation->id,
+        ]);
+    }
+
+    /**
      * Submit Tool Result
      *
      * Submit the result of a builtin tool execution from CLI.
@@ -342,6 +378,19 @@ class ConversationController extends Controller
                     return;
                 }
 
+                if ($conversation->status === 'cancelled') {
+                    $this->sendSSEEvent('cancelled', [
+                        'status' => 'cancelled',
+                        'conversation_id' => $conversation->id,
+                        'stats' => [
+                            'turns' => $conversation->turn_count,
+                            'tokens' => $conversation->total_tokens,
+                        ],
+                    ]);
+
+                    return;
+                }
+
                 // Listen to Redis list for this conversation
                 // Using BLPOP with timeout instead of blocking SUBSCRIBE to prevent PHP worker deadlock
                 $channel = "conversation:{$conversation->id}:events";
@@ -371,7 +420,7 @@ class ConversationController extends Controller
 
                                 // Stop on terminal events
                                 // Tool requests close so CLI can handle tool and reconnect
-                                if (in_array($payload['event'], ['completed', 'failed', 'tool_request'])) {
+                                if (in_array($payload['event'], ['completed', 'failed', 'cancelled', 'tool_request'])) {
                                     break;
                                 }
                             }

@@ -333,3 +333,24 @@ class APIClient:
             timeout=self.timeout,
         )
         response.raise_for_status()
+
+    def stop_conversation(self, conversation_id: int) -> Dict[str, Any]:
+        """
+        Stop a running conversation.
+
+        Args:
+            conversation_id: Conversation ID
+
+        Returns:
+            Status response with cancelled state
+
+        Raises:
+            httpx.HTTPStatusError: If request fails
+        """
+        response = httpx.post(
+            f"{self.base_url}/api/v1/conversations/{conversation_id}/stop",
+            headers=self._get_headers(),
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

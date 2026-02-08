@@ -72,7 +72,7 @@ class SSEClient:
                                 pass  # Skip malformed data
 
                             # Check for terminal events
-                            if event_type in ("completed", "failed"):
+                            if event_type in ("completed", "failed", "cancelled", "tool_request"):
                                 return
 
                         event_type = None
@@ -132,6 +132,7 @@ class SSEEventHandler:
         self.error: Optional[str] = None
         self.stats: Dict[str, int] = {"turns": 0, "tokens": 0}
         self.messages: list = []
+        self.current_tool: Optional[str] = None
 
     def handle_event(self, event_type: str, data: Dict[str, Any]) -> bool:
         """
@@ -183,5 +184,22 @@ class SSEEventHandler:
             if "stats" in data:
                 self.stats = data["stats"]
             return False  # Done
+
+        elif event_type == "cancelled":
+            self.status = "cancelled"
+            if "stats" in data:
+                self.stats = data["stats"]
+            return False  # Done
+
+        elif event_type == "tool_executing":
+            # Tool started executing (system tool on server)
+            tool = data.get("tool", {})
+            self.current_tool = tool.get("name", "unknown")
+            return True
+
+        elif event_type == "tool_completed":
+            # Tool finished executing
+            self.current_tool = None
+            return True
 
         return True  # Unknown event, continue

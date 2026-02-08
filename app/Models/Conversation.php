@@ -197,6 +197,26 @@ class Conversation extends Model
     }
 
     /**
+     * Check if conversation is cancelled.
+     */
+    public function isCancelled(): bool
+    {
+        return $this->status === 'cancelled';
+    }
+
+    /**
+     * Mark conversation as cancelled.
+     */
+    public function markAsCancelled(): void
+    {
+        $this->update([
+            'status' => 'cancelled',
+            'completed_at' => now(),
+            'last_activity_at' => now(),
+        ]);
+    }
+
+    /**
      * Get the current request turn count.
      */
     public function getRequestTurnCount(): int

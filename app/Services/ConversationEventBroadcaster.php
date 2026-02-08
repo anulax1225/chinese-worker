@@ -148,6 +148,21 @@ class ConversationEventBroadcaster
     }
 
     /**
+     * Broadcast cancellation event.
+     */
+    public function cancelled(Conversation $conversation): void
+    {
+        $this->broadcast($conversation, 'cancelled', [
+            'status' => 'cancelled',
+            'conversation_id' => $conversation->id,
+            'stats' => [
+                'turns' => $conversation->turn_count,
+                'tokens' => $conversation->total_tokens,
+            ],
+        ]);
+    }
+
+    /**
      * Broadcast processing event.
      */
     public function processing(Conversation $conversation): void
