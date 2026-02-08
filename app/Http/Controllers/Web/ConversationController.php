@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Enums\DocumentStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
 use App\Models\Conversation;
+use App\Models\Document;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -66,8 +68,16 @@ class ConversationController extends Controller
 
         $conversation->load(['agent:id,name,description,ai_backend']);
 
+        // Get user's ready documents for attachment
+        $documents = Document::where('user_id', $request->user()->id)
+            ->where('status', DocumentStatus::Ready)
+            ->latest()
+            ->limit(50)
+            ->get(['id', 'title', 'status', 'mime_type', 'file_size']);
+
         return Inertia::render('Conversations/Show', [
             'conversation' => $conversation,
+            'documents' => $documents,
             'breadcrumbs' => [
                 ['label' => 'Conversations', 'href' => '/conversations'],
                 ['label' => "#{$conversation->id}"],

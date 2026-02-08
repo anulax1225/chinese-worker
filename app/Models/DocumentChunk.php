@@ -82,6 +82,22 @@ class DocumentChunk extends Model
     }
 
     /**
+     * Scope a query to get chunks by index range.
+     */
+    public function scopeInRange(Builder $query, int $start, int $end): Builder
+    {
+        return $query->whereBetween('chunk_index', [$start, $end]);
+    }
+
+    /**
+     * Scope to search within chunk content.
+     */
+    public function scopeSearch(Builder $query, string $term): Builder
+    {
+        return $query->where('content', 'LIKE', '%'.$term.'%');
+    }
+
+    /**
      * Get a preview of the content (first N characters).
      */
     public function getPreview(int $length = 200): string

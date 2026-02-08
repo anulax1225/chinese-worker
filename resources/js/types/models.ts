@@ -98,6 +98,38 @@ export interface File {
     updated_at: string;
 }
 
+export type DocumentStatus = 'pending' | 'extracting' | 'cleaning' | 'normalizing' | 'chunking' | 'ready' | 'failed';
+export type DocumentSourceType = 'upload' | 'url' | 'paste';
+
+export interface DocumentStage {
+    id: number;
+    document_id: number;
+    stage: 'extracted' | 'cleaned' | 'normalized' | 'chunked';
+    content: string;
+    metadata: Record<string, unknown>;
+    created_at: string;
+}
+
+export interface Document {
+    id: number;
+    user_id: number;
+    file_id: number | null;
+    title: string | null;
+    source_type: DocumentSourceType;
+    source_path: string;
+    mime_type: string;
+    file_size: number;
+    status: DocumentStatus;
+    error_message: string | null;
+    metadata: Record<string, unknown> | null;
+    processing_started_at: string | null;
+    processing_completed_at: string | null;
+    created_at: string;
+    updated_at: string;
+    stages?: DocumentStage[];
+    file?: File;
+}
+
 export interface AIBackend {
     name: string;
     driver: string;

@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\DTOs\ToolResult;
+use App\Enums\DocumentStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
 use App\Models\Conversation;
+use App\Models\Document;
 use App\Services\ConversationEventBroadcaster;
 use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
@@ -89,6 +91,7 @@ class ConversationController extends Controller
      *
      * @bodyParam content string required The message content. Example: What files are in /tmp?
      * @bodyParam images array Optional base64-encoded images for vision. Example: []
+     * @bodyParam document_ids array Optional document IDs to attach. Example: [1, 2]
      *
      * @response 202 {
      *   "status": "processing",
@@ -103,12 +106,28 @@ class ConversationController extends Controller
         $request->validate([
             'content' => ['required', 'string'],
             'images' => ['nullable', 'array'],
+            'document_ids' => ['nullable', 'array'],
+            'document_ids.*' => ['integer', 'exists:documents,id'],
         ]);
+
+        $documentIds = $request->input('document_ids', []);
+
+        // Attach documents to conversation if provided
+        if (! empty($documentIds)) {
+            $this->attachDocuments($conversation, $request->user(), $documentIds);
+        }
+
+        // Build message content with document previews if documents attached
+        $messageContent = $this->buildMessageWithDocuments(
+            $request->input('content'),
+            $conversation,
+            $documentIds
+        );
 
         // Process message asynchronously (could use a queue job here)
         $state = $this->conversationService->processMessage(
             $conversation,
-            $request->input('content'),
+            $messageContent,
             $request->input('images')
         );
 
@@ -550,5 +569,80 @@ class ConversationController extends Controller
         $conversation->delete();
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Attach documents to a conversation.
+     *
+     * Only attaches documents that:
+     * - Belong to the user
+     * - Have status "ready"
+     * - Are not already attached
+     *
+     * @param  array<int>  $documentIds
+     */
+    protected function attachDocuments(Conversation $conversation, mixed $user, array $documentIds): void
+    {
+        $documents = Document::query()
+            ->where('user_id', $user->id)
+            ->where('status', DocumentStatus::Ready)
+            ->whereIn('id', $documentIds)
+            ->get();
+
+        foreach ($documents as $document) {
+            // Skip if already attached
+            if ($conversation->documents()->where('documents.id', $document->id)->exists()) {
+                continue;
+            }
+
+            $previewChunks = 2;
+            $previewTokens = $document->chunks()
+                ->ordered()
+                ->limit($previewChunks)
+                ->sum('token_count');
+
+            $conversation->documents()->attach($document->id, [
+                'preview_chunks' => $previewChunks,
+                'preview_tokens' => $previewTokens,
+                'attached_at' => now(),
+            ]);
+        }
+    }
+
+    /**
+     * Build message content with document previews appended.
+     *
+     * @param  array<int>  $documentIds
+     */
+    protected function buildMessageWithDocuments(string $content, Conversation $conversation, array $documentIds): string
+    {
+        if (empty($documentIds)) {
+            return $content;
+        }
+
+        // Get newly attached documents with their preview chunks
+        $documents = $conversation->documents()
+            ->whereIn('documents.id', $documentIds)
+            ->with(['chunks' => fn ($query) => $query->ordered()->limit(2)])
+            ->get();
+
+        if ($documents->isEmpty()) {
+            return $content;
+        }
+
+        $output = $content;
+        $output .= "\n\n---\n**Attached Documents:**\n";
+
+        foreach ($documents as $document) {
+            $chunkCount = $document->chunks()->count();
+            $output .= "\n### {$document->title} (ID: {$document->id})\n";
+            $output .= "Total chunks: {$chunkCount} | Use `document_get_chunks` to access more.\n\n";
+
+            foreach ($document->chunks->take(2) as $chunk) {
+                $output .= "**[Chunk {$chunk->chunk_index}]**\n{$chunk->content}\n\n";
+            }
+        }
+
+        return $output;
     }
 }

@@ -8,6 +8,7 @@ A self-hosted AI agent framework built with Laravel 12. Create intelligent agent
 - **Agent Management** - Create agents with custom system prompts, tools, and model configurations
 - **Multi-Turn Conversations** - Stateful conversations with message history and context
 - **Tool Execution** - Built-in tools (bash, file operations, search) plus custom tool definitions
+- **Document Ingestion** - Multi-format document processing with text extraction, cleaning, and chunking
 - **Web Search & Fetch** - Integrated SearXNG search and web content extraction
 - **Real-Time Streaming** - Server-Sent Events for live response streaming
 - **System Prompt Templating** - Blade-based prompts with variable substitution
@@ -70,6 +71,7 @@ All documentation is in the [`docs/guide/`](docs/guide/) directory:
 
 ### Features
 - [AI Backends](docs/guide/ai-backends.md) - Configuring Ollama, Claude, and OpenAI
+- [Document Ingestion](docs/guide/document-ingestion.md) - PDF, DOCX, images with OCR
 - [Search & Web Fetch](docs/guide/search-and-webfetch.md) - Web search and content extraction
 - [Queues & Jobs](docs/guide/queues-and-jobs.md) - Background processing with Horizon
 
@@ -109,16 +111,17 @@ composer lint
 │              Sanctum Auth │ Form Requests │ Resources           │
 └─────────────────────────────────────────────────────────────────┘
                                 │
-        ┌───────────────────────┼───────────────────────┐
-        ▼                       ▼                       ▼
-┌───────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    Agents     │     │  Conversations  │     │      Tools      │
-│ System Prompts│     │    Messages     │     │   Execution     │
-│  Model Config │     │  Tool Requests  │     │                 │
-└───────────────┘     └─────────────────┘     └─────────────────┘
-        │                       │                       │
-        └───────────────────────┼───────────────────────┘
-                                │
+   ┌────────────────┬───────────┼───────────┬────────────────┐
+   ▼                ▼           ▼           ▼                ▼
+┌──────────┐  ┌───────────┐  ┌───────┐  ┌─────────┐  ┌────────────┐
+│  Agents  │  │Convers-   │  │ Tools │  │Documents│  │  Search &  │
+│  System  │  │ations     │  │ Exec  │  │Extract →│  │  WebFetch  │
+│  Prompts │  │ Messages  │  │       │  │Clean →  │  │            │
+│          │  │           │  │       │  │Chunk    │  │            │
+└──────────┘  └───────────┘  └───────┘  └─────────┘  └────────────┘
+        │             │           │           │              │
+        └─────────────┴───────────┼───────────┴──────────────┘
+                                  │
 ┌─────────────────────────────────────────────────────────────────┐
 │                       AIBackendManager                          │
 │           Ollama │ Anthropic Claude │ OpenAI                    │
@@ -126,7 +129,7 @@ composer lint
                                 │
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Background Jobs                             │
-│     ProcessConversationTurn │ PullModelJob │ Cleanup            │
+│  ProcessConversationTurn │ ProcessDocumentJob │ PullModelJob    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 

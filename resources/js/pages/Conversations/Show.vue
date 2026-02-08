@@ -18,11 +18,15 @@ import {
     sendMessage as sendMessageAction,
     submitToolResult as submitToolResultAction,
 } from '@/actions/App/Http/Controllers/Api/V1/ConversationController';
-import type { Conversation, ToolRequest } from '@/types';
+import type { Conversation, Document, ToolRequest } from '@/types';
 
 const props = defineProps<{
     conversation: Conversation;
+    documents: Document[];
 }>();
+
+// State for document selection
+const selectedDocumentIds = ref<number[]>([]);
 
 // Get CSRF token from meta tag
 const getCsrfToken = (): string => {
@@ -112,7 +116,7 @@ const scrollToBottomClick = () => {
     isUserScrolledUp.value = false;
 };
 
-const triggerProcessing = async (content: string) => {
+const triggerProcessing = async (content: string, documentIds: number[] = []) => {
     isSubmitting.value = true;
     streamingPhases.value = [];
 
@@ -124,7 +128,10 @@ const triggerProcessing = async (content: string) => {
                 'Accept': 'application/json',
                 'X-CSRF-TOKEN': getCsrfToken(),
             },
-            body: JSON.stringify({ content }),
+            body: JSON.stringify({
+                content,
+                document_ids: documentIds.length > 0 ? documentIds : undefined,
+            }),
         });
 
         if (!response.ok) {
@@ -144,7 +151,7 @@ const triggerProcessing = async (content: string) => {
     }
 };
 
-const sendMessage = async (message: string) => {
+const sendMessage = async (message: string, documentIds: number[] = []) => {
     if (!message.trim() || isSubmitting.value) return;
 
     // Optimistically add user message
@@ -155,8 +162,8 @@ const sendMessage = async (message: string) => {
 
     await scrollToBottom();
 
-    // Trigger processing via API
-    await triggerProcessing(message);
+    // Trigger processing via API with document IDs
+    await triggerProcessing(message, documentIds);
 };
 
 const connectToStream = () => {
@@ -387,11 +394,13 @@ watch(() => props.conversation.status, (newStatus) => {
         <!-- Floating Chat Input Bar -->
         <ChatInputBar
             v-model:new-message="newMessage"
+            v-model:selected-document-ids="selectedDocumentIds"
             :conversation="conversation"
             :is-submitting="isSubmitting"
             :can-send-messages="canSendMessages"
             :connection-state="connectionState"
             :input-disabled-reason="inputDisabledReason"
+            :available-documents="documents"
             @send="sendMessage"
             @stop="handleStop"
             @delete="deleteConversation"

@@ -4,6 +4,7 @@ use App\Http\Controllers\Web\AgentController;
 use App\Http\Controllers\Web\AIBackendController;
 use App\Http\Controllers\Web\ConversationController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\DocumentController;
 use App\Http\Controllers\Web\FileController;
 use App\Http\Controllers\Web\SearchController;
 use App\Http\Controllers\Web\SettingsController;
@@ -27,6 +28,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('tools', ToolController::class)->only(['index', 'create', 'show', 'edit']);
     Route::resource('system-prompts', SystemPromptController::class)->only(['index', 'create', 'show', 'edit']);
     Route::resource('files', FileController::class)->only(['index', 'show']);
+    Route::resource('documents', DocumentController::class)->only(['index', 'create', 'show']);
     Route::resource('conversations', ConversationController::class)->only(['index', 'show']);
 
     // AI Backends

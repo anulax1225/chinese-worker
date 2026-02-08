@@ -6,7 +6,9 @@ use App\Enums\DocumentStageType;
 use App\Enums\DocumentStatus;
 use App\Models\Document;
 use App\Models\DocumentStage;
+use App\Services\Document\CleaningPipeline;
 use App\Services\Document\DocumentIngestionService;
+use App\Services\Document\StructurePipeline;
 use App\Services\Document\TextExtractorRegistry;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -51,7 +53,9 @@ class ProcessDocumentJob implements ShouldQueue
 
     public function handle(
         TextExtractorRegistry $extractorRegistry,
-        DocumentIngestionService $ingestionService
+        DocumentIngestionService $ingestionService,
+        CleaningPipeline $cleaningPipeline,
+        StructurePipeline $structurePipeline
     ): void {
         $document = $this->document;
         $startTime = microtime(true);
@@ -65,11 +69,11 @@ class ProcessDocumentJob implements ShouldQueue
             // Phase 1: Extraction
             $this->runExtractionPhase($document, $extractorRegistry, $ingestionService);
 
-            // Phase 2: Cleaning (simplified for now)
-            $this->runCleaningPhase($document);
+            // Phase 2: Cleaning
+            $this->runCleaningPhase($document, $cleaningPipeline);
 
-            // Phase 3: Normalization (simplified for now)
-            $this->runNormalizationPhase($document);
+            // Phase 3: Normalization
+            $this->runNormalizationPhase($document, $structurePipeline);
 
             // Phase 4: Chunking (simplified for now)
             $this->runChunkingPhase($document);
@@ -123,9 +127,8 @@ class ProcessDocumentJob implements ShouldQueue
 
     /**
      * Run the content cleaning phase.
-     * This is a simplified version - full cleaning pipeline will be added in Sprint 2.
      */
-    protected function runCleaningPhase(Document $document): void
+    protected function runCleaningPhase(Document $document, CleaningPipeline $pipeline): void
     {
         $document->markAs(DocumentStatus::Cleaning);
 
@@ -136,24 +139,23 @@ class ProcessDocumentJob implements ShouldQueue
         }
 
         $text = $extractedStage->content;
-        $originalLength = mb_strlen($text);
 
-        // Basic cleaning for now (full pipeline in Sprint 2)
-        $cleaned = $this->basicClean($text);
-        $cleanedLength = mb_strlen($cleaned);
+        // Run through the cleaning pipeline
+        $result = $pipeline->clean($text);
 
-        $this->storeStage($document, DocumentStageType::Cleaned, $cleaned, [
-            'characters_before' => $originalLength,
-            'characters_after' => $cleanedLength,
-            'characters_removed' => $originalLength - $cleanedLength,
+        $this->storeStage($document, DocumentStageType::Cleaned, $result->text, [
+            'characters_before' => $result->charactersBefore,
+            'characters_after' => $result->charactersAfter,
+            'characters_removed' => $result->charactersRemoved(),
+            'reduction_percentage' => $result->reductionPercentage(),
+            'steps_applied' => $result->stepsApplied,
         ]);
     }
 
     /**
      * Run the structure normalization phase.
-     * This is a simplified version - full normalization will be added in Sprint 2.
      */
-    protected function runNormalizationPhase(Document $document): void
+    protected function runNormalizationPhase(Document $document, StructurePipeline $pipeline): void
     {
         $document->markAs(DocumentStatus::Normalizing);
 
@@ -163,11 +165,16 @@ class ProcessDocumentJob implements ShouldQueue
             throw new \RuntimeException('Cleaning stage not found');
         }
 
-        // For now, just pass through (full structure processing in Sprint 2)
-        $normalized = $cleanedStage->content;
+        $text = $cleanedStage->content;
 
-        $this->storeStage($document, DocumentStageType::Normalized, $normalized, [
-            'sections_detected' => 0,
+        // Run through the structure pipeline
+        $result = $pipeline->process($text);
+
+        $this->storeStage($document, DocumentStageType::Normalized, $result->text, [
+            'sections_detected' => $result->sectionCount(),
+            'section_titles' => $result->getSectionTitles(),
+            'processors_applied' => $result->metadata['processors_applied'] ?? [],
+            'metadata' => $result->metadata,
         ]);
     }
 
@@ -208,24 +215,6 @@ class ProcessDocumentJob implements ShouldQueue
             'chunk_count' => count($chunks),
             'total_tokens' => array_sum(array_column($chunks, 'token_count')),
         ]);
-    }
-
-    /**
-     * Basic text cleaning (placeholder for full pipeline).
-     */
-    protected function basicClean(string $text): string
-    {
-        // Normalize line endings
-        $text = str_replace(["\r\n", "\r"], "\n", $text);
-
-        // Remove excessive whitespace
-        $text = preg_replace('/[ \t]+/', ' ', $text);
-
-        // Remove excessive blank lines
-        $text = preg_replace('/\n{3,}/', "\n\n", $text);
-
-        // Trim
-        return trim($text);
     }
 
     /**

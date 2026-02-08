@@ -23,6 +23,7 @@ import {
     Circle,
     FileCog,
     Cpu,
+    Library,
 } from 'lucide-vue-next';
 import AppHeader from '@/components/AppHeader.vue';
 import NewConversationDialog from '@/components/NewConversationDialog.vue';
@@ -46,6 +47,7 @@ const adminNavigation = [
     { name: 'System Prompts', href: '/system-prompts', icon: FileCog },
     { name: 'Tools', href: '/tools', icon: Wrench },
     { name: 'AI Backends', href: '/ai-backends', icon: Cpu },
+    { name: 'Documents', href: '/documents', icon: Library },
     { name: 'Files', href: '/files', icon: FileText },
     { name: 'Search', href: '/search', icon: Search },
 ];

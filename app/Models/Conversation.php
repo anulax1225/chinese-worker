@@ -6,6 +6,7 @@ use App\DTOs\TokenUsage;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Conversation extends Model
 {
@@ -75,6 +76,33 @@ class Conversation extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the documents attached to this conversation.
+     */
+    public function documents(): BelongsToMany
+    {
+        return $this->belongsToMany(Document::class, 'conversation_documents')
+            ->withPivot(['preview_chunks', 'preview_tokens', 'attached_at']);
+    }
+
+    /**
+     * Check if conversation has any attached documents.
+     */
+    public function hasDocuments(): bool
+    {
+        return $this->documents()->exists();
+    }
+
+    /**
+     * Get document IDs attached to this conversation.
+     *
+     * @return array<int>
+     */
+    public function getDocumentIds(): array
+    {
+        return $this->documents()->pluck('documents.id')->toArray();
     }
 
     /**

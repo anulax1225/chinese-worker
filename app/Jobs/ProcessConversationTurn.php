@@ -10,6 +10,7 @@ use App\Services\AIBackendManager;
 use App\Services\ClientToolRegistry;
 use App\Services\ConversationEventBroadcaster;
 use App\Services\Prompts\PromptAssembler;
+use App\Services\Tools\DocumentToolHandler;
 use App\Services\Tools\TodoToolHandler;
 use App\Services\Tools\ToolArgumentValidator;
 use App\Services\Tools\WebToolHandler;
@@ -52,6 +53,10 @@ class ProcessConversationTurn implements ShouldQueue
         'todo_clear',
         'web_search',
         'web_fetch',
+        'document_list',
+        'document_info',
+        'document_get_chunks',
+        'document_search',
     ];
 
     public function __construct(
@@ -390,6 +395,12 @@ class ProcessConversationTurn implements ShouldQueue
 
             if (str_starts_with($toolCall->name, 'web_')) {
                 $handler = app(WebToolHandler::class);
+
+                return $handler->execute($toolCall->name, $toolCall->arguments);
+            }
+
+            if (str_starts_with($toolCall->name, 'document_')) {
+                $handler = new DocumentToolHandler($this->conversation);
 
                 return $handler->execute($toolCall->name, $toolCall->arguments);
             }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -17,9 +17,12 @@ import {
     MoreVertical,
     Trash2,
     Loader2,
+    Paperclip,
 } from 'lucide-vue-next';
 import TokenUsageIndicator from '@/components/TokenUsageIndicator.vue';
-import type { Conversation } from '@/types';
+import DocumentChip from '@/components/DocumentChip.vue';
+import DocumentPicker from '@/components/DocumentPicker.vue';
+import type { Conversation, Document } from '@/types';
 import type { ConnectionState } from '@/composables/useConversationStream';
 
 const props = defineProps<{
@@ -28,15 +31,39 @@ const props = defineProps<{
     canSendMessages: boolean;
     connectionState: ConnectionState;
     inputDisabledReason: string;
+    availableDocuments?: Document[];
 }>();
 
 const emit = defineEmits<{
-    send: [message: string];
+    send: [message: string, documentIds: number[]];
     stop: [];
     delete: [];
 }>();
 
 const newMessage = defineModel<string>('newMessage', { default: '' });
+const selectedDocumentIds = defineModel<number[]>('selectedDocumentIds', { default: () => [] });
+
+const showDocumentPicker = ref(false);
+
+const hasDocuments = computed(() => (props.availableDocuments?.length ?? 0) > 0);
+
+const getDocumentById = (id: number): Document | undefined => {
+    return props.availableDocuments?.find(d => d.id === id);
+};
+
+const handleSelectDocument = (id: number) => {
+    if (!selectedDocumentIds.value.includes(id)) {
+        selectedDocumentIds.value = [...selectedDocumentIds.value, id];
+    }
+};
+
+const handleDeselectDocument = (id: number) => {
+    selectedDocumentIds.value = selectedDocumentIds.value.filter(docId => docId !== id);
+};
+
+const removeDocument = (id: number) => {
+    selectedDocumentIds.value = selectedDocumentIds.value.filter(docId => docId !== id);
+};
 
 const connectionStatusColor = computed(() => {
     const colors: Record<ConnectionState, string> = {
@@ -76,8 +103,9 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 const sendMessage = () => {
     if (!newMessage.value.trim() || props.isSubmitting) return;
-    emit('send', newMessage.value.trim());
+    emit('send', newMessage.value.trim(), [...selectedDocumentIds.value]);
     newMessage.value = '';
+    selectedDocumentIds.value = [];
 };
 </script>
 
@@ -156,8 +184,31 @@ const sendMessage = () => {
                     </div>
                 </div>
 
+                <!-- Selected documents chips -->
+                <div v-if="selectedDocumentIds.length > 0" class="px-3 pt-3 flex flex-wrap gap-1.5">
+                    <DocumentChip
+                        v-for="id in selectedDocumentIds"
+                        :key="id"
+                        :document="getDocumentById(id)!"
+                        @remove="removeDocument(id)"
+                    />
+                </div>
+
                 <!-- Input row -->
                 <div class="flex items-end gap-2 p-3">
+                    <!-- Attach documents button -->
+                    <Button
+                        v-if="hasDocuments && canSendMessages"
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        class="shrink-0 w-9 h-9"
+                        :disabled="isSubmitting"
+                        @click="showDocumentPicker = true"
+                    >
+                        <Paperclip class="w-4 h-4" />
+                    </Button>
+
                     <Textarea
                         v-model="newMessage"
                         placeholder="Type a message..."
@@ -191,6 +242,17 @@ const sendMessage = () => {
                 </div>
             </div>
         </div>
+
+        <!-- Document Picker Dialog -->
+        <DocumentPicker
+            v-if="hasDocuments"
+            :documents="availableDocuments!"
+            :selected-ids="selectedDocumentIds"
+            :is-open="showDocumentPicker"
+            @update:is-open="showDocumentPicker = $event"
+            @select="handleSelectDocument"
+            @deselect="handleDeselectDocument"
+        />
     </div>
 </template>
 

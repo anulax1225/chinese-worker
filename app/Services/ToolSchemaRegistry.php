@@ -128,6 +128,72 @@ class ToolSchemaRegistry
                     'required' => ['url'],
                 ],
             ],
+            [
+                'name' => 'document_list',
+                'description' => 'List all documents attached to this conversation with their IDs, status, and statistics',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [],
+                ],
+            ],
+            [
+                'name' => 'document_info',
+                'description' => 'Get detailed information about a specific attached document including sections and metadata',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'document_id' => [
+                            'type' => 'integer',
+                            'description' => 'The document ID',
+                        ],
+                    ],
+                    'required' => ['document_id'],
+                ],
+            ],
+            [
+                'name' => 'document_get_chunks',
+                'description' => 'Get the content of specific chunks from a document by index range (max 10 chunks at a time)',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'document_id' => [
+                            'type' => 'integer',
+                            'description' => 'The document ID',
+                        ],
+                        'start_index' => [
+                            'type' => 'integer',
+                            'description' => 'The starting chunk index (0-based)',
+                        ],
+                        'end_index' => [
+                            'type' => 'integer',
+                            'description' => 'The ending chunk index (inclusive, defaults to start_index)',
+                        ],
+                    ],
+                    'required' => ['document_id', 'start_index'],
+                ],
+            ],
+            [
+                'name' => 'document_search',
+                'description' => 'Search for text within attached documents and return matching chunk previews',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'query' => [
+                            'type' => 'string',
+                            'description' => 'The search query (minimum 2 characters)',
+                        ],
+                        'document_id' => [
+                            'type' => 'integer',
+                            'description' => 'Optional: limit search to a specific document',
+                        ],
+                        'max_results' => [
+                            'type' => 'integer',
+                            'description' => 'Maximum results to return (default: 5, max: 10)',
+                        ],
+                    ],
+                    'required' => ['query'],
+                ],
+            ],
         ];
     }
 
@@ -154,8 +220,17 @@ class ToolSchemaRegistry
 
         $tools = array_merge($tools, $clientToolSchemas);
 
-        // Add all system tools (always available, executed on server)
-        $tools = array_merge($tools, $this->getSystemToolSchemas());
+        // Add system tools (filter document tools if no documents attached)
+        $systemTools = $this->getSystemToolSchemas();
+
+        if (! $conversation->hasDocuments()) {
+            $systemTools = array_values(array_filter(
+                $systemTools,
+                fn ($tool) => ! str_starts_with($tool['name'], 'document_')
+            ));
+        }
+
+        $tools = array_merge($tools, $systemTools);
 
         // Add user tools from agent (API tools only for now)
         foreach ($conversation->agent->tools as $tool) {

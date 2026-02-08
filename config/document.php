@@ -31,17 +31,38 @@ return [
     */
 
     'supported_types' => [
+        // Plain text (PlainTextExtractor)
         'text/plain',
         'text/markdown',
         'text/x-markdown',
         'text/csv',
-        'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/html',
-        'application/xhtml+xml',
         'application/json',
         'application/xml',
         'text/xml',
+
+        // Documents (TextractExtractor)
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/rtf',
+        'application/vnd.oasis.opendocument.text',
+
+        // Spreadsheets (TextractExtractor)
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.oasis.opendocument.spreadsheet',
+
+        // Presentations (TextractExtractor)
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+
+        // HTML (TextractExtractor)
+        'text/html',
+        'application/xhtml+xml',
+
+        // Images with OCR (TextractExtractor)
+        'image/jpeg',
+        'image/png',
+        'image/gif',
     ],
 
     /*
