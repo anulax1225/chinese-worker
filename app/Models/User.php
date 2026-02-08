@@ -79,4 +79,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Conversation::class);
     }
+
+    /**
+     * Get the documents for the user.
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(Document::class);
+    }
 }

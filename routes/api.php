@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\ConversationController;
+use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\FileController;
 use App\Http\Controllers\Api\V1\SystemPromptController;
 use App\Http\Controllers\Api\V1\ToolController;
@@ -57,5 +58,13 @@ Route::prefix('v1')->group(function (): void {
             ->where('model', '[a-zA-Z0-9_\-\.:\/]+');
         Route::delete('ai-backends/{backend}/models/{model}', [AIBackendController::class, 'deleteModel'])
             ->where('model', '[a-zA-Z0-9_\-\.:\/]+');
+
+        // Documents
+        Route::get('documents/supported-types', [DocumentController::class, 'supportedTypes']);
+        Route::apiResource('documents', DocumentController::class)->except(['update']);
+        Route::get('documents/{document}/stages', [DocumentController::class, 'stages']);
+        Route::get('documents/{document}/chunks', [DocumentController::class, 'chunks']);
+        Route::get('documents/{document}/preview', [DocumentController::class, 'preview']);
+        Route::post('documents/{document}/reprocess', [DocumentController::class, 'reprocess']);
     });
 });

@@ -1,0 +1,797 @@
+name: 'Conversation Management'
+description: |-
+
+  APIs for managing AI agent conversations
+endpoints:
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/agents/{agent_id}/conversations'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Create Conversation'
+      description: 'Create a new conversation with an agent.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      agent_id:
+        custom: []
+        name: agent_id
+        description: 'The ID of the agent.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      agent:
+        custom: []
+        name: agent
+        description: 'The agent ID.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      agent_id: 1
+      agent: 1
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      title:
+        custom: []
+        name: title
+        description: 'Optional title for the conversation.'
+        required: false
+        example: 'Debug authentication issue'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      metadata:
+        custom: []
+        name: metadata
+        description: 'Optional metadata.'
+        required: false
+        example: []
+        type: object
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      client_type:
+        custom: []
+        name: client_type
+        description: ''
+        required: true
+        example: architecto
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      client_tool_schemas:
+        custom: []
+        name: client_tool_schemas
+        description: ''
+        required: false
+        example: null
+        type: 'object[]'
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: true
+        deprecated: false
+      'client_tool_schemas[].name':
+        custom: []
+        name: 'client_tool_schemas[].name'
+        description: 'This field is required when <code>client_tool_schemas</code> is present.'
+        required: false
+        example: architecto
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      'client_tool_schemas[].description':
+        custom: []
+        name: 'client_tool_schemas[].description'
+        description: 'This field is required when <code>client_tool_schemas</code> is present.'
+        required: false
+        example: 'Eius et animi quos velit et.'
+        type: string
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      'client_tool_schemas[].parameters':
+        custom: []
+        name: 'client_tool_schemas[].parameters'
+        description: 'This field is required when <code>client_tool_schemas</code> is present.'
+        required: false
+        example: null
+        type: object
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+    cleanBodyParameters:
+      title: 'Debug authentication issue'
+      metadata: []
+      client_type: architecto
+      client_tool_schemas:
+        -
+          name: architecto
+          description: 'Eius et animi quos velit et.'
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 201
+        content: |-
+          {
+            "conversation": {
+              "id": 123,
+              "agent_id": 1,
+              "user_id": 1,
+              "status": "active",
+              "messages": [],
+              "turn_count": 0,
+              "total_tokens": 0,
+              "created_at": "2026-01-27T10:00:00.000000Z"
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: api/v1/conversations
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'List Conversations'
+      description: "Get paginated list of user's conversations."
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters: []
+    cleanUrlParameters: []
+    queryParameters:
+      agent_id:
+        custom: []
+        name: agent_id
+        description: 'Filter by agent ID.'
+        required: false
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      status:
+        custom: []
+        name: status
+        description: 'Filter by status.'
+        required: false
+        example: active
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      per_page:
+        custom: []
+        name: per_page
+        description: 'Items per page.'
+        required: false
+        example: 15
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanQueryParameters:
+      agent_id: 1
+      status: active
+      per_page: 15
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "data": [...],
+            "links": {...},
+            "meta": {...}
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/conversations/{conversation_id}'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Show Conversation'
+      description: 'Get full conversation details and history.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "conversation": {
+              "id": 123,
+              "agent": {"id": 1, "name": "Code Assistant"},
+              "status": "active",
+              "messages": [...],
+              "turn_count": 5,
+              "total_tokens": 1250,
+              "started_at": "2026-01-27T10:00:00.000000Z",
+              "last_activity_at": "2026-01-27T10:30:00.000000Z"
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/conversations/{conversation_id}/messages'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Send Message'
+      description: 'Send a message to a conversation. Server processes through agentic loop.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      content:
+        custom: []
+        name: content
+        description: 'The message content.'
+        required: true
+        example: 'What files are in /tmp?'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      images:
+        custom: []
+        name: images
+        description: 'Optional base64-encoded images for vision.'
+        required: false
+        example: []
+        type: 'string[]'
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      content: 'What files are in /tmp?'
+      images: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 202
+        content: |-
+          {
+            "status": "processing",
+            "conversation_id": 123,
+            "check_url": "/api/v1/conversations/123/status"
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/conversations/{conversation_id}/status'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Get Conversation Status'
+      description: 'Poll for conversation status (used with polling mode).'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "status": "completed",
+            "conversation_id": 123,
+            "messages": [
+              {"role": "assistant", "content": "I found 2 files in /tmp..."}
+            ],
+            "stats": {
+              "turns": 5,
+              "tokens": 450
+            }
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/conversations/{conversation_id}/stop'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Stop Conversation'
+      description: 'Stop a running conversation and mark it as cancelled.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "status": "cancelled",
+            "conversation_id": 123
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - GET
+    uri: 'api/v1/conversations/{conversation_id}/stream'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Stream Conversation Events'
+      description: 'Open a Server-Sent Events stream for real-time conversation updates.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "event": "tool_request",
+            "data": {"status": "waiting_for_tool", "tool_request": {...}}
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - POST
+    uri: 'api/v1/conversations/{conversation_id}/tool-results'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Submit Tool Result'
+      description: 'Submit the result of a builtin tool execution from CLI.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters:
+      call_id:
+        custom: []
+        name: call_id
+        description: 'The tool call ID.'
+        required: true
+        example: call_abc123
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      success:
+        custom: []
+        name: success
+        description: 'Whether tool execution succeeded.'
+        required: true
+        example: true
+        type: boolean
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+      output:
+        custom: []
+        name: output
+        description: 'The tool output (if successful).'
+        required: false
+        example: file1.txt\nfile2.txt
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+      error:
+        custom: []
+        name: error
+        description: 'The error message (if failed).'
+        required: false
+        example: 'File not found'
+        type: string
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: true
+        deprecated: false
+    cleanBodyParameters:
+      call_id: call_abc123
+      success: true
+      output: file1.txt\nfile2.txt
+      error: 'File not found'
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 200
+        content: |-
+          {
+            "status": "processing",
+            "conversation_id": 123
+          }
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
+  -
+    custom: []
+    httpMethods:
+      - DELETE
+    uri: 'api/v1/conversations/{conversation_id}'
+    metadata:
+      custom: []
+      groupName: 'Conversation Management'
+      groupDescription: |-
+
+        APIs for managing AI agent conversations
+      subgroup: ''
+      subgroupDescription: ''
+      title: 'Delete Conversation'
+      description: 'Delete a conversation permanently.'
+      authenticated: false
+      deprecated: false
+    headers:
+      Content-Type: application/json
+      Accept: application/json
+    urlParameters:
+      conversation_id:
+        custom: []
+        name: conversation_id
+        description: 'The ID of the conversation.'
+        required: true
+        example: 1
+        type: integer
+        enumValues: []
+        exampleWasSpecified: false
+        nullable: false
+        deprecated: false
+      conversation:
+        custom: []
+        name: conversation
+        description: 'The conversation ID.'
+        required: true
+        example: 123
+        type: integer
+        enumValues: []
+        exampleWasSpecified: true
+        nullable: false
+        deprecated: false
+    cleanUrlParameters:
+      conversation_id: 1
+      conversation: 123
+    queryParameters: []
+    cleanQueryParameters: []
+    bodyParameters: []
+    cleanBodyParameters: []
+    fileParameters: []
+    responses:
+      -
+        custom: []
+        status: 204
+        content: '{}'
+        headers: []
+        description: ''
+    responseFields: []
+    auth: []
+    controller: null
+    method: null
+    route: null
