@@ -363,15 +363,18 @@ const showModelDetails = async (model: AIModel) => {
             </Card>
 
             <!-- Models Table -->
-            <Card v-if="backend.supports_model_management">
+            <Card v-if="backend.models.length > 0 || backend.supports_model_management">
                 <CardHeader>
                     <CardTitle>Models</CardTitle>
                     <CardDescription>
                         {{ backend.models.length }} model{{ backend.models.length !== 1 ? 's' : '' }} available
+                        <span v-if="!backend.supports_model_management" class="text-muted-foreground">
+                            (cloud API - models are managed by provider)
+                        </span>
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div v-if="backend.models.length === 0" class="text-center py-8">
+                    <div v-if="backend.models.length === 0 && backend.supports_model_management" class="text-center py-8">
                         <p class="text-muted-foreground mb-4">No models installed yet.</p>
                         <Button @click="openPullDialog">
                             <Download class="h-4 w-4 mr-2" />
@@ -379,62 +382,70 @@ const showModelDetails = async (model: AIModel) => {
                         </Button>
                     </div>
 
-                    <Table v-else>
+                    <Table v-else-if="backend.models.length > 0">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Size</TableHead>
-                                <TableHead>Parameters</TableHead>
-                                <TableHead>Modified</TableHead>
-                                <TableHead class="w-12"></TableHead>
+                                <TableHead v-if="backend.supports_model_management">Size</TableHead>
+                                <TableHead v-if="backend.supports_model_management">Parameters</TableHead>
+                                <TableHead v-if="backend.supports_model_management">Modified</TableHead>
+                                <TableHead v-else>Description</TableHead>
+                                <TableHead v-if="backend.supports_model_management" class="w-12"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             <TableRow
                                 v-for="model in backend.models"
                                 :key="model.name"
-                                class="cursor-pointer"
-                                @click="showModelDetails(model)"
+                                :class="{ 'cursor-pointer': backend.supports_model_management }"
+                                @click="backend.supports_model_management && showModelDetails(model)"
                             >
                                 <TableCell class="font-medium">
                                     {{ model.name }}
                                 </TableCell>
-                                <TableCell>
-                                    {{ model.size_human || formatBytes(model.size) }}
-                                </TableCell>
-                                <TableCell>
-                                    {{ model.parameter_size || '-' }}
-                                </TableCell>
-                                <TableCell>
-                                    {{ formatDate(model.modified_at) }}
-                                </TableCell>
-                                <TableCell>
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger as-child>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                class="h-8 w-8"
-                                                @click.stop
-                                            >
-                                                <MoreHorizontal class="h-4 w-4" />
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem @click.stop="showModelDetails(model)">
-                                                <Info class="mr-2 h-4 w-4" />
-                                                Details
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                                class="text-destructive"
-                                                @click.stop="confirmDelete(model)"
-                                            >
-                                                <Trash2 class="mr-2 h-4 w-4" />
-                                                Delete
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
+                                <template v-if="backend.supports_model_management">
+                                    <TableCell>
+                                        {{ model.size_human || formatBytes(model.size) }}
+                                    </TableCell>
+                                    <TableCell>
+                                        {{ model.parameter_size || '-' }}
+                                    </TableCell>
+                                    <TableCell>
+                                        {{ formatDate(model.modified_at) }}
+                                    </TableCell>
+                                    <TableCell>
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger as-child>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    class="h-8 w-8"
+                                                    @click.stop
+                                                >
+                                                    <MoreHorizontal class="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuItem @click.stop="showModelDetails(model)">
+                                                    <Info class="mr-2 h-4 w-4" />
+                                                    Details
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    class="text-destructive"
+                                                    @click.stop="confirmDelete(model)"
+                                                >
+                                                    <Trash2 class="mr-2 h-4 w-4" />
+                                                    Delete
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </template>
+                                <template v-else>
+                                    <TableCell class="text-muted-foreground">
+                                        {{ model.description || '-' }}
+                                    </TableCell>
+                                </template>
                             </TableRow>
                         </TableBody>
                     </Table>

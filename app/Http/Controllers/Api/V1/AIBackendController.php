@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\StreamsServerSentEvents;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\PullModelRequest;
 use App\Http\Resources\AIBackendResource;
@@ -9,6 +10,7 @@ use App\Jobs\PullModelJob;
 use App\Services\AIBackendManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -20,6 +22,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class AIBackendController extends Controller
 {
+    use StreamsServerSentEvents;
+
     public function __construct(protected AIBackendManager $backendManager) {}
 
     /**
@@ -149,6 +153,8 @@ class AIBackendController extends Controller
      */
     public function pullModel(PullModelRequest $request, string $backend): JsonResponse
     {
+        Gate::authorize('manage-ai-models');
+
         try {
             $driver = $this->backendManager->driver($backend);
 
@@ -192,12 +198,7 @@ class AIBackendController extends Controller
     {
         return response()->stream(
             function () use ($pullId) {
-                if (ob_get_level()) {
-                    ob_end_clean();
-                }
-
-                echo ':'.str_repeat(' ', 2048)."\n\n";
-                flush();
+                $this->prepareSSEStream();
 
                 $this->sendSSEEvent('connected', ['pull_id' => $pullId]);
 
@@ -224,20 +225,14 @@ class AIBackendController extends Controller
                             }
                         }
 
-                        echo ": heartbeat\n\n";
-                        flush();
+                        $this->sendSSEHeartbeat();
                     }
                 } catch (\Exception $e) {
                     $this->sendSSEEvent('error', ['message' => 'Stream error']);
                 }
             },
             200,
-            [
-                'Content-Type' => 'text/event-stream',
-                'Cache-Control' => 'no-cache',
-                'Connection' => 'keep-alive',
-                'X-Accel-Buffering' => 'no',
-            ]
+            $this->getSSEHeaders()
         );
     }
 
@@ -248,6 +243,8 @@ class AIBackendController extends Controller
      */
     public function showModel(string $backend, string $model): JsonResponse
     {
+        Gate::authorize('manage-ai-models');
+
         try {
             $driver = $this->backendManager->driver($backend);
 
@@ -276,6 +273,8 @@ class AIBackendController extends Controller
      */
     public function deleteModel(string $backend, string $model): JsonResponse
     {
+        Gate::authorize('manage-ai-models');
+
         try {
             $driver = $this->backendManager->driver($backend);
 
@@ -295,18 +294,5 @@ class AIBackendController extends Controller
                 'message' => $e->getMessage(),
             ], 500);
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $data
-     */
-    protected function sendSSEEvent(string $event, array $data): void
-    {
-        echo "event: {$event}\n";
-        echo 'data: '.json_encode($data)."\n\n";
-        if (ob_get_level()) {
-            ob_flush();
-        }
-        flush();
     }
 }

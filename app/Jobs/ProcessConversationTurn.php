@@ -21,6 +21,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class ProcessConversationTurn implements ShouldQueue
 {
@@ -30,7 +31,7 @@ class ProcessConversationTurn implements ShouldQueue
      * The number of seconds the job can run before timing out.
      * Set high to allow for long AI responses.
      */
-    public int $timeout = 300;
+    public int $timeout = 12000;
 
     /**
      * The number of times the job may be attempted.
@@ -206,7 +207,7 @@ class ProcessConversationTurn implements ShouldQueue
             // Disconnect with separate error handling - don't let cleanup errors break job completion
             try {
                 $backend->disconnect();
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 Log::warning('Backend disconnect failed', [
                     'conversation_id' => $this->conversation->id,
                     'error' => $e->getMessage(),
@@ -215,7 +216,7 @@ class ProcessConversationTurn implements ShouldQueue
 
             try {
                 $broadcaster->disconnect();
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 Log::warning('Broadcaster disconnect failed', [
                     'conversation_id' => $this->conversation->id,
                     'error' => $e->getMessage(),
@@ -451,5 +452,22 @@ class ProcessConversationTurn implements ShouldQueue
     protected function getAllToolSchemas(): array
     {
         return app(ToolSchemaRegistry::class)->getToolsForConversation($this->conversation);
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        Log::error('Conversation turn job failed', [
+            'conversation_id' => $this->conversation->id,
+            'error' => $exception?->getMessage(),
+        ]);
+
+        $this->conversation->update(['status' => 'failed']);
+        app(ConversationEventBroadcaster::class)->failed(
+            $this->conversation,
+            $exception?->getMessage() ?? 'Unknown error'
+        );
     }
 }

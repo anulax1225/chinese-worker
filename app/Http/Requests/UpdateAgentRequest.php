@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateAgentRequest extends FormRequest
 {
@@ -37,7 +38,10 @@ class UpdateAgentRequest extends FormRequest
             'model_config.context_length' => ['nullable', 'integer', 'min:1024', 'max:1000000'],
             'model_config.timeout' => ['nullable', 'integer', 'min:10', 'max:3600'],
             'tool_ids' => ['nullable', 'array'],
-            'tool_ids.*' => ['integer', 'exists:tools,id'],
+            'tool_ids.*' => [
+                'integer',
+                Rule::exists('tools', 'id')->where('user_id', $this->user()->id),
+            ],
             'system_prompt_ids' => ['nullable', 'array'],
             'system_prompt_ids.*' => ['integer', 'exists:system_prompts,id'],
         ];
@@ -56,7 +60,7 @@ class UpdateAgentRequest extends FormRequest
             'code.required' => 'The agent code is required.',
             'status.in' => 'The status must be one of: active, inactive, or error.',
             'ai_backend.in' => 'The AI backend must be one of: ollama, anthropic, or openai.',
-            'tool_ids.*.exists' => 'One or more selected tools do not exist.',
+            'tool_ids.*.exists' => 'One or more selected tools do not exist or do not belong to you.',
             'system_prompt_ids.*.exists' => 'One or more selected system prompts do not exist.',
         ];
     }

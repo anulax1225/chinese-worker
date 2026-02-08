@@ -30,6 +30,8 @@ class SystemPromptController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection
     {
+        $this->authorize('viewAny', SystemPrompt::class);
+
         $prompts = SystemPrompt::query()
             ->when($request->search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
             ->when($request->has('active'), fn ($q) => $q->where('is_active', $request->boolean('active')))
@@ -53,6 +55,8 @@ class SystemPromptController extends Controller
      */
     public function store(StoreSystemPromptRequest $request): JsonResponse
     {
+        $this->authorize('create', SystemPrompt::class);
+
         $prompt = SystemPrompt::create($request->validated());
 
         return (new SystemPromptResource($prompt))->response()->setStatusCode(201);
@@ -67,6 +71,8 @@ class SystemPromptController extends Controller
      */
     public function show(SystemPrompt $systemPrompt): JsonResponse
     {
+        $this->authorize('view', $systemPrompt);
+
         return (new SystemPromptResource($systemPrompt))->response();
     }
 
@@ -86,6 +92,8 @@ class SystemPromptController extends Controller
      */
     public function update(UpdateSystemPromptRequest $request, SystemPrompt $systemPrompt): JsonResponse
     {
+        $this->authorize('update', $systemPrompt);
+
         $systemPrompt->update($request->validated());
 
         return (new SystemPromptResource($systemPrompt))->response();
@@ -100,6 +108,8 @@ class SystemPromptController extends Controller
      */
     public function destroy(SystemPrompt $systemPrompt): JsonResponse
     {
+        $this->authorize('delete', $systemPrompt);
+
         $systemPrompt->delete();
 
         return response()->json(null, 204);

@@ -9,6 +9,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class CleanupTempFilesJob implements ShouldQueue
 {
@@ -40,6 +41,16 @@ class CleanupTempFilesJob implements ShouldQueue
         Log::info('Cleaned up old output files', [
             'deleted_count' => $deletedOutputCount,
             'cutoff_time' => $outputFilesBefore->toDateTimeString(),
+        ]);
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        Log::error('Cleanup job failed', [
+            'error' => $exception?->getMessage(),
         ]);
     }
 }

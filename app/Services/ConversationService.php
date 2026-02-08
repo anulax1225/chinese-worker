@@ -68,6 +68,54 @@ class ConversationService
     }
 
     /**
+     * Add a user message to the conversation without dispatching job.
+     */
+    public function addUserMessage(
+        Conversation $conversation,
+        string $message,
+        ?array $images = null
+    ): void {
+        $result = $this->backendManager->forAgent($conversation->agent);
+        $backend = $result['backend'];
+        $tokenCount = $backend->countTokens($message);
+
+        $userMessage = ChatMessage::user($message, $images)->withTokenCount($tokenCount);
+        $conversation->addMessage($userMessage->toArray());
+    }
+
+    /**
+     * Start processing the conversation (dispatch job).
+     */
+    public function startProcessing(Conversation $conversation): ConversationState
+    {
+        try {
+            if ($conversation->context_limit === null) {
+                $result = $this->backendManager->forAgent($conversation->agent);
+                $backend = $result['backend'];
+                $conversation->update(['context_limit' => $backend->getContextLimit()]);
+            }
+
+            $conversation->update(['status' => 'active']);
+            $conversation->markAsStarted();
+            $conversation->resetRequestTurnCount();
+
+            ProcessConversationTurn::dispatch($conversation);
+            $this->broadcaster->processing($conversation);
+
+            return ConversationState::processing($conversation);
+        } catch (Exception $e) {
+            Log::error('Conversation processing failed', [
+                'conversation_id' => $conversation->id,
+                'error' => $e->getMessage(),
+            ]);
+            $conversation->update(['status' => 'failed']);
+            $this->broadcaster->failed($conversation, $e->getMessage());
+
+            return ConversationState::failed($conversation, $e->getMessage());
+        }
+    }
+
+    /**
      * Submit a tool result and resume the conversation.
      */
     public function submitToolResult(

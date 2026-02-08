@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AttachToolsRequest;
 use App\Http\Requests\StoreAgentRequest;
 use App\Http\Requests\UpdateAgentRequest;
 use App\Http\Resources\AgentResource;
@@ -199,15 +200,8 @@ class AgentController extends Controller
      *   }
      * }
      */
-    public function attachTools(Request $request, Agent $agent): JsonResponse
+    public function attachTools(AttachToolsRequest $request, Agent $agent): JsonResponse
     {
-        $this->authorize('update', $agent);
-
-        $request->validate([
-            'tool_ids' => ['required', 'array'],
-            'tool_ids.*' => ['integer', 'exists:tools,id'],
-        ]);
-
         $this->agentService->attachTools($agent, $request->input('tool_ids'));
 
         return response()->json([

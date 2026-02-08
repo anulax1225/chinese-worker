@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Contracts\AIBackendInterface;
 use App\DTOs\NormalizedModelConfig;
 use App\Models\Agent;
+use App\Services\AI\AnthropicBackend;
 use App\Services\AI\ModelConfigNormalizer;
 use App\Services\AI\OllamaBackend;
+use App\Services\AI\OpenAIBackend;
 use Closure;
 use InvalidArgumentException;
 
@@ -105,6 +107,22 @@ class AIBackendManager
     protected function createOllamaDriver(array $config): AIBackendInterface
     {
         return new OllamaBackend($config);
+    }
+
+    /**
+     * Create an Anthropic driver instance.
+     */
+    protected function createAnthropicDriver(array $config): AIBackendInterface
+    {
+        return new AnthropicBackend($config);
+    }
+
+    /**
+     * Create an OpenAI driver instance.
+     */
+    protected function createOpenaiDriver(array $config): AIBackendInterface
+    {
+        return new OpenAIBackend($config);
     }
 
     /**

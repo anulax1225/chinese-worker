@@ -65,7 +65,7 @@ class LoginController extends Controller
     /**
      * Get User
      *
-     * Get current authentificated user.
+     * Get current authenticated user.
      *
      * @group Authentication
      *
@@ -79,7 +79,7 @@ class LoginController extends Controller
      *  "updated_at": "2026-01-26T14:00:00.000000Z"
      * }
      */
-    public function user(Request $request)
+    public function user(Request $request): UserResource
     {
         return new UserResource($request->user());
     }

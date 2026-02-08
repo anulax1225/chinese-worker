@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
+use Throwable;
 
 class PullModelJob implements ShouldQueue
 {
@@ -96,5 +97,22 @@ class PullModelJob implements ShouldQueue
     protected function broadcastError(string $channel, string $error): void
     {
         $this->broadcast($channel, 'failed', ['error' => $error]);
+    }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(?Throwable $exception): void
+    {
+        $channel = "model-pull:{$this->pullId}:events";
+
+        Log::error('Model pull job failed', [
+            'backend' => $this->backend,
+            'model' => $this->modelName,
+            'pull_id' => $this->pullId,
+            'error' => $exception?->getMessage(),
+        ]);
+
+        $this->broadcastError($channel, $exception?->getMessage() ?? 'Unknown error');
     }
 }

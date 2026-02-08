@@ -86,13 +86,11 @@ class AIBackendController extends Controller
             $backendData['status'] = 'connected';
             $backendData['supports_model_management'] = $driver->supportsModelManagement();
 
-            // List models if supported
-            if ($driver->supportsModelManagement()) {
-                try {
-                    $backendData['models'] = $driver->listModels();
-                } catch (Throwable $e) {
-                    $backendData['models'] = [];
-                }
+            // List models (works for all backends - managed or not)
+            try {
+                $backendData['models'] = $driver->listModels();
+            } catch (Throwable $e) {
+                $backendData['models'] = [];
             }
         } catch (Throwable $e) {
             $backendData['status'] = 'error';

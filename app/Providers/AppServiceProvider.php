@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -41,6 +42,14 @@ class AppServiceProvider extends ServiceProvider
     {
         JsonResource::withoutWrapping();
         $this->configureDefaults();
+        $this->configureGates();
+    }
+
+    protected function configureGates(): void
+    {
+        // Gate for managing AI models (pull, delete, etc.)
+        // Can be restricted to admin users when role system is added
+        Gate::define('manage-ai-models', fn ($_user) => true);
     }
 
     protected function configureDefaults(): void

@@ -4,11 +4,16 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\DTOs\ToolResult;
 use App\Enums\DocumentStatus;
+use App\Http\Controllers\Concerns\StreamsServerSentEvents;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SendMessageRequest;
+use App\Http\Requests\StoreConversationRequest;
+use App\Http\Requests\SubmitToolResultRequest;
 use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
 use App\Models\Conversation;
 use App\Models\Document;
+use App\Models\User;
 use App\Services\ConversationEventBroadcaster;
 use App\Services\ConversationService;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +31,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ConversationController extends Controller
 {
+    use StreamsServerSentEvents;
+
     public function __construct(protected ConversationService $conversationService) {}
 
     /**
@@ -51,20 +58,8 @@ class ConversationController extends Controller
      *   }
      * }
      */
-    public function store(Request $request, Agent $agent): JsonResponse
+    public function store(StoreConversationRequest $request, Agent $agent): JsonResponse
     {
-        $this->authorize('view', $agent);
-
-        $request->validate([
-            'title' => ['nullable', 'string', 'max:255'],
-            'metadata' => ['nullable', 'array'],
-            'client_type' => ['required', 'string'],
-            'client_tool_schemas' => ['nullable', 'array'],
-            'client_tool_schemas.*.name' => ['required_with:client_tool_schemas', 'string'],
-            'client_tool_schemas.*.description' => ['required_with:client_tool_schemas', 'string'],
-            'client_tool_schemas.*.parameters' => ['required_with:client_tool_schemas', 'array'],
-        ]);
-
         $conversation = Conversation::create([
             'agent_id' => $agent->id,
             'user_id' => $request->user()->id,
@@ -99,17 +94,8 @@ class ConversationController extends Controller
      *   "check_url": "/api/v1/conversations/123/status"
      * }
      */
-    public function sendMessage(Request $request, Conversation $conversation): JsonResponse
+    public function sendMessage(SendMessageRequest $request, Conversation $conversation): JsonResponse
     {
-        $this->authorize('view', $conversation);
-
-        $request->validate([
-            'content' => ['required', 'string'],
-            'images' => ['nullable', 'array'],
-            'document_ids' => ['nullable', 'array'],
-            'document_ids.*' => ['integer', 'exists:documents,id'],
-        ]);
-
         $documentIds = $request->input('document_ids', []);
 
         // Attach documents to conversation if provided
@@ -117,19 +103,21 @@ class ConversationController extends Controller
             $this->attachDocuments($conversation, $request->user(), $documentIds);
         }
 
-        // Build message content with document previews if documents attached
-        $messageContent = $this->buildMessageWithDocuments(
+        // Add user's prompt as first message
+        $this->conversationService->addUserMessage(
+            $conversation,
             $request->input('content'),
-            $conversation,
-            $documentIds
-        );
-
-        // Process message asynchronously (could use a queue job here)
-        $state = $this->conversationService->processMessage(
-            $conversation,
-            $messageContent,
             $request->input('images')
         );
+
+        // Add document preview as second message if documents were attached
+        $documentMessage = $this->buildDocumentMessage($conversation, $documentIds);
+        if ($documentMessage !== null) {
+            $this->conversationService->addUserMessage($conversation, $documentMessage);
+        }
+
+        // Start processing (dispatch job)
+        $state = $this->conversationService->startProcessing($conversation);
 
         // Return appropriate response based on state
         if ($state->status === 'waiting_for_tool') {
@@ -265,17 +253,8 @@ class ConversationController extends Controller
      *   "conversation_id": 123
      * }
      */
-    public function submitToolResult(Request $request, Conversation $conversation): JsonResponse
+    public function submitToolResult(SubmitToolResultRequest $request, Conversation $conversation): JsonResponse
     {
-        $this->authorize('view', $conversation);
-
-        $request->validate([
-            'call_id' => ['required', 'string'],
-            'success' => ['required', 'boolean'],
-            'output' => ['nullable', 'string'],
-            'error' => ['nullable', 'string'],
-        ]);
-
         $result = new ToolResult(
             success: $request->boolean('success'),
             output: $request->input('output') ?? '',
@@ -327,17 +306,7 @@ class ConversationController extends Controller
 
         return response()->stream(
             function () use ($conversation) {
-                // Disable output buffering for real-time streaming
-                if (ob_get_level()) {
-                    ob_end_clean();
-                }
-
-                // 2KB padding for nginx buffering
-                echo ':'.str_repeat(' ', 2048)."\n\n";
-                if (ob_get_level()) {
-                    ob_flush();
-                }
-                flush();
+                $this->prepareSSEStream();
 
                 // Send initial connected event
                 $this->sendSSEEvent('connected', [
@@ -445,12 +414,7 @@ class ConversationController extends Controller
                             }
                         }
 
-                        // Flush output to keep connection alive (sends SSE comment as heartbeat)
-                        echo ": heartbeat\n\n";
-                        if (ob_get_level()) {
-                            ob_flush();
-                        }
-                        flush();
+                        $this->sendSSEHeartbeat();
                     }
                 } catch (\Exception $e) {
                     Log::error('SSE Redis polling error', [
@@ -465,28 +429,8 @@ class ConversationController extends Controller
                 }
             },
             200,
-            [
-                'Content-Type' => 'text/event-stream',
-                'Cache-Control' => 'no-cache',
-                'Connection' => 'keep-alive',
-                'X-Accel-Buffering' => 'no', // Disable nginx buffering
-            ]
+            $this->getSSEHeaders()
         );
-    }
-
-    /**
-     * Send an SSE event to the stream.
-     *
-     * @param  array<string, mixed>  $data
-     */
-    protected function sendSSEEvent(string $event, array $data): void
-    {
-        echo "event: {$event}\n";
-        echo 'data: '.json_encode($data)."\n\n";
-        if (ob_get_level()) {
-            ob_flush();
-        }
-        flush();
     }
 
     /**
@@ -581,7 +525,7 @@ class ConversationController extends Controller
      *
      * @param  array<int>  $documentIds
      */
-    protected function attachDocuments(Conversation $conversation, mixed $user, array $documentIds): void
+    protected function attachDocuments(Conversation $conversation, User $user, array $documentIds): void
     {
         $documents = Document::query()
             ->where('user_id', $user->id)
@@ -610,28 +554,26 @@ class ConversationController extends Controller
     }
 
     /**
-     * Build message content with document previews appended.
+     * Build document preview message content.
      *
      * @param  array<int>  $documentIds
      */
-    protected function buildMessageWithDocuments(string $content, Conversation $conversation, array $documentIds): string
+    protected function buildDocumentMessage(Conversation $conversation, array $documentIds): ?string
     {
         if (empty($documentIds)) {
-            return $content;
+            return null;
         }
 
-        // Get newly attached documents with their preview chunks
         $documents = $conversation->documents()
             ->whereIn('documents.id', $documentIds)
             ->with(['chunks' => fn ($query) => $query->ordered()->limit(2)])
             ->get();
 
         if ($documents->isEmpty()) {
-            return $content;
+            return null;
         }
 
-        $output = $content;
-        $output .= "\n\n---\n**Attached Documents:**\n";
+        $output = "**Attached Documents:**\n";
 
         foreach ($documents as $document) {
             $chunkCount = $document->chunks()->count();

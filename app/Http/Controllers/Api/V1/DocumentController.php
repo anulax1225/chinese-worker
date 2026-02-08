@@ -10,6 +10,7 @@ use App\Http\Resources\DocumentChunkResource;
 use App\Http\Resources\DocumentResource;
 use App\Http\Resources\DocumentStageResource;
 use App\Models\Document;
+use App\Models\User;
 use App\Services\Document\DocumentIngestionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -210,7 +211,7 @@ class DocumentController extends Controller
     /**
      * Ingest a document from an uploaded file.
      */
-    protected function ingestFromUpload(StoreDocumentRequest $request, $user, ?string $title): Document
+    protected function ingestFromUpload(StoreDocumentRequest $request, User $user, ?string $title): Document
     {
         $uploadedFile = $request->file('file');
 
