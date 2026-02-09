@@ -204,10 +204,8 @@ class AIBackendController extends Controller
     public function streamPullProgress(Request $request, string $backend, string $pullId): StreamedResponse
     {
         return response()->stream(
-            function () use ($pullId) {
-                $this->prepareSSEStream();
-
-                $this->sendSSEEvent('connected', ['pull_id' => $pullId]);
+            function () use ($pullId): \Generator {
+                yield $this->formatSSEEvent('connected', ['pull_id' => $pullId]);
 
                 $channel = "model-pull:{$pullId}:events";
                 $timeout = 2;
@@ -224,7 +222,7 @@ class AIBackendController extends Controller
                             $payload = json_decode($result[1], true);
 
                             if ($payload && isset($payload['event'], $payload['data'])) {
-                                $this->sendSSEEvent($payload['event'], $payload['data']);
+                                yield $this->formatSSEEvent($payload['event'], $payload['data']);
 
                                 if (in_array($payload['event'], ['completed', 'failed'])) {
                                     break;
@@ -232,10 +230,10 @@ class AIBackendController extends Controller
                             }
                         }
 
-                        $this->sendSSEHeartbeat();
+                        yield $this->formatSSEHeartbeat();
                     }
                 } catch (\Exception $e) {
-                    $this->sendSSEEvent('error', ['message' => 'Stream error']);
+                    yield $this->formatSSEEvent('error', ['message' => 'Stream error']);
                 }
             },
             200,

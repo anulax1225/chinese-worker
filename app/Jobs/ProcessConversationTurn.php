@@ -57,6 +57,7 @@ class ProcessConversationTurn implements ShouldQueue
         'document_list',
         'document_info',
         'document_get_chunks',
+        'document_read_file',
         'document_search',
     ];
 

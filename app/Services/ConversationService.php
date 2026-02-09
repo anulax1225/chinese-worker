@@ -9,6 +9,7 @@ use App\DTOs\ToolResult;
 use App\Events\ContextFiltered;
 use App\Jobs\ProcessConversationTurn;
 use App\Models\Conversation;
+use App\Models\Message;
 use App\Services\ContextFilter\ContextFilterManager;
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -156,13 +157,14 @@ class ConversationService
         Conversation $conversation,
         string $message,
         ?array $images = null
-    ): void {
+    ): Message {
         $result = $this->backendManager->forAgent($conversation->agent);
         $backend = $result['backend'];
         $tokenCount = $backend->countTokens($message);
 
         $userMessage = ChatMessage::user($message, $images)->withTokenCount($tokenCount);
-        $conversation->addMessage($userMessage);
+
+        return $conversation->addMessage($userMessage);
     }
 
     /**

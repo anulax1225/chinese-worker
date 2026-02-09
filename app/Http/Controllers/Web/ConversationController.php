@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Enums\DocumentStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
 use App\Models\Conversation;
 use App\Models\Document;
@@ -66,7 +67,7 @@ class ConversationController extends Controller
     {
         $this->authorize('view', $conversation);
 
-        $conversation->load(['agent:id,name,description,ai_backend']);
+        $conversation->load(['agent:id,name,description,ai_backend', 'conversationMessages', 'conversationMessages.toolCalls', 'conversationMessages.attachments']);
 
         // Get user's ready documents for attachment
         $documents = Document::where('user_id', $request->user()->id)
@@ -76,7 +77,7 @@ class ConversationController extends Controller
             ->get(['id', 'title', 'status', 'mime_type', 'file_size']);
 
         return Inertia::render('Conversations/Show', [
-            'conversation' => $conversation,
+            'conversation' => new ConversationResource($conversation),
             'documents' => $documents,
             'breadcrumbs' => [
                 ['label' => 'Conversations', 'href' => '/conversations'],

@@ -30,7 +30,7 @@ const parsedData = computed<WebSearchData | null>(() => {
     try {
         return JSON.parse(props.content);
     } catch {
-        return null;
+        return undefined;
     }
 });
 
@@ -47,7 +47,7 @@ const getFaviconUrl = (url: string) => {
         const domain = new URL(url).hostname;
         return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
     } catch {
-        return null;
+        return undefined;
     }
 };
 
@@ -64,15 +64,16 @@ const uniqueSources = computed(() => {
 </script>
 
 <template>
-    <div class="max-w-[85%]">
-        <!-- Compact header with search info -->
-        <div class="flex items-center gap-2 mb-2">
-            <div class="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Search class="h-4 w-4" />
+    <div class="flex gap-3">
+        <div class="h-8 w-8 shrink-0 rounded-full bg-blue-500/10 flex items-center justify-center">
+            <Search class="h-4 w-4 text-blue-500" />
+        </div>
+        <div class="flex-1">
+            <!-- Compact header with search info -->
+            <div class="flex items-center gap-1.5 text-sm text-muted-foreground mb-2">
                 <span>Searched</span>
                 <span v-if="parsedData?.query" class="font-medium text-foreground">"{{ parsedData.query }}"</span>
             </div>
-        </div>
 
         <!-- Source pills - ChatGPT/Claude style -->
         <div class="flex flex-wrap gap-1.5 mb-2">
@@ -157,6 +158,7 @@ const uniqueSources = computed(() => {
         <!-- No results -->
         <div v-if="parsedData && !parsedData.results?.length" class="text-sm text-muted-foreground py-2">
             No results found
+        </div>
         </div>
     </div>
 </template>

@@ -13,6 +13,7 @@ use App\Http\Resources\ConversationResource;
 use App\Models\Agent;
 use App\Models\Conversation;
 use App\Models\Document;
+use App\Models\MessageAttachment;
 use App\Models\User;
 use App\Services\ConversationEventBroadcaster;
 use App\Services\ConversationService;
@@ -102,16 +103,23 @@ class ConversationController extends Controller
         }
 
         // Add user's prompt as first message
-        $this->conversationService->addUserMessage(
+        $userMessage = $this->conversationService->addUserMessage(
             $conversation,
             $request->input('content'),
             $request->input('images')
         );
 
-        // Add document preview as second message if documents were attached
-        $documentMessage = $this->buildDocumentMessage($conversation, $documentIds);
-        if ($documentMessage !== null) {
-            $this->conversationService->addUserMessage($conversation, $documentMessage);
+        // Link documents as attachments on the user message
+        if (! empty($documentIds)) {
+            $documents = $conversation->documents()->whereIn('documents.id', $documentIds)->get();
+            foreach ($documents as $document) {
+                $userMessage->attachments()->create([
+                    'type' => MessageAttachment::TYPE_DOCUMENT,
+                    'document_id' => $document->id,
+                    'filename' => $document->title,
+                    'mime_type' => $document->mime_type,
+                ]);
+            }
         }
 
         // Start processing (dispatch job)
@@ -299,11 +307,9 @@ class ConversationController extends Controller
         $this->authorize('view', $conversation);
 
         return response()->stream(
-            function () use ($conversation) {
-                $this->prepareSSEStream();
-
+            function () use ($conversation): \Generator {
                 // Send initial connected event
-                $this->sendSSEEvent('connected', [
+                yield $this->formatSSEEvent('connected', [
                     'conversation_id' => $conversation->id,
                     'status' => 'connected',
                 ]);
@@ -313,7 +319,7 @@ class ConversationController extends Controller
                 $conversation->refresh();
 
                 if ($conversation->isWaitingForTool()) {
-                    $this->sendSSEEvent('tool_request', [
+                    yield $this->formatSSEEvent('tool_request', [
                         'status' => 'waiting_for_tool',
                         'conversation_id' => $conversation->id,
                         'tool_request' => $conversation->pending_tool_request,
@@ -341,13 +347,13 @@ class ConversationController extends Controller
                     if ($lastMessage && $lastMessage->role === 'assistant') {
                         $data['messages'] = [$lastMessage->toArray()];
                     }
-                    $this->sendSSEEvent('completed', $data);
+                    yield $this->formatSSEEvent('completed', $data);
 
                     return;
                 }
 
                 if ($conversation->status === 'failed') {
-                    $this->sendSSEEvent('failed', [
+                    yield $this->formatSSEEvent('failed', [
                         'status' => 'failed',
                         'conversation_id' => $conversation->id,
                         'error' => 'Conversation failed',
@@ -361,7 +367,7 @@ class ConversationController extends Controller
                 }
 
                 if ($conversation->status === 'cancelled') {
-                    $this->sendSSEEvent('cancelled', [
+                    yield $this->formatSSEEvent('cancelled', [
                         'status' => 'cancelled',
                         'conversation_id' => $conversation->id,
                         'stats' => [
@@ -398,7 +404,7 @@ class ConversationController extends Controller
                             $payload = json_decode($message, true);
 
                             if ($payload && isset($payload['event'], $payload['data'])) {
-                                $this->sendSSEEvent($payload['event'], $payload['data']);
+                                yield $this->formatSSEEvent($payload['event'], $payload['data']);
 
                                 // Stop on terminal events
                                 // Tool requests close so CLI can handle tool and reconnect
@@ -408,7 +414,7 @@ class ConversationController extends Controller
                             }
                         }
 
-                        $this->sendSSEHeartbeat();
+                        yield $this->formatSSEHeartbeat();
                     }
                 } catch (\Exception $e) {
                     Log::error('SSE Redis polling error', [
@@ -416,7 +422,7 @@ class ConversationController extends Controller
                         'error' => $e->getMessage(),
                     ]);
 
-                    $this->sendSSEEvent('error', [
+                    yield $this->formatSSEEvent('error', [
                         'message' => 'Stream connection error',
                         'conversation_id' => $conversation->id,
                     ]);
@@ -445,7 +451,7 @@ class ConversationController extends Controller
     {
         $this->authorize('view', $conversation);
 
-        $conversation->load('agent');
+        $conversation->load(['agent', 'conversationMessages.toolCalls', 'conversationMessages.attachments']);
 
         return new ConversationResource($conversation);
     }
@@ -539,40 +545,5 @@ class ConversationController extends Controller
                 'attached_at' => now(),
             ]);
         }
-    }
-
-    /**
-     * Build document preview message content.
-     *
-     * @param  array<int>  $documentIds
-     */
-    protected function buildDocumentMessage(Conversation $conversation, array $documentIds): ?string
-    {
-        if (empty($documentIds)) {
-            return null;
-        }
-
-        $documents = $conversation->documents()
-            ->whereIn('documents.id', $documentIds)
-            ->with(['chunks' => fn ($query) => $query->ordered()->limit(2)])
-            ->get();
-
-        if ($documents->isEmpty()) {
-            return null;
-        }
-
-        $output = "**Attached Documents:**\n";
-
-        foreach ($documents as $document) {
-            $chunkCount = $document->chunks()->count();
-            $output .= "\n### {$document->title} (ID: {$document->id})\n";
-            $output .= "Total chunks: {$chunkCount} | Use `document_get_chunks` to access more.\n\n";
-
-            foreach ($document->chunks->take(2) as $chunk) {
-                $output .= "**[Chunk {$chunk->chunk_index}]**\n{$chunk->content}\n\n";
-            }
-        }
-
-        return $output;
     }
 }

@@ -26,6 +26,7 @@ class MessageAttachment extends Model
     protected $fillable = [
         'message_id',
         'type',
+        'document_id',
         'filename',
         'mime_type',
         'storage_path',
@@ -50,5 +51,13 @@ class MessageAttachment extends Model
     public function message(): BelongsTo
     {
         return $this->belongsTo(Message::class);
+    }
+
+    /**
+     * Get the document associated with this attachment.
+     */
+    public function document(): BelongsTo
+    {
+        return $this->belongsTo(Document::class);
     }
 }

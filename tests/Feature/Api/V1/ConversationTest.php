@@ -1,9 +1,14 @@
 <?php
 
+use App\DTOs\ConversationState;
 use App\Models\Agent;
 use App\Models\Conversation;
+use App\Models\Document;
+use App\Models\DocumentChunk;
 use App\Models\Message;
+use App\Models\MessageAttachment;
 use App\Models\User;
+use App\Services\ConversationService;
 use Laravel\Sanctum\Sanctum;
 
 describe('Conversation Management', function () {
@@ -522,6 +527,202 @@ describe('Conversation Management', function () {
         });
     });
 
+});
+
+describe('Send Message with Documents', function () {
+    beforeEach(function () {
+        $this->user = User::factory()->create();
+        $this->agent = Agent::factory()->create([
+            'user_id' => $this->user->id,
+            'ai_backend' => 'ollama',
+        ]);
+        Sanctum::actingAs($this->user);
+    });
+
+    test('sending message with document_ids creates message attachments on user message', function () {
+        $conversation = Conversation::factory()->create([
+            'user_id' => $this->user->id,
+            'agent_id' => $this->agent->id,
+        ]);
+
+        $document = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Test Document',
+            'mime_type' => 'application/pdf',
+        ]);
+
+        DocumentChunk::factory()->create([
+            'document_id' => $document->id,
+            'chunk_index' => 0,
+            'content' => 'Chunk content here',
+            'token_count' => 50,
+        ]);
+
+        $userMessage = Message::factory()->user()->create([
+            'conversation_id' => $conversation->id,
+        ]);
+
+        $mock = Mockery::mock(ConversationService::class);
+        $mock->shouldReceive('addUserMessage')
+            ->andReturn($userMessage);
+        $mock->shouldReceive('startProcessing')
+            ->andReturn(ConversationState::processing($conversation));
+        $this->app->instance(ConversationService::class, $mock);
+
+        $response = $this->postJson("/api/v1/conversations/{$conversation->id}/messages", [
+            'content' => 'Please analyze this document',
+            'document_ids' => [$document->id],
+        ]);
+
+        $response->assertStatus(202);
+
+        $attachments = $userMessage->attachments()->get();
+        expect($attachments)->toHaveCount(1);
+        expect($attachments->first()->type)->toBe(MessageAttachment::TYPE_DOCUMENT);
+        expect($attachments->first()->document_id)->toBe($document->id);
+        expect($attachments->first()->filename)->toBe('Test Document');
+        expect($attachments->first()->mime_type)->toBe('application/pdf');
+        expect($attachments->first()->storage_path)->toBeNull();
+    });
+
+    test('sending message with multiple documents creates multiple attachments', function () {
+        $conversation = Conversation::factory()->create([
+            'user_id' => $this->user->id,
+            'agent_id' => $this->agent->id,
+        ]);
+
+        $doc1 = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Doc 1',
+            'mime_type' => 'application/pdf',
+        ]);
+        $doc2 = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Doc 2',
+            'mime_type' => 'text/plain',
+        ]);
+
+        foreach ([$doc1, $doc2] as $doc) {
+            DocumentChunk::factory()->create([
+                'document_id' => $doc->id,
+                'chunk_index' => 0,
+                'content' => 'Content',
+                'token_count' => 30,
+            ]);
+        }
+
+        $userMessage = Message::factory()->user()->create([
+            'conversation_id' => $conversation->id,
+        ]);
+
+        $mock = Mockery::mock(ConversationService::class);
+        $mock->shouldReceive('addUserMessage')
+            ->andReturn($userMessage);
+        $mock->shouldReceive('startProcessing')
+            ->andReturn(ConversationState::processing($conversation));
+        $this->app->instance(ConversationService::class, $mock);
+
+        $response = $this->postJson("/api/v1/conversations/{$conversation->id}/messages", [
+            'content' => 'Analyze these documents',
+            'document_ids' => [$doc1->id, $doc2->id],
+        ]);
+
+        $response->assertStatus(202);
+
+        $attachments = $userMessage->attachments()->get();
+        expect($attachments)->toHaveCount(2);
+        expect($attachments->pluck('document_id')->toArray())
+            ->toContain($doc1->id)
+            ->toContain($doc2->id);
+    });
+
+    test('getMessages injects document preview after message with document attachments', function () {
+        $conversation = Conversation::factory()->create([
+            'user_id' => $this->user->id,
+            'agent_id' => $this->agent->id,
+        ]);
+
+        $document = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+            'title' => 'My Report',
+            'mime_type' => 'text/plain',
+        ]);
+
+        DocumentChunk::factory()->create([
+            'document_id' => $document->id,
+            'chunk_index' => 0,
+            'content' => 'Report content here',
+            'token_count' => 40,
+        ]);
+
+        $userMessage = Message::factory()->user()->create([
+            'conversation_id' => $conversation->id,
+            'position' => 0,
+            'content' => 'Analyze this document',
+        ]);
+
+        $userMessage->attachments()->create([
+            'type' => MessageAttachment::TYPE_DOCUMENT,
+            'document_id' => $document->id,
+            'filename' => $document->title,
+            'mime_type' => $document->mime_type,
+        ]);
+
+        $messages = $conversation->getMessages();
+
+        expect($messages)->toHaveCount(2);
+        expect($messages[0]->role)->toBe('user');
+        expect($messages[0]->content)->toBe('Analyze this document');
+        expect($messages[1]->role)->toBe('user');
+        expect($messages[1]->content)->toContain('**Attached Documents:**');
+        expect($messages[1]->content)->toContain('My Report');
+        expect($messages[1]->content)->toContain('Report content here');
+    });
+
+    test('getMessages does not inject preview for messages without document attachments', function () {
+        $conversation = Conversation::factory()->create([
+            'user_id' => $this->user->id,
+            'agent_id' => $this->agent->id,
+        ]);
+
+        Message::factory()->user()->create([
+            'conversation_id' => $conversation->id,
+            'position' => 0,
+            'content' => 'Just a plain message',
+        ]);
+
+        $messages = $conversation->getMessages();
+
+        expect($messages)->toHaveCount(1);
+        expect($messages[0]->content)->toBe('Just a plain message');
+    });
+
+    test('sending message without document_ids creates no document attachments', function () {
+        $conversation = Conversation::factory()->create([
+            'user_id' => $this->user->id,
+            'agent_id' => $this->agent->id,
+        ]);
+
+        $userMessage = Message::factory()->user()->create([
+            'conversation_id' => $conversation->id,
+        ]);
+
+        $mock = Mockery::mock(ConversationService::class);
+        $mock->shouldReceive('addUserMessage')
+            ->once()
+            ->andReturn($userMessage);
+        $mock->shouldReceive('startProcessing')
+            ->andReturn(ConversationState::processing($conversation));
+        $this->app->instance(ConversationService::class, $mock);
+
+        $response = $this->postJson("/api/v1/conversations/{$conversation->id}/messages", [
+            'content' => 'Just a message',
+        ]);
+
+        $response->assertStatus(202);
+
+        expect($userMessage->attachments()->count())->toBe(0);
+    });
 });
 
 describe('Conversation Management - Unauthenticated', function () {

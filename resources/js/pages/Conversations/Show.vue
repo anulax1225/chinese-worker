@@ -154,10 +154,26 @@ const triggerProcessing = async (content: string, documentIds: number[] = []) =>
 const sendMessage = async (message: string, documentIds: number[] = []) => {
     if (!message.trim() || isSubmitting.value) return;
 
+    // Build optimistic attachments from selected documents
+    const optimisticAttachments = documentIds
+        .map(id => props.documents.find(d => d.id === id))
+        .filter(Boolean)
+        .map(doc => ({
+            id: `temp-${doc!.id}`,
+            type: 'document' as const,
+            document_id: doc!.id,
+            filename: doc!.title || 'Untitled',
+            mime_type: doc!.mime_type,
+            storage_path: null,
+            metadata: null,
+            created_at: new Date().toISOString(),
+        }));
+
     // Optimistically add user message
     props.conversation.messages.push({
         role: 'user',
         content: message,
+        attachments: optimisticAttachments.length > 0 ? optimisticAttachments : undefined,
     });
 
     await scrollToBottom();
@@ -310,7 +326,7 @@ const renderMarkdown = (content: string): string => {
     return md.render(content);
 };
 
-// On mount: handle initial state (do NOT auto-connect to stream)
+// On mount: handle initial state
 onMounted(async () => {
     scrollToBottom();
 
@@ -322,6 +338,12 @@ onMounted(async () => {
     ) {
         pendingToolRequest.value = props.conversation.pending_tool_request;
         toolDialogOpen.value = true;
+    }
+
+    // Auto-connect to stream if conversation is currently processing
+    if (props.conversation.status === 'active') {
+        isSubmitting.value = true;
+        connectToStream();
     }
 });
 

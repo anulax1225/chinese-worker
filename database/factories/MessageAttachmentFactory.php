@@ -42,12 +42,14 @@ class MessageAttachmentFactory extends Factory
     /**
      * Configure the attachment as a document.
      */
-    public function document(): static
+    public function document(?int $documentId = null): static
     {
         return $this->state(fn (array $attributes) => [
             'type' => MessageAttachment::TYPE_DOCUMENT,
+            'document_id' => $documentId,
             'mime_type' => $this->faker->randomElement(['application/pdf', 'text/plain', 'application/json']),
             'filename' => $this->faker->word().'.'.$this->faker->randomElement(['pdf', 'txt', 'json']),
+            'storage_path' => null,
         ]);
     }
 }

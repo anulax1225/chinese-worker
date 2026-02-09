@@ -4,3 +4,5 @@ export { default as WebFetchResult } from './WebFetchResult.vue';
 export { default as BashResult } from './BashResult.vue';
 export { default as FileReadResult } from './FileReadResult.vue';
 export { default as FileWriteResult } from './FileWriteResult.vue';
+export { default as TodoResult } from './TodoResult.vue';
+export { default as DocumentResult } from './DocumentResult.vue';

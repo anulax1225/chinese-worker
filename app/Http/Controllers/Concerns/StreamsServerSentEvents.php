@@ -5,35 +5,21 @@ namespace App\Http\Controllers\Concerns;
 trait StreamsServerSentEvents
 {
     /**
-     * Send an SSE event to the stream.
+     * Format an SSE event string for use with yield in a Generator.
      *
      * @param  array<string, mixed>  $data
      */
-    protected function sendSSEEvent(string $event, array $data): void
+    protected function formatSSEEvent(string $event, array $data): string
     {
-        echo "event: {$event}\n";
-        echo 'data: '.json_encode($data)."\n\n";
-        if (ob_get_level()) {
-            ob_flush();
-        }
-        flush();
+        return "event: {$event}\ndata: ".json_encode($data)."\n\n";
     }
 
     /**
-     * Prepare the output buffer for SSE streaming.
+     * Format an SSE heartbeat comment.
      */
-    protected function prepareSSEStream(): void
+    protected function formatSSEHeartbeat(): string
     {
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
-
-        // 2KB padding for nginx buffering
-        echo ':'.str_repeat(' ', 2048)."\n\n";
-        if (ob_get_level()) {
-            ob_flush();
-        }
-        flush();
+        return ": heartbeat\n\n";
     }
 
     /**
@@ -44,22 +30,10 @@ trait StreamsServerSentEvents
     protected function getSSEHeaders(): array
     {
         return [
-            'Content-Type' => 'text/event-stream',
+            'Content-Type' => 'text/event-stream; charset=UTF-8',
             'Cache-Control' => 'no-cache',
             'Connection' => 'keep-alive',
             'X-Accel-Buffering' => 'no',
         ];
-    }
-
-    /**
-     * Send an SSE heartbeat comment.
-     */
-    protected function sendSSEHeartbeat(): void
-    {
-        echo ": heartbeat\n\n";
-        if (ob_get_level()) {
-            ob_flush();
-        }
-        flush();
     }
 }

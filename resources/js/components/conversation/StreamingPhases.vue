@@ -9,6 +9,8 @@ import {
     BashResult,
     FileReadResult,
     FileWriteResult,
+    TodoResult,
+    DocumentResult,
 } from '@/components/tools';
 
 export interface StreamingPhase {
@@ -38,6 +40,8 @@ const getToolResultComponent = (toolName: string | undefined) => {
     if (name === 'bash') return BashResult;
     if (name === 'read') return FileReadResult;
     if (name === 'write') return FileWriteResult;
+    if (name.startsWith('todo_')) return TodoResult;
+    if (name.startsWith('document_')) return DocumentResult;
     return ToolResultDefault;
 };
 </script>

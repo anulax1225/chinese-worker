@@ -279,6 +279,158 @@ describe('document_get_chunks', function () {
     });
 });
 
+describe('document_read_file', function () {
+    test('reads entire document content', function () {
+        $document = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Full Read Document',
+        ]);
+
+        DocumentChunk::create([
+            'document_id' => $document->id,
+            'chunk_index' => 0,
+            'content' => 'First chunk of content.',
+            'token_count' => 30,
+            'start_offset' => 0,
+            'end_offset' => 100,
+            'created_at' => now(),
+        ]);
+
+        DocumentChunk::create([
+            'document_id' => $document->id,
+            'chunk_index' => 1,
+            'content' => 'Second chunk of content.',
+            'token_count' => 30,
+            'start_offset' => 100,
+            'end_offset' => 200,
+            'created_at' => now(),
+        ]);
+
+        DocumentChunk::create([
+            'document_id' => $document->id,
+            'chunk_index' => 2,
+            'content' => 'Third chunk of content.',
+            'token_count' => 30,
+            'start_offset' => 200,
+            'end_offset' => 300,
+            'created_at' => now(),
+        ]);
+
+        $this->conversation->documents()->attach($document->id, [
+            'preview_chunks' => 2,
+            'preview_tokens' => 60,
+            'attached_at' => now(),
+        ]);
+
+        $result = $this->handler->execute('document_read_file', [
+            'document_id' => $document->id,
+        ]);
+
+        expect($result->success)->toBeTrue();
+        expect($result->output)->toContain('Full Read Document');
+        expect($result->output)->toContain('First chunk of content.');
+        expect($result->output)->toContain('Second chunk of content.');
+        expect($result->output)->toContain('Third chunk of content.');
+    });
+
+    test('includes section titles in output', function () {
+        $document = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Sectioned Document',
+        ]);
+
+        DocumentChunk::create([
+            'document_id' => $document->id,
+            'chunk_index' => 0,
+            'content' => 'Intro content.',
+            'token_count' => 20,
+            'start_offset' => 0,
+            'end_offset' => 50,
+            'section_title' => 'Introduction',
+            'created_at' => now(),
+        ]);
+
+        DocumentChunk::create([
+            'document_id' => $document->id,
+            'chunk_index' => 1,
+            'content' => 'Body content.',
+            'token_count' => 20,
+            'start_offset' => 50,
+            'end_offset' => 100,
+            'section_title' => 'Body',
+            'created_at' => now(),
+        ]);
+
+        $this->conversation->documents()->attach($document->id, [
+            'preview_chunks' => 2,
+            'preview_tokens' => 40,
+            'attached_at' => now(),
+        ]);
+
+        $result = $this->handler->execute('document_read_file', [
+            'document_id' => $document->id,
+        ]);
+
+        expect($result->success)->toBeTrue();
+        expect($result->output)->toContain('## Introduction');
+        expect($result->output)->toContain('## Body');
+    });
+
+    test('returns error when document exceeds token limit', function () {
+        $document = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+            'title' => 'Large Document',
+        ]);
+
+        // Create chunks that exceed 50,000 tokens
+        for ($i = 0; $i < 60; $i++) {
+            DocumentChunk::create([
+                'document_id' => $document->id,
+                'chunk_index' => $i,
+                'content' => str_repeat('word ', 200),
+                'token_count' => 1000,
+                'start_offset' => $i * 1000,
+                'end_offset' => ($i + 1) * 1000,
+                'created_at' => now(),
+            ]);
+        }
+
+        $this->conversation->documents()->attach($document->id, [
+            'preview_chunks' => 2,
+            'preview_tokens' => 2000,
+            'attached_at' => now(),
+        ]);
+
+        $result = $this->handler->execute('document_read_file', [
+            'document_id' => $document->id,
+        ]);
+
+        expect($result->success)->toBeFalse();
+        expect($result->error)->toContain('too large');
+        expect($result->error)->toContain('document_get_chunks');
+    });
+
+    test('returns error for non-attached document', function () {
+        $document = Document::factory()->ready()->create([
+            'user_id' => $this->user->id,
+        ]);
+
+        $result = $this->handler->execute('document_read_file', [
+            'document_id' => $document->id,
+        ]);
+
+        expect($result->success)->toBeFalse();
+        expect($result->error)->toContain('not found');
+    });
+
+    test('returns error when document_id is missing', function () {
+        $result = $this->handler->execute('document_read_file', []);
+
+        expect($result->success)->toBeFalse();
+        expect($result->error)->toContain('document_id');
+    });
+});
+
 describe('document_search', function () {
     beforeEach(function () {
         $this->document = Document::factory()->ready()->create([

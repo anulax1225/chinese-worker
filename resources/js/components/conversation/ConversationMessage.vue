@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Bot, ChevronRight, Wrench, Brain } from 'lucide-vue-next';
+import { Bot, ChevronRight, Wrench, Brain, FileText } from 'lucide-vue-next';
 import {
     ToolResultDefault,
     WebSearchResult,
@@ -9,6 +10,8 @@ import {
     BashResult,
     FileReadResult,
     FileWriteResult,
+    TodoResult,
+    DocumentResult,
 } from '@/components/tools';
 import type { ChatMessage } from '@/types';
 
@@ -18,6 +21,11 @@ const props = defineProps<{
     isFirstInSequence: boolean;
     renderMarkdown: (content: string) => string;
 }>();
+
+// Document attachments for display on user messages
+const documentAttachments = computed(() =>
+    props.message.attachments?.filter(a => a.type === 'document') ?? []
+);
 
 // Count words in thinking content
 const countWords = (text: string): number => {
@@ -32,6 +40,8 @@ const getToolResultComponent = (toolName: string | undefined) => {
     if (name === 'bash') return BashResult;
     if (name === 'read') return FileReadResult;
     if (name === 'write') return FileWriteResult;
+    if (name.startsWith('todo_')) return TodoResult;
+    if (name.startsWith('document_')) return DocumentResult;
     return ToolResultDefault;
 };
 </script>
@@ -43,22 +53,30 @@ const getToolResultComponent = (toolName: string | undefined) => {
             <div class="bg-primary shadow-sm px-4 py-2.5 rounded-2xl text-primary-foreground">
                 <div class="text-sm whitespace-pre-wrap">{{ message.content }}</div>
             </div>
+            <!-- Document attachment chips -->
+            <div v-if="documentAttachments.length" class="flex flex-wrap gap-1.5 mt-1.5 justify-end">
+                <div
+                    v-for="attachment in documentAttachments"
+                    :key="attachment.id"
+                    class="inline-flex items-center gap-1.5 bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md text-xs text-muted-foreground"
+                >
+                    <FileText class="w-3 h-3 shrink-0" />
+                    <span class="max-w-40 truncate">{{ attachment.filename }}</span>
+                </div>
+            </div>
             <div v-if="message.token_count" class="mt-1 text-[10px] text-muted-foreground/50 text-right">
                 {{ message.token_count }} tokens
             </div>
         </div>
     </div>
 
-    <!-- Tool message - Dynamic component based on tool type -->
-    <div v-else-if="message.role === 'tool'" class="flex gap-3">
-        <div class="w-8 shrink-0" />
-        <div class="bg-card shadow-sm px-4 py-2.5 border border-border rounded-2xl rounded-tl-md max-w-[85%] md:max-w-[65%]">
-            <component
-                :is="getToolResultComponent(message.name)"
-                :content="message.content"
-                :tool-name="message.name"
-            />
-        </div>
+    <!-- Tool message - rendered directly (components have their own layout) -->
+    <div v-else-if="message.role === 'tool'" class="max-w-[85%] md:max-w-[75%]">
+        <component
+            :is="getToolResultComponent(message.name)"
+            :content="message.content"
+            :tool-name="message.name"
+        />
     </div>
 
     <!-- System message - Centered, muted -->
@@ -113,7 +131,7 @@ const getToolResultComponent = (toolName: string | undefined) => {
                     class="text-xs"
                 >
                     <Wrench class="mr-1 w-3 h-3" />
-                    {{ tool.function?.name || 'tool' }}
+                    {{ tool.name || tool.function_name || 'tool' }}
                 </Badge>
             </div>
 

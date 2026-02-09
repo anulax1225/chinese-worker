@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Log;
 
 class Conversation extends Model
 {
@@ -182,11 +183,54 @@ class Conversation extends Model
      */
     public function getMessages(): array
     {
-        return $this->conversationMessages()
-            ->with(['toolCalls', 'attachments'])
-            ->get()
-            ->map(fn (Message $m) => $m->toChatMessage())
-            ->all();
+        $messages = $this->conversationMessages()
+            ->with(['toolCalls', 'attachments.document'])
+            ->get();
+
+        $result = [];
+        foreach ($messages as $message) {
+            $result[] = $message->toChatMessage();
+
+            $documentContent = $this->buildDocumentPreview($message);
+            if ($documentContent !== null) {
+                $result[] = ChatMessage::user($documentContent);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Build a document preview message from a message's document attachments.
+     */
+    protected function buildDocumentPreview(Message $message): ?string
+    {
+        $documentAttachments = $message->attachments->where('type', MessageAttachment::TYPE_DOCUMENT);
+
+        if ($documentAttachments->isEmpty()) {
+            return null;
+        }
+
+        $output = "**Attached Documents:**\n";
+
+        foreach ($documentAttachments as $attachment) {
+            $document = $attachment->document;
+            if (! $document) {
+                continue;
+            }
+
+            $chunkCount = $document->chunks()->count();
+            $previewChunks = $document->chunks()->ordered()->limit(2)->get();
+
+            $output .= "\n### {$document->title} (ID: {$document->id})\n";
+            $output .= "Total chunks: {$chunkCount} | Use `document_get_chunks` or `document_read_file` to access more.\n\n";
+
+            foreach ($previewChunks as $chunk) {
+                $output .= "**[Chunk {$chunk->chunk_index}]**\n{$chunk->content}\n\n";
+            }
+        }
+
+        return $output;
     }
 
     /**
@@ -196,6 +240,8 @@ class Conversation extends Model
      */
     public function getMessagesAsArrays(): array
     {
+        Log::info('Messages : ', ['messages' => $this->conversationMessages()->with(['toolCalls', 'attachments'])->get()->toArray()]);
+
         return array_map(fn (ChatMessage $m) => $m->toArray(), $this->getMessages());
     }
 

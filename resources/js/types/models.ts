@@ -208,15 +208,30 @@ export interface Conversation {
     agent?: Agent;
 }
 
+export interface MessageAttachment {
+    id: string;
+    type: 'image' | 'document';
+    document_id: number | null;
+    filename: string;
+    mime_type: string;
+    storage_path: string | null;
+    metadata: Record<string, unknown> | null;
+    created_at: string;
+}
+
 export interface ChatMessage {
+    id?: string;
+    position?: number;
     role: 'user' | 'assistant' | 'system' | 'tool';
     content: string;
     thinking?: string;
     tool_call_id?: string;
     tool_calls?: ToolCall[];
+    attachments?: MessageAttachment[];
     name?: string;
     token_count?: number;
     counted_at?: string;
+    created_at?: string;
 }
 
 export interface ToolRequest {
@@ -227,11 +242,12 @@ export interface ToolRequest {
 
 export interface ToolCall {
     id: string;
-    type: 'function';
-    function: {
-        name: string;
-        arguments: string;
-    };
+    call_id: string;
+    function_name: string;
+    name: string;
+    arguments: Record<string, unknown>;
+    position: number;
+    created_at: string;
 }
 
 export interface PersonalAccessToken {

@@ -24,6 +24,7 @@ class DocumentToolHandler
             'document_list' => $this->list(),
             'document_info' => $this->info($args),
             'document_get_chunks' => $this->getChunks($args),
+            'document_read_file' => $this->readFile($args),
             'document_search' => $this->search($args),
             default => new ToolResult(
                 success: false,
@@ -197,6 +198,74 @@ class DocumentToolHandler
                 $output .= "[Section: {$chunk->section_title}]\n";
             }
             $output .= "[Chunk {$chunk->chunk_index}] ({$chunk->token_count} tokens)\n";
+            $output .= $chunk->content."\n\n";
+        }
+
+        return new ToolResult(
+            success: true,
+            output: trim($output),
+            error: null
+        );
+    }
+
+    /**
+     * Read the entire content of a document at once.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    protected function readFile(array $args): ToolResult
+    {
+        $documentId = $args['document_id'] ?? null;
+        if (! $documentId) {
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: 'document_id is required'
+            );
+        }
+
+        $document = $this->findDocument($documentId);
+        if (! $document) {
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: "Document not found or not attached: {$documentId}"
+            );
+        }
+
+        $totalTokens = $document->getTotalTokens();
+        $maxTokens = 50000;
+
+        if ($totalTokens > $maxTokens) {
+            $chunkCount = $document->getChunkCount();
+
+            return new ToolResult(
+                success: false,
+                output: '',
+                error: "Document is too large to read at once ({$totalTokens} tokens, limit: {$maxTokens}). Use document_get_chunks with start_index/end_index to read in parts. Total chunks: {$chunkCount}"
+            );
+        }
+
+        $chunks = $document->chunks()
+            ->ordered()
+            ->get();
+
+        if ($chunks->isEmpty()) {
+            return new ToolResult(
+                success: true,
+                output: 'Document has no content.',
+                error: null
+            );
+        }
+
+        $docTitle = $document->title ?? 'Untitled';
+        $output = "Document: {$docTitle} ({$chunks->count()} chunks, {$totalTokens} tokens)\n";
+        $output .= str_repeat('=', 60)."\n\n";
+
+        foreach ($chunks as $chunk) {
+            if ($chunk->section_title) {
+                $output .= "## {$chunk->section_title}\n\n";
+            }
             $output .= $chunk->content."\n\n";
         }
 

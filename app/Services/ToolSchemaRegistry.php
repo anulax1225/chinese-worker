@@ -173,6 +173,20 @@ class ToolSchemaRegistry
                 ],
             ],
             [
+                'name' => 'document_read_file',
+                'description' => 'Read the entire content of a document at once. Best for small to medium documents. For large documents exceeding the token limit, use document_get_chunks instead.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'document_id' => [
+                            'type' => 'integer',
+                            'description' => 'The document ID',
+                        ],
+                    ],
+                    'required' => ['document_id'],
+                ],
+            ],
+            [
                 'name' => 'document_search',
                 'description' => 'Search for text within attached documents and return matching chunk previews',
                 'parameters' => [
