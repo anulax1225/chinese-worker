@@ -9,6 +9,7 @@ readonly class FilterResult
     /**
      * @param  array<int, ChatMessage>  $messages
      * @param  array<int, string>  $removedMessageIds
+     * @param  array<string, mixed>|null  $metadata
      */
     public function __construct(
         public array $messages,
@@ -17,6 +18,7 @@ readonly class FilterResult
         public array $removedMessageIds,
         public string $strategyUsed,
         public float $durationMs,
+        public ?array $metadata = null,
     ) {}
 
     /**
@@ -59,7 +61,7 @@ readonly class FilterResult
      */
     public function toArray(): array
     {
-        return [
+        $result = [
             'original_count' => $this->originalCount,
             'filtered_count' => $this->filteredCount,
             'removed_count' => $this->getRemovedCount(),
@@ -67,5 +69,11 @@ readonly class FilterResult
             'strategy_used' => $this->strategyUsed,
             'duration_ms' => round($this->durationMs, 2),
         ];
+
+        if ($this->metadata !== null) {
+            $result['metadata'] = $this->metadata;
+        }
+
+        return $result;
     }
 }

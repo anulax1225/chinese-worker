@@ -108,6 +108,70 @@ Pass-through strategy that performs no filtering. All messages are sent to the A
 - Short conversations that won't exceed limits
 - Testing without filtering interference
 
+### Summarization
+
+Compresses old messages into AI-generated summaries stored in the database. Provides better context preservation than simple truncation.
+
+```php
+// Agent configuration
+'context_strategy' => 'summarization',
+'context_options' => [
+    'min_messages' => 5,       // Minimum messages to trigger summarization
+    'target_tokens' => 500,    // Target summary token count
+],
+```
+
+**How it works:**
+1. Identifies messages that would be removed by token budget
+2. If enough messages to summarize, calls AI to generate a summary
+3. Stores summary in `conversation_summaries` table
+4. Marks original messages as `summarized = true`
+5. Injects synthetic summary message into context
+6. Falls back to token budget if AI call fails
+
+**Database Schema:**
+```
+conversation_summaries
+├── id (ulid)
+├── conversation_id (foreign key)
+├── from_position (first summarized message position)
+├── to_position (last summarized message position)
+├── content (the summary text)
+├── token_count (summary token count)
+├── original_token_count (tokens saved)
+├── backend_used (AI backend name)
+├── model_used (AI model name)
+├── summarized_message_ids (JSON array)
+└── metadata (JSON)
+
+messages (new fields)
+├── is_synthetic (boolean) - True for AI-generated summary messages
+├── summarized (boolean) - True when included in a summary
+└── summary_id (ulid) - Reference to the summary
+```
+
+**Configuration in `config/ai.php`:**
+```php
+'summarization' => [
+    'enabled' => true,
+    'backend' => null,           // Use conversation's backend if null
+    'model' => null,             // Use backend's default model
+    'target_tokens' => 500,
+    'min_messages_for_summary' => 5,
+    'cache' => [
+        'enabled' => true,
+        'ttl' => 3600,
+    ],
+    'fallback_on_failure' => 'token_budget',
+    'prompt' => 'Summarize the following conversation...',
+],
+```
+
+**Best for:**
+- Long-running conversations
+- Contexts where historical details matter
+- When simple truncation loses too much information
+
 ## Configuration
 
 ### Per-Agent Settings
@@ -244,6 +308,23 @@ ContextFilterResolutionFailed::class
 // - conversationId (optional)
 ```
 
+**ConversationSummarized** - After summarization completes:
+```php
+ConversationSummarized::class
+// Properties:
+// - conversationId
+// - summaryId
+// - summarizedMessageCount
+// - originalTokenCount
+// - summaryTokenCount
+// - compressionRatio
+// - backend
+// - durationMs
+// Methods:
+// - getTokensSaved(): int
+// - getCompressionPercentage(): float
+```
+
 ### Logging
 
 All filtering operations are logged:
@@ -263,6 +344,7 @@ Errors are logged at `error` level with full context.
 **Solution:** Check the strategy name in agent configuration. Valid strategies:
 - `token_budget`
 - `sliding_window`
+- `summarization`
 - `noop`
 
 ### Pinned Messages Exceed Limit

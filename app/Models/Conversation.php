@@ -98,6 +98,14 @@ class Conversation extends Model
     }
 
     /**
+     * Get the summaries for the conversation.
+     */
+    public function summaries(): HasMany
+    {
+        return $this->hasMany(ConversationSummary::class)->orderBy('from_position');
+    }
+
+    /**
      * Check if conversation has any attached documents.
      */
     public function hasDocuments(): bool

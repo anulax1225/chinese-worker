@@ -6,10 +6,13 @@ namespace App\Providers;
 
 use App\Contracts\ContextFilterStrategy;
 use App\Contracts\TokenEstimator;
+use App\Services\AIBackendManager;
 use App\Services\ContextFilter\ContextFilterManager;
 use App\Services\ContextFilter\Strategies\NoOpStrategy;
 use App\Services\ContextFilter\Strategies\SlidingWindowStrategy;
+use App\Services\ContextFilter\Strategies\SummarizationStrategy;
 use App\Services\ContextFilter\Strategies\TokenBudgetStrategy;
+use App\Services\ContextFilter\SummarizationService;
 use App\Services\ContextFilter\TokenEstimators\CharRatioEstimator;
 use Illuminate\Support\ServiceProvider;
 
@@ -30,11 +33,29 @@ class ContextFilterServiceProvider extends ServiceProvider
             return new TokenBudgetStrategy($app->make(TokenEstimator::class));
         });
 
+        // Register summarization service
+        $this->app->singleton(SummarizationService::class, function ($app) {
+            return new SummarizationService(
+                backendManager: $app->make(AIBackendManager::class),
+                tokenEstimator: $app->make(TokenEstimator::class),
+            );
+        });
+
+        // Register summarization strategy (composes with TokenBudgetStrategy)
+        $this->app->singleton(SummarizationStrategy::class, function ($app) {
+            return new SummarizationStrategy(
+                tokenBudgetStrategy: $app->make(TokenBudgetStrategy::class),
+                summarizationService: $app->make(SummarizationService::class),
+                tokenEstimator: $app->make(TokenEstimator::class),
+            );
+        });
+
         // Tag all strategies for container resolution
         $this->app->tag([
             NoOpStrategy::class,
             SlidingWindowStrategy::class,
             TokenBudgetStrategy::class,
+            SummarizationStrategy::class,
         ], ContextFilterStrategy::class);
 
         // Register the manager
