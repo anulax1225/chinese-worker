@@ -427,15 +427,6 @@ class PullManager:
     def _is_cached(self, model_id: str) -> bool:
         """Check if model is fully downloaded by verifying against manifest."""
         try:
-            # Check manifest exists
-            manifest_path = self._get_manifest_path(model_id)
-            if not manifest_path.exists():
-                return False  # No manifest = not properly downloaded
-
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-
-            # Get snapshot path
             cache_info = scan_cache_dir()
             snapshot_path = None
             for repo in cache_info.repos:
@@ -446,13 +437,19 @@ class PullManager:
                     break
 
             if snapshot_path is None:
-                return False
+                return False  # Not in cache at all
 
-            # Verify all files in manifest exist
-            for filename in manifest["files"]:
-                if not (snapshot_path / filename).exists():
-                    return False
+            # If manifest exists, verify all files are present
+            manifest_path = self._get_manifest_path(model_id)
+            if manifest_path.exists():
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
 
+                for filename in manifest["files"]:
+                    if not (snapshot_path / filename).exists():
+                        return False  # Manifest exists but files incomplete
+
+            # Either all manifest files exist, or no manifest (legacy) = cached
             return True
         except Exception:
             return False

@@ -140,26 +140,35 @@ class HFCacheManager:
     def is_cached(self, model_id: str) -> bool:
         """Check if model exists AND is complete (verified against manifest)."""
         try:
-            manifest_path = self._get_manifest_path(model_id)
-            if not manifest_path.exists():
-                return False  # No manifest = not properly downloaded
-
-            with open(manifest_path) as f:
-                manifest = json.load(f)
-
             cache_info = scan_cache_dir()
-            for repo in cache_info.repos:
-                if repo.repo_id == model_id and repo.repo_type == "model":
-                    for rev in repo.revisions:
-                        snapshot = rev.snapshot_path
-                        # Verify all manifest files exist
-                        all_exist = all(
-                            (snapshot / filename).exists()
-                            for filename in manifest["files"]
-                        )
-                        if all_exist:
-                            return True
-            return False
+            repo_exists = any(
+                r.repo_id == model_id and r.repo_type == "model"
+                for r in cache_info.repos
+            )
+            if not repo_exists:
+                return False
+
+            # If manifest exists, verify all files are present
+            manifest_path = self._get_manifest_path(model_id)
+            if manifest_path.exists():
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+
+                for repo in cache_info.repos:
+                    if repo.repo_id == model_id and repo.repo_type == "model":
+                        for rev in repo.revisions:
+                            snapshot = rev.snapshot_path
+                            # Verify all manifest files exist
+                            all_exist = all(
+                                (snapshot / filename).exists()
+                                for filename in manifest["files"]
+                            )
+                            if all_exist:
+                                return True
+                return False  # Manifest exists but files incomplete
+
+            # No manifest = legacy download, trust that it's complete
+            return True
         except Exception:
             return False
 
