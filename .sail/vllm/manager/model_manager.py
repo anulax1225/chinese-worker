@@ -20,6 +20,7 @@ import torch
 from vllm import AsyncLLMEngine, SamplingParams
 from vllm.engine.arg_utils import AsyncEngineArgs
 
+from cache_manager import HFCacheManager
 from config import ManagerConfig
 from tokenizer_resolver import ensure_tokenizer_available, resolve_tokenizer
 
@@ -113,6 +114,34 @@ class ModelManager:
                 logger.info(f"Using external tokenizer: {tokenizer}")
                 ensure_tokenizer_available(tokenizer, hf_token=self.config.hf_token)
 
+            # Pre-check GPU memory (GPU mode only)
+            if not self.config.is_cpu and torch.cuda.is_available():
+                free_vram, total_vram = torch.cuda.mem_get_info()
+                usable_vram = total_vram * self.config.vllm_gpu_memory_utilization
+
+                # Get model size from cache
+                cache = HFCacheManager(hf_token=self.config.hf_token)
+                model_size = 0
+                for m in cache.list_models():
+                    if m["name"] == model:
+                        model_size = m["size"]
+                        break
+
+                if model_size > 0 and model_size > usable_vram:
+                    raise RuntimeError(
+                        f"Model '{model}' is ~{model_size / 1e9:.1f}GB but only "
+                        f"{usable_vram / 1e9:.1f}GB VRAM is available "
+                        f"({total_vram / 1e9:.1f}GB total x "
+                        f"{self.config.vllm_gpu_memory_utilization} utilization). "
+                        f"Try a smaller model or a more aggressively quantized variant."
+                    )
+
+                logger.info(
+                    f"VRAM check: model ~{model_size / 1e9:.1f}GB, "
+                    f"available {free_vram / 1e9:.1f}GB free / "
+                    f"{usable_vram / 1e9:.1f}GB usable"
+                )
+
             # Build engine args
             engine_args = AsyncEngineArgs(
                 model=model,
@@ -141,6 +170,22 @@ class ModelManager:
             self._start_keep_alive_timer()
 
             logger.info(f"Model ready: {model}")
+
+        except torch.cuda.OutOfMemoryError as e:
+            self.state = "error"
+            self.error_message = (
+                f"Out of GPU memory loading '{model}'. "
+                f"GPU has {self._get_total_vram_gb():.1f}GB total. "
+                f"Try a smaller model or lower VLLM_GPU_MEMORY_UTILIZATION."
+            )
+            self.engine = None
+            self.tokenizer = None
+            # Force cleanup after OOM
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.error(f"OOM loading {model}: {e}")
+            raise RuntimeError(self.error_message) from e
 
         except Exception as e:
             self.state = "error"
@@ -433,3 +478,13 @@ class ModelManager:
             }
         except Exception:
             return None
+
+    @staticmethod
+    def _get_total_vram_gb() -> float:
+        """Get total GPU VRAM in GB."""
+        if not torch.cuda.is_available():
+            return 0.0
+        try:
+            return torch.cuda.get_device_properties(0).total_memory / 1e9
+        except Exception:
+            return 0.0
