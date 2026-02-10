@@ -99,7 +99,22 @@ return [
                 'num_ctx' => 4096,
             ],
         ],
-
+        'vllm-gpu' => [
+            'driver' => 'vllm',
+            'base_url' => env('VLLM_GPU_BASE_URL', 'http://vllm-gpu:8000/v1'),
+            'model' => env('VLLM_GPU_MODEL', 'meta-llama/Llama-3.1-8B-Instruct'),
+            'api_key' => env('VLLM_API_KEY'),
+            'max_tokens' => env('VLLM_MAX_TOKENS', 4096),
+            'timeout' => env('VLLM_TIMEOUT', 120),
+        ],
+        'vllm-cpu' => [
+            'driver' => 'vllm',
+            'base_url' => env('VLLM_CPU_BASE_URL', 'http://vllm-cpu:8000/v1'),
+            'model' => env('VLLM_CPU_MODEL', 'meta-llama/Llama-3.2-3B-Instruct'),
+            'api_key' => env('VLLM_API_KEY'),
+            'max_tokens' => env('VLLM_MAX_TOKENS', 4096),
+            'timeout' => env('VLLM_TIMEOUT', 120),
+        ],
         'claude' => [
             'driver' => 'anthropic',
             'api_key' => env('ANTHROPIC_API_KEY'),
@@ -107,7 +122,6 @@ return [
             'max_tokens' => 4096,
             'timeout' => 120,
         ],
-
         'openai' => [
             'driver' => 'openai',
             'api_key' => env('OPENAI_API_KEY'),
@@ -115,7 +129,6 @@ return [
             'max_tokens' => 4096,
             'timeout' => 120,
         ],
-
         'huggingface' => [
             'driver' => 'huggingface',
             'api_key' => env('HUGGINGFACE_API_KEY'),
@@ -124,15 +137,6 @@ return [
             'max_tokens' => 4096,
             'timeout' => env('HUGGINGFACE_TIMEOUT', 120),
             'provider' => env('HUGGINGFACE_PROVIDER'),
-        ],
-
-        'vllm' => [
-            'driver' => 'vllm',
-            'base_url' => env('VLLM_BASE_URL', 'http://localhost:8000/v1'),
-            'model' => env('VLLM_MODEL', 'meta-llama/Llama-3.1-8B-Instruct'),
-            'api_key' => env('VLLM_API_KEY'),
-            'max_tokens' => env('VLLM_MAX_TOKENS', 4096),
-            'timeout' => env('VLLM_TIMEOUT', 120),
         ],
     ],
 ];

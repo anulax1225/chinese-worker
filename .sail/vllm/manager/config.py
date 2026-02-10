@@ -7,6 +7,7 @@ Uses pydantic-settings for env var parsing with sensible defaults.
 import re
 from typing import Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -60,11 +61,20 @@ class ManagerConfig(BaseSettings):
     huggingface_api_key: str = ""
 
     # vLLM engine settings
-    vllm_gpu_memory_utilization: float = 0.9
+    vllm_gpu_memory_utilization: float = 0.7
     vllm_tensor_parallel_size: int = 1
     vllm_max_model_len: Optional[int] = None
     vllm_quantization: str = ""
     vllm_target_device: str = ""  # "cpu" for CPU mode, empty for GPU
+    vllm_tokenizer: str = ""  # Explicit tokenizer override for community-quantized models
+
+    @field_validator("vllm_max_model_len", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v):
+        """Treat empty strings from env vars as None."""
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
 
     model_config = {"env_prefix": "", "extra": "ignore"}
 

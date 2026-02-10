@@ -58,7 +58,7 @@ ARG PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu"
 
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
-        curl ca-certificates libtcmalloc-minimal4 libnuma-dev && \
+        curl ca-certificates libtcmalloc-minimal4 libnuma-dev g++ && \
     curl -LsSf https://astral.sh/uv/install.sh | sh && \
     rm -rf /var/lib/apt/lists/*
 

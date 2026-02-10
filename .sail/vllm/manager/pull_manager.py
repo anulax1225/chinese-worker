@@ -67,7 +67,7 @@ class PullJob:
             return json.dumps({"status": "cancelled"}) + "\n"
 
         return json.dumps({
-            "status": f"downloading {self.model_id}" if self.state == PullState.DOWNLOADING
+            "status": f"downloading {self.model_id[0:5]}... - {self._files[self.files_done if len(self._files) > self.files_done else len(self._files) - 1].rfilename}" if self.state == PullState.DOWNLOADING
                       else f"pulling manifest for {self.model_id}",
             "total": self.total_bytes,
             "completed": self.downloaded_bytes,

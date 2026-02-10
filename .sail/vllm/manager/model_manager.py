@@ -9,6 +9,7 @@ Manages AsyncLLMEngine lifecycle:
 
 import asyncio
 import gc
+import inspect
 import json
 import logging
 import time
@@ -20,8 +21,16 @@ from vllm import AsyncLLMEngine, SamplingParams
 from vllm.engine.arg_utils import AsyncEngineArgs
 
 from config import ManagerConfig
+from tokenizer_resolver import ensure_tokenizer_available, resolve_tokenizer
 
 logger = logging.getLogger("vllm-manager")
+
+
+async def maybe_await(obj):
+    """Handle vLLM methods that may or may not be async."""
+    if inspect.isawaitable(obj):
+        return await obj
+    return obj
 
 
 class ModelManager:
@@ -95,9 +104,19 @@ class ModelManager:
         logger.info(f"Loading model: {model}")
 
         try:
+            # Resolve tokenizer for community-quantized models
+            tokenizer = self.config.vllm_tokenizer or None
+            if not tokenizer:
+                tokenizer = resolve_tokenizer(model, hf_token=self.config.hf_token)
+
+            if tokenizer:
+                logger.info(f"Using external tokenizer: {tokenizer}")
+                ensure_tokenizer_available(tokenizer, hf_token=self.config.hf_token)
+
             # Build engine args
             engine_args = AsyncEngineArgs(
                 model=model,
+                tokenizer=tokenizer or model,
                 gpu_memory_utilization=self.config.vllm_gpu_memory_utilization,
                 tensor_parallel_size=self.config.vllm_tensor_parallel_size,
                 max_model_len=self.config.vllm_max_model_len,
@@ -115,7 +134,7 @@ class ModelManager:
             self.engine = AsyncLLMEngine.from_engine_args(engine_args)
 
             # Get tokenizer for chat template
-            self.tokenizer = await self.engine.get_tokenizer()
+            self.tokenizer = await maybe_await(self.engine.get_tokenizer())
 
             self.state = "ready"
             self.last_used = time.time()

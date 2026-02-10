@@ -28,7 +28,7 @@ class UpdateAgentRequest extends FormRequest
             'code' => ['sometimes', 'required', 'string'],
             'config' => ['nullable', 'array'],
             'status' => ['nullable', 'in:active,inactive,error'],
-            'ai_backend' => ['nullable', 'string', 'in:ollama,anthropic,openai,huggingface,vllm'],
+            'ai_backend' => ['nullable', 'string', 'in:ollama,anthropic,openai,huggingface,vllm-gpu,vllm-cpu,vllm'],
             'model_config' => ['nullable', 'array'],
             'model_config.model' => ['nullable', 'string', 'max:255'],
             'model_config.temperature' => ['nullable', 'numeric', 'min:0', 'max:2'],
