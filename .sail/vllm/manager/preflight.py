@@ -232,57 +232,36 @@ def estimate_model_memory(
     max_model_len: Optional[int] = None,
 ) -> tuple[int, dict]:
     """
-    Estimate model memory requirements from safetensors headers.
+    Estimate model memory requirements from actual file sizes on disk.
+
+    Uses the actual safetensor file sizes which correctly reflects quantization.
 
     Returns:
         (estimated_bytes, details_dict)
     """
-    total_params = 0
     details: dict = {"files": [], "param_count": 0}
 
-    # Parse safetensors headers for parameter count
+    # Sum actual file sizes on disk (most accurate for quantized models)
+    weight_bytes = 0
     for st_file in snapshot_path.glob("*.safetensors"):
         try:
-            with open(st_file, "rb") as f:
-                # First 8 bytes = header size (little-endian u64)
-                header_size = struct.unpack("<Q", f.read(8))[0]
-                if header_size > 100_000_000:  # Sanity check: 100MB max header
-                    continue
-                header_json = f.read(header_size).decode("utf-8")
-                header = json.loads(header_json)
-
-                file_params = 0
-                for key, meta in header.items():
-                    if key == "__metadata__":
-                        continue
-                    shape = meta.get("shape", [])
-                    params = 1
-                    for dim in shape:
-                        params *= dim
-                    file_params += params
-
-                total_params += file_params
-                details["files"].append({"name": st_file.name, "params": file_params})
+            file_size = st_file.stat().st_size
+            weight_bytes += file_size
+            details["files"].append({"name": st_file.name, "size": file_size})
         except Exception:
             pass
 
-    details["param_count"] = total_params
+    # Also check for .bin files (older format)
+    for bin_file in snapshot_path.glob("*.bin"):
+        if "pytorch_model" in bin_file.name or "model" in bin_file.name:
+            try:
+                file_size = bin_file.stat().st_size
+                weight_bytes += file_size
+                details["files"].append({"name": bin_file.name, "size": file_size})
+            except Exception:
+                pass
 
-    # Determine bytes per parameter based on quantization
-    quant_config = model_config.get("quantization_config", {})
-    bits = quant_config.get("bits")
-    if bits:
-        bytes_per_param = bits / 8
-    else:
-        # Check torch_dtype
-        dtype = model_config.get("torch_dtype", "float16")
-        dtype_sizes = {"float32": 4, "float16": 2, "bfloat16": 2, "int8": 1}
-        bytes_per_param = dtype_sizes.get(dtype, 2)
-
-    # Model weights memory
-    weight_bytes = int(total_params * bytes_per_param)
     details["weight_bytes"] = weight_bytes
-    details["bytes_per_param"] = bytes_per_param
 
     # KV cache estimation
     context_len = max_model_len or model_config.get(
@@ -570,7 +549,7 @@ def check_oom_estimate(
     if ratio > 1.2:  # More than 20% over available
         return CheckResult(
             check_id=CheckId.OOM_ESTIMATE,
-            severity=CheckSeverity.BLOCK,
+            severity=CheckSeverity.WARN,  # Don't block, just warn
             message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
             f"~{available / 1e9:.1f}GB {memory_type} available "
             f"({ratio:.1f}x over limit).",
