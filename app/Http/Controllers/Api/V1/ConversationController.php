@@ -62,7 +62,7 @@ class ConversationController extends Controller
         $conversation = Conversation::create([
             'agent_id' => $agent->id,
             'user_id' => $request->user()->id,
-            'status' => 'active',
+            'status' => 'completed',
             'messages' => [],
             'metadata' => $request->input('metadata', []),
             'turn_count' => 0,

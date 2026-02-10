@@ -26,7 +26,7 @@ readonly class NormalizedModelConfig
      *
      * @return array<string, mixed>
      */
-    public function toOllamaOptions(): array
+    public function toOllamaParams(): array
     {
         return array_filter([
             'temperature' => $this->temperature,
@@ -59,6 +59,40 @@ readonly class NormalizedModelConfig
      * @return array<string, mixed>
      */
     public function toOpenAIParams(): array
+    {
+        return array_filter([
+            'max_tokens' => $this->maxTokens,
+            'temperature' => $this->temperature,
+            'top_p' => $this->topP,
+            'frequency_penalty' => $this->frequencyPenalty,
+            'presence_penalty' => $this->presencePenalty,
+            'stop' => $this->stopSequences,
+        ], fn ($v) => $v !== null);
+    }
+
+    /**
+     * Convert to HuggingFace params format (OpenAI-compatible).
+     *
+     * @return array<string, mixed>
+     */
+    public function toHuggingFaceParams(): array
+    {
+        return array_filter([
+            'max_tokens' => $this->maxTokens,
+            'temperature' => $this->temperature,
+            'top_p' => $this->topP,
+            'frequency_penalty' => $this->frequencyPenalty,
+            'presence_penalty' => $this->presencePenalty,
+            'stop' => $this->stopSequences,
+        ], fn ($v) => $v !== null);
+    }
+
+    /**
+     * Convert to vLLM params format (OpenAI-compatible).
+     *
+     * @return array<string, mixed>
+     */
+    public function toVLLMParams(): array
     {
         return array_filter([
             'max_tokens' => $this->maxTokens,

@@ -33,7 +33,7 @@ describe('Conversation Management', function () {
                 ->assertJsonFragment([
                     'agent_id' => $this->agent->id,
                     'user_id' => $this->user->id,
-                    'status' => 'active',
+                    'status' => 'completed',
                     'turn_count' => 0,
                 ]);
         });

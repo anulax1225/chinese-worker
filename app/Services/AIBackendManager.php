@@ -6,9 +6,11 @@ use App\Contracts\AIBackendInterface;
 use App\DTOs\NormalizedModelConfig;
 use App\Models\Agent;
 use App\Services\AI\AnthropicBackend;
+use App\Services\AI\HuggingFaceBackend;
 use App\Services\AI\ModelConfigNormalizer;
 use App\Services\AI\OllamaBackend;
 use App\Services\AI\OpenAIBackend;
+use App\Services\AI\VLLMBackend;
 use Closure;
 use InvalidArgumentException;
 
@@ -123,6 +125,22 @@ class AIBackendManager
     protected function createOpenaiDriver(array $config): AIBackendInterface
     {
         return new OpenAIBackend($config);
+    }
+
+    /**
+     * Create a HuggingFace driver instance.
+     */
+    protected function createHuggingfaceDriver(array $config): AIBackendInterface
+    {
+        return new HuggingFaceBackend($config);
+    }
+
+    /**
+     * Create a vLLM driver instance.
+     */
+    protected function createVllmDriver(array $config): AIBackendInterface
+    {
+        return new VLLMBackend($config);
     }
 
     /**

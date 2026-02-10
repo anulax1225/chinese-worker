@@ -59,4 +59,21 @@ readonly class ModelPullProgress
             error: $data['error'] ?? null,
         );
     }
+
+    /**
+     * Create from vLLM manager response (Ollama-compatible format).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromVLLMResponse(array $data): self
+    {
+        // The manager outputs Ollama-compatible NDJSON, so we use the same format
+        return new self(
+            status: $data['status'] ?? 'unknown',
+            digest: $data['digest'] ?? null,
+            total: $data['total'] ?? null,
+            completed: $data['completed'] ?? null,
+            error: $data['error'] ?? null,
+        );
+    }
 }

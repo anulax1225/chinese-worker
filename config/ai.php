@@ -115,5 +115,24 @@ return [
             'max_tokens' => 4096,
             'timeout' => 120,
         ],
+
+        'huggingface' => [
+            'driver' => 'huggingface',
+            'api_key' => env('HUGGINGFACE_API_KEY'),
+            'base_url' => env('HUGGINGFACE_BASE_URL', 'https://router.huggingface.co/v1'),
+            'model' => env('HUGGINGFACE_MODEL', 'meta-llama/Llama-3.1-8B-Instruct'),
+            'max_tokens' => 4096,
+            'timeout' => env('HUGGINGFACE_TIMEOUT', 120),
+            'provider' => env('HUGGINGFACE_PROVIDER'),
+        ],
+
+        'vllm' => [
+            'driver' => 'vllm',
+            'base_url' => env('VLLM_BASE_URL', 'http://localhost:8000/v1'),
+            'model' => env('VLLM_MODEL', 'meta-llama/Llama-3.1-8B-Instruct'),
+            'api_key' => env('VLLM_API_KEY'),
+            'max_tokens' => env('VLLM_MAX_TOKENS', 4096),
+            'timeout' => env('VLLM_TIMEOUT', 120),
+        ],
     ],
 ];

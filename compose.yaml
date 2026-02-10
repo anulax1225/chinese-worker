@@ -29,6 +29,7 @@ services:
             - rustfs
             - mailpit
             - ollama
+            - vllm
             - searxng
     mysql:
         image: 'mysql:8.4'
@@ -124,14 +125,14 @@ services:
     ollama:
         image: 'ollama/ollama:latest'
         environment:
-            OLLAMA_CONTEXT_LENGTH: 64000
+            OLLAMA_CONTEXT_LENGTH: 1000000
             OLLAMA_KEEP_ALIVE: 3600
         # Vulkan adapter if not an nvidia card
-        #     OLLAMA_VULKAN: 1
-        # devices:
-        #     - /dev/dri
+            OLLAMA_VULKAN: 1
+        devices:
+            - /dev/dri
         # if it's an nvdia card (also install nvidia-container-kit for integration with docker)
-        gpus: all
+        # gpus: all
         ports:
             - '${FORWARD_OLLAMA_PORT:-11434}:11434'
         volumes:
@@ -148,6 +149,79 @@ services:
             timeout: 10s
             retries: 3
             start_period: 10s
+    # gpu accelarated vllm
+    # vllm:
+    #     build:
+    #         context: './.sail/vllm'
+    #         dockerfile: Dockerfile
+    #     image: 'sail/vllm-managed:latest'
+    #     # if it's an nvidia card (also install nvidia-container-kit for integration with docker)
+    #     # gpus: all
+    #     # Vulkan / AMD ROCm alternative (requires changing base image in Dockerfile):
+    #     devices:
+    #         - /dev/dri
+    #     ports:
+    #         - '${FORWARD_VLLM_PORT:-8000}:8000'
+    #     environment:
+    #         # Model to load on startup
+    #         VLLM_MODEL: '${VLLM_MODEL:-meta-llama/Llama-3.1-8B-Instruct}'
+    #         # HuggingFace token for gated models (Llama, Mistral, etc.)
+    #         HUGGING_FACE_HUB_TOKEN: '${HUGGINGFACE_API_KEY:-}'
+    #         # Disable anonymous usage stats
+    #         VLLM_NO_USAGE_STATS: 1
+    #         # GPU memory utilization (0-1 ratio)
+    #         VLLM_GPU_MEMORY_UTILIZATION: '${VLLM_GPU_MEMORY_UTILIZATION:-0.8}'
+    #         # Multi-GPU tensor parallelism
+    #         VLLM_TENSOR_PARALLEL_SIZE: '${VLLM_TENSOR_PARALLEL_SIZE:-1}'
+    #         # Max model context length (optional, leave empty for model default)
+    #         VLLM_MAX_MODEL_LEN: '${VLLM_MAX_MODEL_LEN:-}'
+    #         # Quantization method (optional: awq, gptq, fp8, etc.)
+    #         VLLM_QUANTIZATION: '${VLLM_QUANTIZATION:-}'
+    #         # Extra vLLM args (space-separated)
+    #         VLLM_EXTRA_ARGS: '${VLLM_EXTRA_ARGS:-}'
+    #     volumes:
+    #         - 'sail-vllm:/root/.cache/huggingface/hub'
+    #     networks:
+    #         - sail
+    #     ipc: host
+    #     healthcheck:
+    #         test:
+    #             - CMD
+    #             - curl
+    #             - '-f'
+    #             - 'http://localhost:8000/health'
+    #         interval: 30s
+    #         timeout: 10s
+    #         retries: 5
+    #         start_period: 120s
+    vllm:
+        build:
+            context: './.sail/vllm'
+            dockerfile: Dockerfile.cpu       # ← instead of Dockerfile
+        image: 'sail/vllm-managed-cpu:latest'
+        # No deploy.resources.devices block — no GPU
+        shm_size: '4g'
+        security_opt:
+            - seccomp=unconfined
+        cap_add:
+            - SYS_NICE
+        ports:
+            - '${FORWARD_VLLM_PORT:-8000}:8000'
+        environment:
+            VLLM_MODEL: '${VLLM_MODEL:-meta-llama/Llama-3.2-3B-Instruct}'
+            HUGGING_FACE_HUB_TOKEN: '${HUGGINGFACE_API_KEY}'
+            VLLM_CPU_KVCACHE_SPACE: '${VLLM_CPU_KVCACHE_SPACE:-4}'
+            VLLM_EXTRA_ARGS: '${VLLM_EXTRA_ARGS:---dtype bfloat16}'
+        volumes:
+            - 'sail-vllm:/root/.cache/huggingface/hub'
+        networks:
+            - sail
+        healthcheck:
+            test: ['CMD', 'curl', '-f', 'http://localhost:8000/health']
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 300s    # CPU loading is much slower
     searxng:
         image: 'searxng/searxng:latest'
         ports:
@@ -181,6 +255,8 @@ volumes:
     sail-rustfs:
         driver: local
     sail-ollama:
+        driver: local
+    sail-vllm:
         driver: local
     sail-searxng:
         driver: local

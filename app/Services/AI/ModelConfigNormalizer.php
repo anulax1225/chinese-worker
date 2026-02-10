@@ -32,6 +32,18 @@ class ModelConfigNormalizer
             'context_length' => 128000,
             'timeout' => 120,
         ],
+        'huggingface' => [
+            'temperature' => 0.7,
+            'max_tokens' => 4096,
+            'context_length' => 131072,
+            'timeout' => 120,
+        ],
+        'vllm' => [
+            'temperature' => 0.7,
+            'max_tokens' => 4096,
+            'context_length' => 131072,
+            'timeout' => 120,
+        ],
     ];
 
     /**
@@ -58,6 +70,20 @@ class ModelConfigNormalizer
             'gpt-4-turbo' => ['max_tokens' => 4096, 'context_length' => 128000],
             'gpt-4o' => ['max_tokens' => 16384, 'context_length' => 128000],
             'gpt-3.5-turbo' => ['max_tokens' => 4096, 'context_length' => 16385],
+        ],
+        'huggingface' => [
+            'meta-llama/Llama-3.1-8B-Instruct' => ['max_tokens' => 8192, 'context_length' => 131072],
+            'meta-llama/Llama-3.1-70B-Instruct' => ['max_tokens' => 8192, 'context_length' => 131072],
+            'Qwen/Qwen2.5-72B-Instruct' => ['max_tokens' => 8192, 'context_length' => 131072],
+            'mistralai/Mistral-7B-Instruct-v0.3' => ['max_tokens' => 8192, 'context_length' => 32768],
+            'deepseek-ai/DeepSeek-R1' => ['max_tokens' => 8192, 'context_length' => 65536],
+        ],
+        'vllm' => [
+            'meta-llama/Llama-3.1-8B-Instruct' => ['max_tokens' => 8192, 'context_length' => 131072],
+            'meta-llama/Llama-3.1-70B-Instruct' => ['max_tokens' => 8192, 'context_length' => 131072],
+            'Qwen/Qwen2.5-72B-Instruct' => ['max_tokens' => 8192, 'context_length' => 131072],
+            'Qwen/Qwen2.5-7B-Instruct' => ['max_tokens' => 8192, 'context_length' => 131072],
+            'microsoft/phi-4' => ['max_tokens' => 4096, 'context_length' => 16384],
         ],
     ];
 
@@ -175,6 +201,8 @@ class ModelConfigNormalizer
             'ollama' => 'llama3.1',
             'anthropic' => 'claude-sonnet-4-5-20250929',
             'openai' => 'gpt-4',
+            'huggingface' => 'meta-llama/Llama-3.1-8B-Instruct',
+            'vllm' => 'meta-llama/Llama-3.1-8B-Instruct',
             default => 'llama3.1',
         };
     }

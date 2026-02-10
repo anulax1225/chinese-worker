@@ -147,6 +147,143 @@ readonly class AIModel
     }
 
     /**
+     * Create from vLLM /v1/models response item.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromVLLM(array $data): self
+    {
+        $modelId = $data['id'] ?? 'unknown';
+
+        return new self(
+            name: $modelId,
+            modifiedAt: isset($data['created']) ? date('c', $data['created']) : null,
+            size: null,
+            digest: null,
+            family: self::extractFamilyFromModelId($modelId),
+            parameterSize: null,
+            quantizationLevel: null,
+            capabilities: ['completion', 'tool_use'],
+            contextLength: self::getKnownContextLength($modelId),
+            description: null,
+            details: [
+                'source' => 'self_hosted',
+                'object' => $data['object'] ?? 'model',
+                'owned_by' => $data['owned_by'] ?? 'vllm',
+            ],
+        );
+    }
+
+    /**
+     * Create from vLLM manager /api/tags response item (Ollama-compatible format).
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromVLLMTag(array $data): self
+    {
+        $details = $data['details'] ?? [];
+        $modelName = $data['name'] ?? $data['model'] ?? 'unknown';
+
+        return new self(
+            name: $modelName,
+            modifiedAt: $data['modified_at'] ?? null,
+            size: $data['size'] ?? null,
+            digest: $data['digest'] ?? null,
+            family: $details['family'] ?? self::extractFamilyFromModelId($modelName),
+            parameterSize: $details['parameter_size'] ?? null,
+            quantizationLevel: $details['quantization_level'] ?? null,
+            capabilities: ['completion', 'tool_use'],
+            contextLength: self::getKnownContextLength($modelName),
+            description: null,
+            details: array_merge($details, [
+                'source' => 'self_hosted',
+                'backend' => 'vllm',
+            ]),
+        );
+    }
+
+    /**
+     * Create from vLLM manager /api/show response (Ollama-compatible format).
+     *
+     * @param  array<string, mixed>  $data
+     * @param  string|null  $modelName  Optional model name override
+     */
+    public static function fromVLLMShow(array $data, ?string $modelName = null): self
+    {
+        $details = $data['details'] ?? [];
+        $modelInfo = $data['model_info'] ?? [];
+        $name = $modelName ?? $data['name'] ?? $data['model'] ?? 'unknown';
+
+        return new self(
+            name: $name,
+            modifiedAt: $data['modified_at'] ?? null,
+            size: null, // Not provided in show response
+            digest: null,
+            family: $details['family'] ?? self::extractFamilyFromModelId($name),
+            parameterSize: $details['parameter_size'] ?? null,
+            quantizationLevel: $details['quantization_level'] ?? null,
+            capabilities: ['completion', 'tool_use'],
+            contextLength: $modelInfo['context_length'] ?? self::getKnownContextLength($name),
+            description: null,
+            details: [
+                'source' => 'self_hosted',
+                'backend' => 'vllm',
+                'format' => $details['format'] ?? null,
+                'families' => $details['families'] ?? [],
+                'architecture' => $modelInfo['general.architecture'] ?? null,
+                'hidden_size' => $modelInfo['hidden_size'] ?? null,
+                'num_layers' => $modelInfo['num_layers'] ?? null,
+                'vocab_size' => $modelInfo['vocab_size'] ?? null,
+                'parameters' => $data['parameters'] ?? null,
+            ],
+        );
+    }
+
+    /**
+     * Extract model family from model ID (e.g., "meta-llama/Llama-3.1-8B" -> "llama").
+     */
+    private static function extractFamilyFromModelId(string $modelId): ?string
+    {
+        $modelLower = strtolower($modelId);
+
+        return match (true) {
+            str_contains($modelLower, 'llama') => 'llama',
+            str_contains($modelLower, 'qwen') => 'qwen',
+            str_contains($modelLower, 'mistral') || str_contains($modelLower, 'mixtral') => 'mistral',
+            str_contains($modelLower, 'phi') => 'phi',
+            str_contains($modelLower, 'gemma') => 'gemma',
+            str_contains($modelLower, 'deepseek') => 'deepseek',
+            str_contains($modelLower, 'hermes') => 'hermes',
+            default => null,
+        };
+    }
+
+    /**
+     * Get known context length for popular models.
+     */
+    private static function getKnownContextLength(string $modelId): ?int
+    {
+        $knownLimits = [
+            'meta-llama/Llama-3.1' => 131072,
+            'meta-llama/Llama-3.2' => 131072,
+            'Qwen/Qwen2.5' => 131072,
+            'Qwen/Qwen3' => 131072,
+            'microsoft/phi-4' => 16384,
+            'mistralai/Mistral' => 32768,
+            'deepseek-ai/DeepSeek' => 65536,
+            'NousResearch/Hermes' => 131072,
+        ];
+
+        foreach ($knownLimits as $prefix => $contextLength) {
+            if (str_starts_with($modelId, $prefix)) {
+                return $contextLength;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Extract context length from model_info.
      *
      * @param  array<string, mixed>  $modelInfo

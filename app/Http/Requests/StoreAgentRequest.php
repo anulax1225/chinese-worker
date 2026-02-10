@@ -27,7 +27,7 @@ class StoreAgentRequest extends FormRequest
             'description' => ['nullable', 'string'],
             'config' => ['nullable', 'array'],
             'status' => ['nullable', 'in:active,inactive,error'],
-            'ai_backend' => ['nullable', 'string', 'in:ollama,anthropic,openai'],
+            'ai_backend' => ['nullable', 'string', 'in:ollama,anthropic,openai,huggingface,vllm'],
             'model_config' => ['nullable', 'array'],
             'model_config.model' => ['nullable', 'string', 'max:255'],
             'model_config.temperature' => ['nullable', 'numeric', 'min:0', 'max:2'],
@@ -57,7 +57,7 @@ class StoreAgentRequest extends FormRequest
             'name.required' => 'The agent name is required.',
             'name.max' => 'The agent name must not exceed 255 characters.',
             'status.in' => 'The status must be one of: active, inactive, or error.',
-            'ai_backend.in' => 'The AI backend must be one of: ollama, anthropic, or openai.',
+            'ai_backend.in' => 'The AI backend must be one of: ollama, anthropic, openai, huggingface, or vllm.',
             'tool_ids.*.exists' => 'One or more selected tools do not exist or do not belong to you.',
             'system_prompt_ids.*.exists' => 'One or more selected system prompts do not exist.',
         ];

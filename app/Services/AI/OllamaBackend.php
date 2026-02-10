@@ -58,7 +58,7 @@ class OllamaBackend implements AIBackendInterface
         $clone->normalizedConfig = $config;
         $clone->model = $config->model;
         $clone->timeout = $config->timeout;
-        $clone->options = $config->toOllamaOptions();
+        $clone->options = $config->toOllamaParams();
 
         // Recreate client with new timeout
         $clone->client = new Client([
