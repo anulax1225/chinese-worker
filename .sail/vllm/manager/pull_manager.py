@@ -17,6 +17,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import AsyncIterator, Optional
 
 from huggingface_hub import HfApi, hf_hub_download, scan_cache_dir
@@ -156,6 +157,18 @@ class PullManager:
                 for s in siblings[:3]:
                     size = get_file_size(s)
                     logger.debug(f"[PULL] File sample: {s.rfilename} = {size:,} bytes (lfs={getattr(s, 'lfs', None)})")
+
+                # Save manifest for verification (ensures incomplete downloads are detected)
+                manifest = {
+                    "model_id": model_id,
+                    "files": [s.rfilename for s in siblings],
+                    "total_bytes": total_size,
+                    "files_total": files_total,
+                }
+                manifest_path = self._get_manifest_path(model_id)
+                with open(manifest_path, "w") as f:
+                    json.dump(manifest, f)
+                logger.debug(f"[PULL] Saved manifest to {manifest_path}")
             except Exception as e:
                 logger.error(f"[PULL] Failed to get model info: {e}")
                 job = PullJob(model_id=model_id, state=PullState.FAILED, error=str(e))
@@ -179,6 +192,9 @@ class PullManager:
                 job,
             )
 
+            # Start heartbeat loop for SSE keep-alive during large file downloads
+            job._heartbeat_task = asyncio.create_task(self._heartbeat_loop(job))
+
             # Fire-and-forget cleanup when done
             asyncio.ensure_future(self._wait_and_cleanup(model_id, job))
 
@@ -192,6 +208,19 @@ class PullManager:
         self._notify(job)
 
         try:
+            # Get existing snapshot path to check for already downloaded files
+            snapshot_path = None
+            try:
+                cache_info = scan_cache_dir()
+                for repo in cache_info.repos:
+                    if repo.repo_id == job.model_id and repo.repo_type == "model":
+                        for rev in repo.revisions:
+                            snapshot_path = rev.snapshot_path
+                            break
+                        break
+            except Exception:
+                pass  # No existing cache, will download everything
+
             # Use file list from job (populated in pull())
             for i, file_info in enumerate(job._files):
                 if job.state == PullState.CANCELLED:
@@ -200,6 +229,15 @@ class PullManager:
 
                 filename = file_info.rfilename
                 file_size = get_file_size(file_info)
+
+                # Check if file already exists (resume support)
+                if snapshot_path and (snapshot_path / filename).exists():
+                    job.files_done = i + 1
+                    job.downloaded_bytes += file_size
+                    logger.info(f"[PULL] Skipping already downloaded: {filename} ({file_size:,} bytes)")
+                    self._notify(job)
+                    continue
+
                 logger.info(f"[PULL] Downloading file {i+1}/{job.files_total}: {filename} ({file_size:,} bytes)")
 
                 # Download file
@@ -265,12 +303,32 @@ class PullManager:
         except asyncio.QueueFull:
             logger.warning("[SSE] Queue full, dropping message")
 
+    async def _heartbeat_loop(self, job: PullJob) -> None:
+        """Send periodic heartbeats to all subscribers during download."""
+        try:
+            while job.state == PullState.DOWNLOADING:
+                await asyncio.sleep(5)  # Send heartbeat every 5 seconds
+                if job.state != PullState.DOWNLOADING:
+                    break
+                # Notify with current progress
+                self._notify(job)
+        except asyncio.CancelledError:
+            pass
+
     async def _wait_and_cleanup(self, model_id: str, job: PullJob) -> None:
         """Wait for download to finish, then move from active to history."""
         try:
             await asyncio.wrap_future(job._future)
         except Exception:
             pass
+        finally:
+            # Cancel heartbeat task
+            if hasattr(job, '_heartbeat_task') and job._heartbeat_task:
+                job._heartbeat_task.cancel()
+                try:
+                    await job._heartbeat_task
+                except asyncio.CancelledError:
+                    pass
 
         async with self._lock:
             if model_id in self._active:
@@ -304,7 +362,7 @@ class PullManager:
         try:
             while True:
                 try:
-                    line = await asyncio.wait_for(queue.get(), timeout=30)
+                    line = await asyncio.wait_for(queue.get(), timeout=10)
                     logger.info(f"[SSE] Yielding to client: {line.strip()[:80]}...")
                     yield line
 
@@ -359,11 +417,43 @@ class PullManager:
             for mid, job in self._active.items()
         }
 
+    def _get_manifest_path(self, model_id: str) -> Path:
+        """Get path to manifest file for a model."""
+        safe_name = model_id.replace("/", "__")
+        manifest_dir = Path.home() / ".cache" / "huggingface" / "hub" / ".vllm-manifests"
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        return manifest_dir / f"{safe_name}.json"
+
     def _is_cached(self, model_id: str) -> bool:
-        """Check if model is already in HF cache."""
+        """Check if model is fully downloaded by verifying against manifest."""
         try:
+            # Check manifest exists
+            manifest_path = self._get_manifest_path(model_id)
+            if not manifest_path.exists():
+                return False  # No manifest = not properly downloaded
+
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+
+            # Get snapshot path
             cache_info = scan_cache_dir()
-            return any(r.repo_id == model_id for r in cache_info.repos if r.repo_type == "model")
+            snapshot_path = None
+            for repo in cache_info.repos:
+                if repo.repo_id == model_id and repo.repo_type == "model":
+                    for rev in repo.revisions:
+                        snapshot_path = rev.snapshot_path
+                        break
+                    break
+
+            if snapshot_path is None:
+                return False
+
+            # Verify all files in manifest exist
+            for filename in manifest["files"]:
+                if not (snapshot_path / filename).exists():
+                    return False
+
+            return True
         except Exception:
             return False
 

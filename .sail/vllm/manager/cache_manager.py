@@ -121,15 +121,45 @@ class HFCacheManager:
                 )
                 delete_strategy.execute()
                 logger.info(f"Deleted model {model_id}, freed {delete_strategy.expected_freed_size_str}")
+
+                # Also delete manifest
+                manifest_path = self._get_manifest_path(model_id)
+                if manifest_path.exists():
+                    manifest_path.unlink()
+                    logger.debug(f"Deleted manifest for {model_id}")
+
                 return True
 
         return False
 
+    def _get_manifest_path(self, model_id: str) -> Path:
+        """Get path to manifest file for a model."""
+        safe_name = model_id.replace("/", "__")
+        return self.cache_dir / ".vllm-manifests" / f"{safe_name}.json"
+
     def is_cached(self, model_id: str) -> bool:
-        """Check if model exists in cache."""
+        """Check if model exists AND is complete (verified against manifest)."""
         try:
+            manifest_path = self._get_manifest_path(model_id)
+            if not manifest_path.exists():
+                return False  # No manifest = not properly downloaded
+
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+
             cache_info = scan_cache_dir()
-            return any(r.repo_id == model_id for r in cache_info.repos if r.repo_type == "model")
+            for repo in cache_info.repos:
+                if repo.repo_id == model_id and repo.repo_type == "model":
+                    for rev in repo.revisions:
+                        snapshot = rev.snapshot_path
+                        # Verify all manifest files exist
+                        all_exist = all(
+                            (snapshot / filename).exists()
+                            for filename in manifest["files"]
+                        )
+                        if all_exist:
+                            return True
+            return False
         except Exception:
             return False
 
