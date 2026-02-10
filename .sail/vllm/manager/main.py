@@ -19,7 +19,9 @@ from pydantic import BaseModel
 from cache_manager import HFCacheManager
 from config import ManagerConfig
 from model_manager import ModelManager
+from preflight import PreflightError, get_recovery_hint, preflight_check
 from pull_manager import PullManager, PullState
+from tokenizer_resolver import resolve_tokenizer
 
 # Configure logging
 logging.basicConfig(
@@ -95,6 +97,10 @@ class DeleteRequest(BaseModel):
     name: str
 
 
+class ValidateRequest(BaseModel):
+    name: str
+
+
 # ─── Inference: /v1/chat/completions (OpenAI-compatible) ───────────
 
 @app.post("/v1/chat/completions")
@@ -128,6 +134,22 @@ async def chat_completions(request: Request):
     # Ensure model is loaded (auto-switch if different)
     try:
         await mgr.ensure_loaded(model, keep_alive=keep_alive)
+    except PreflightError as e:
+        # Return structured error for preflight failures
+        logger.error(f"Preflight blocked model: {e.result.block_reason}")
+        check = e.result.checks[0] if e.result.checks else None
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": {
+                    "message": e.result.block_reason,
+                    "type": "model_load_error",
+                    "code": check.check_id.value if check else "UNKNOWN",
+                    "suggestion": check.suggestion if check else None,
+                    "checks": [c.to_dict() for c in e.result.checks],
+                }
+            },
+        )
     except Exception as e:
         logger.error(f"Failed to load model: {e}")
         logger.error(traceback.format_exc())
@@ -273,6 +295,46 @@ async def show_model(req: ShowRequest, request: Request):
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@app.post("/api/validate")
+async def validate_model(req: ValidateRequest, request: Request):
+    """
+    Dry-run preflight validation without loading the model.
+    Returns validation results and predicted engine overrides.
+    """
+    config: ManagerConfig = request.app.state.config
+    cache: HFCacheManager = request.app.state.cache_mgr
+
+    # Check if model is in cache
+    if not cache.is_cached(req.name):
+        return JSONResponse(
+            status_code=404,
+            content={
+                "valid": False,
+                "error": f"Model '{req.name}' not in cache. Pull it first with POST /api/pull.",
+            },
+        )
+
+    # Resolve tokenizer
+    tokenizer = resolve_tokenizer(req.name, hf_token=config.hf_token)
+
+    # Run preflight
+    try:
+        result = await preflight_check(
+            model_id=req.name,
+            config=config,
+            resolved_tokenizer=tokenizer,
+        )
+    except Exception as e:
+        logger.error(f"Preflight check failed: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"valid": False, "error": f"Preflight check failed: {e}"},
+        )
+
+    status_code = 200 if result.passed else 422
+    return JSONResponse(status_code=status_code, content=result.to_dict())
+
+
 @app.delete("/api/delete")
 async def delete_model(req: DeleteRequest, request: Request):
     """Delete model from cache (Ollama-compatible)."""
@@ -297,24 +359,39 @@ async def delete_model(req: DeleteRequest, request: Request):
 
 @app.get("/health")
 async def health(request: Request):
-    """Health check."""
+    """Health check with preflight info."""
     mgr: ModelManager = request.app.state.model_mgr
     status = mgr.get_status()
 
     if status["state"] == "ready":
-        return {"status": "ok", "model": status["model"]}
+        response = {"status": "ok", "model": status["model"]}
+        # Include preflight info if available
+        if mgr._last_preflight:
+            pf = mgr._last_preflight
+            response["preflight"] = {
+                "passed": pf.passed,
+                "warnings": pf.warnings,
+                "engine_overrides": pf.engine_overrides,
+            }
+        return response
     elif status["state"] == "loading":
         return JSONResponse(
             status_code=503,
-            content={"status": "loading", "model": status["model"]}
+            content={"status": "loading", "model": status["model"]},
         )
     elif status["state"] == "idle":
         return {"status": "idle", "message": "No model loaded (will auto-load on first request)"}
     else:
-        return JSONResponse(
-            status_code=503,
-            content={"status": status["state"], "error": status["error"]}
-        )
+        # Error state - include preflight info if it was a preflight failure
+        error_response = {"status": status["state"], "error": status["error"]}
+        if mgr._last_preflight and mgr._last_preflight.blocked:
+            pf = mgr._last_preflight
+            check = pf.checks[0] if pf.checks else None
+            error_response["preflight_blocked"] = True
+            error_response["check_id"] = check.check_id.value if check else None
+            error_response["suggestion"] = check.suggestion if check else None
+            error_response["hint"] = get_recovery_hint(check.check_id) if check else None
+        return JSONResponse(status_code=503, content=error_response)
 
 
 @app.get("/api/status")

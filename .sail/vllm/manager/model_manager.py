@@ -22,6 +22,7 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 
 from cache_manager import HFCacheManager
 from config import ManagerConfig
+from preflight import PreflightError, classify_engine_error, preflight_check
 from tokenizer_resolver import ensure_tokenizer_available, resolve_tokenizer
 
 logger = logging.getLogger("vllm-manager")
@@ -51,6 +52,7 @@ class ModelManager:
         self.current_model: Optional[str] = None
         self.state: str = "idle"  # idle | loading | ready | unloading | error
         self.error_message: Optional[str] = None
+        self._last_preflight = None  # Store last preflight result for debugging
 
         # Keep-alive
         self.last_used: float = 0
@@ -95,6 +97,8 @@ class ModelManager:
 
     async def _load(self, model: str) -> None:
         """Create vLLM engine for the given model."""
+        import os
+
         # Unload current model if any
         if self.engine is not None:
             await self._unload()
@@ -102,6 +106,7 @@ class ModelManager:
         self.state = "loading"
         self.current_model = model
         self.error_message = None
+        self._last_preflight = None
         logger.info(f"Loading model: {model}")
 
         try:
@@ -114,44 +119,47 @@ class ModelManager:
                 logger.info(f"Using external tokenizer: {tokenizer}")
                 ensure_tokenizer_available(tokenizer, hf_token=self.config.hf_token)
 
-            # Pre-check GPU memory (GPU mode only)
-            if not self.config.is_cpu and torch.cuda.is_available():
-                free_vram, total_vram = torch.cuda.mem_get_info()
-                usable_vram = total_vram * self.config.vllm_gpu_memory_utilization
-
-                # Get model size from cache
-                cache = HFCacheManager(hf_token=self.config.hf_token)
-                model_size = 0
-                for m in cache.list_models():
-                    if m["name"] == model:
-                        model_size = m["size"]
-                        break
-
-                if model_size > 0 and model_size > usable_vram:
-                    raise RuntimeError(
-                        f"Model '{model}' is ~{model_size / 1e9:.1f}GB but only "
-                        f"{usable_vram / 1e9:.1f}GB VRAM is available "
-                        f"({total_vram / 1e9:.1f}GB total x "
-                        f"{self.config.vllm_gpu_memory_utilization} utilization). "
-                        f"Try a smaller model or a more aggressively quantized variant."
-                    )
-
-                logger.info(
-                    f"VRAM check: model ~{model_size / 1e9:.1f}GB, "
-                    f"available {free_vram / 1e9:.1f}GB free / "
-                    f"{usable_vram / 1e9:.1f}GB usable"
+            # Preflight validation (runs before engine creation)
+            engine_overrides = {}
+            if self.config.vllm_preflight_enabled:
+                preflight_result = await preflight_check(
+                    model_id=model,
+                    config=self.config,
+                    resolved_tokenizer=tokenizer,
                 )
+                self._last_preflight = preflight_result
 
-            # Build engine args
+                if preflight_result.blocked:
+                    raise PreflightError(preflight_result)
+
+                # Log warnings
+                for warning in preflight_result.warnings:
+                    logger.warning(f"[PREFLIGHT] {warning}")
+
+                engine_overrides = preflight_result.engine_overrides
+
+                # Apply V1 engine disable if needed
+                if engine_overrides.get("disable_v1"):
+                    os.environ["VLLM_USE_V1"] = "0"
+                    logger.info("Disabled vLLM V1 engine for CPU compatibility")
+
+            # Build engine args with preflight overrides
             engine_args = AsyncEngineArgs(
                 model=model,
                 tokenizer=tokenizer or model,
                 gpu_memory_utilization=self.config.vllm_gpu_memory_utilization,
                 tensor_parallel_size=self.config.vllm_tensor_parallel_size,
-                max_model_len=self.config.vllm_max_model_len,
+                max_model_len=engine_overrides.get(
+                    "max_model_len", self.config.vllm_max_model_len
+                ),
                 quantization=self.config.vllm_quantization or None,
-                trust_remote_code=True,
-                dtype="auto",
+                trust_remote_code=engine_overrides.get(
+                    "trust_remote_code", self.config.vllm_trust_remote_code
+                ),
+                dtype=engine_overrides.get("dtype", self.config.vllm_dtype),
+                enforce_eager=engine_overrides.get(
+                    "enforce_eager", self.config.vllm_enforce_eager
+                ),
             )
 
             # CPU-specific settings
@@ -171,29 +179,50 @@ class ModelManager:
 
             logger.info(f"Model ready: {model}")
 
-        except torch.cuda.OutOfMemoryError as e:
+        except PreflightError as e:
             self.state = "error"
-            self.error_message = (
-                f"Out of GPU memory loading '{model}'. "
-                f"GPU has {self._get_total_vram_gb():.1f}GB total. "
-                f"Try a smaller model or lower VLLM_GPU_MEMORY_UTILIZATION."
-            )
+            self.error_message = e.result.block_reason
+            self._last_preflight = e.result
             self.engine = None
             self.tokenizer = None
-            # Force cleanup after OOM
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            logger.error(f"Preflight blocked {model}: {e.result.block_reason}")
+            raise
+
+        except torch.cuda.OutOfMemoryError as e:
+            self.state = "error"
+            error_result = classify_engine_error(e)
+            self.error_message = error_result.message
+            self._cleanup_gpu()
             logger.error(f"OOM loading {model}: {e}")
             raise RuntimeError(self.error_message) from e
 
         except Exception as e:
             self.state = "error"
-            self.error_message = str(e)
-            self.engine = None
-            self.tokenizer = None
+            error_result = classify_engine_error(e)
+            self.error_message = error_result.message
+            self._cleanup_gpu()
             logger.error(f"Failed to load {model}: {e}")
             raise
+
+    def _cleanup_gpu(self) -> None:
+        """Nuclear GPU cleanup after failed load attempts."""
+        self.engine = None
+        self.tokenizer = None
+
+        # Aggressive garbage collection
+        gc.collect()
+        gc.collect()
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            try:
+                torch.cuda.reset_peak_memory_stats()
+            except Exception:
+                pass
+
+        self.state = "idle"
+        logger.info("GPU memory cleanup complete")
 
     async def _unload(self) -> None:
         """Destroy engine and free all GPU memory."""

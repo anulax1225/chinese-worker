@@ -68,6 +68,13 @@ class ManagerConfig(BaseSettings):
     vllm_target_device: str = ""  # "cpu" for CPU mode, empty for GPU
     vllm_tokenizer: str = ""  # Explicit tokenizer override for community-quantized models
 
+    # Preflight validation settings
+    vllm_trust_remote_code: bool = True  # Default enabled for user-chosen models
+    vllm_preflight_enabled: bool = True  # Can disable for debugging
+    vllm_auto_cap_context: bool = True  # Auto-reduce max_model_len if OOM likely
+    vllm_enforce_eager: bool = False  # Force eager mode (no CUDA graphs)
+    vllm_dtype: str = "auto"  # Explicit dtype override
+
     @field_validator("vllm_max_model_len", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
