@@ -294,8 +294,14 @@ def estimate_model_memory(
     details["kv_cache_bytes"] = kv_cache_bytes
     details["context_len"] = context_len
 
-    # Total with 15% overhead for activations, optimizer states, etc.
-    total_estimate = int((weight_bytes + kv_cache_bytes) * 1.15)
+    # Total with overhead:
+    # - CUDA context: ~1GB fixed overhead
+    # - Activations/intermediates: ~20% of model size
+    cuda_context_bytes = 1 * 1024 * 1024 * 1024  # 1GB
+    activation_overhead = int((weight_bytes + kv_cache_bytes) * 0.20)
+    total_estimate = weight_bytes + kv_cache_bytes + cuda_context_bytes + activation_overhead
+    details["cuda_context_bytes"] = cuda_context_bytes
+    details["activation_overhead"] = activation_overhead
     details["total_estimate"] = total_estimate
 
     return total_estimate, details
