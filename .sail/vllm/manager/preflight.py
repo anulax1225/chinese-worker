@@ -151,6 +151,7 @@ class PreflightResult:
     warnings: list[str] = field(default_factory=list)
     engine_overrides: dict = field(default_factory=dict)
     platform: Optional[PlatformInfo] = None
+    model_config: dict = field(default_factory=dict)  # Preserve for capabilities detection
 
     def to_dict(self) -> dict:
         """Convert to dictionary for API responses."""
@@ -1019,6 +1020,9 @@ async def preflight_check(
             "Could not read config.json - skipping some preflight checks."
         )
         model_config = {}
+
+    # Preserve model config for capabilities detection
+    result.model_config = model_config
 
     # Run all checks
     checks_to_run = [

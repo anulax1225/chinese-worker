@@ -75,10 +75,28 @@ class ManagerConfig(BaseSettings):
     vllm_enforce_eager: bool = False  # Force eager mode (no CUDA graphs)
     vllm_dtype: str = "auto"  # Explicit dtype override
 
+    # Capability overrides (None = auto-detect)
+    vllm_reasoning_parser: Optional[str] = None  # VLLM_REASONING_PARSER
+    vllm_tool_parser: Optional[str] = None  # VLLM_TOOL_PARSER
+    vllm_chat_template: Optional[str] = None  # VLLM_CHAT_TEMPLATE
+
     @field_validator("vllm_max_model_len", mode="before")
     @classmethod
     def empty_str_to_none(cls, v):
         """Treat empty strings from env vars as None."""
+        if isinstance(v, str) and v.strip() == "":
+            return None
+        return v
+
+    @field_validator(
+        "vllm_reasoning_parser",
+        "vllm_tool_parser",
+        "vllm_chat_template",
+        mode="before",
+    )
+    @classmethod
+    def empty_str_to_none_caps(cls, v):
+        """Treat empty strings from env vars as None for capability overrides."""
         if isinstance(v, str) and v.strip() == "":
             return None
         return v

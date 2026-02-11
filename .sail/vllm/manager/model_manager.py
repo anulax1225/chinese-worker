@@ -22,6 +22,7 @@ from vllm.engine.arg_utils import AsyncEngineArgs
 
 from cache_manager import HFCacheManager
 from config import ManagerConfig
+from model_capabilities import ModelCapabilities, detect_capabilities
 from preflight import PreflightError, classify_engine_error, preflight_check
 from tokenizer_resolver import ensure_tokenizer_available, resolve_tokenizer
 
@@ -53,6 +54,7 @@ class ModelManager:
         self.state: str = "idle"  # idle | loading | ready | unloading | error
         self.error_message: Optional[str] = None
         self._last_preflight = None  # Store last preflight result for debugging
+        self.caps: Optional[ModelCapabilities] = None  # Detected model capabilities
 
         # Keep-alive
         self.last_used: float = 0
@@ -143,7 +145,17 @@ class ModelManager:
                     os.environ["VLLM_USE_V1"] = "0"
                     logger.info("Disabled vLLM V1 engine for CPU compatibility")
 
-            # Build engine args with preflight overrides
+            # Detect model capabilities from config
+            model_config = (
+                preflight_result.model_config
+                if self.config.vllm_preflight_enabled and preflight_result
+                else {}
+            )
+            self.caps = detect_capabilities(
+                model, model_config, self._get_user_overrides()
+            )
+
+            # Build engine args with preflight overrides and capabilities
             engine_args = AsyncEngineArgs(
                 model=model,
                 tokenizer=tokenizer or model,
@@ -161,6 +173,10 @@ class ModelManager:
                     "enforce_eager", self.config.vllm_enforce_eager
                 ),
                 cpu_offload_gb=engine_overrides.get("cpu_offload_gb", 0),
+                # Capabilities-based args
+                enable_auto_tool_choice=self.caps.enable_tool_choice,
+                tool_call_parser=self.caps.tool_call_parser,
+                chat_template=self.caps.chat_template,
             )
 
             # CPU-specific settings
@@ -243,6 +259,7 @@ class ModelManager:
         self.engine = None
         self.tokenizer = None
         self.current_model = None
+        self.caps = None
         del engine
 
         # Force GPU memory release
@@ -416,6 +433,17 @@ class ModelManager:
             return "length"
         return "stop"
 
+    def _get_user_overrides(self) -> dict:
+        """Collect explicit user overrides that should not be auto-detected."""
+        overrides = {}
+        if self.config.vllm_reasoning_parser:
+            overrides["VLLM_REASONING_PARSER"] = self.config.vllm_reasoning_parser
+        if self.config.vllm_tool_parser:
+            overrides["VLLM_TOOL_PARSER"] = self.config.vllm_tool_parser
+        if self.config.vllm_chat_template:
+            overrides["VLLM_CHAT_TEMPLATE"] = self.config.vllm_chat_template
+        return overrides
+
     # ── Keep-Alive Timer ────────────────────────────────────────────
 
     def _start_keep_alive_timer(self) -> None:
@@ -493,6 +521,15 @@ class ModelManager:
             "will_unload_in": will_unload_in,
             "error": self.error_message,
             "gpu_memory": self._get_gpu_info(),
+            "capabilities": {
+                "family": self.caps.family,
+                "supports_thinking": self.caps.supports_thinking,
+                "supports_tools": self.caps.supports_tools,
+                "reasoning_parser": self.caps.reasoning_parser,
+                "tool_call_parser": self.caps.tool_call_parser,
+            }
+            if self.caps
+            else None,
         }
 
     @staticmethod
