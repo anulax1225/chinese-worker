@@ -160,6 +160,7 @@ class ModelManager:
                 enforce_eager=engine_overrides.get(
                     "enforce_eager", self.config.vllm_enforce_eager
                 ),
+                cpu_offload_gb=engine_overrides.get("cpu_offload_gb", 0),
             )
 
             # CPU-specific settings

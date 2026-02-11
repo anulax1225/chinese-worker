@@ -547,16 +547,33 @@ def check_oom_estimate(
     ratio = estimated_bytes / available
 
     if ratio > 1.2:  # More than 20% over available
-        return CheckResult(
-            check_id=CheckId.OOM_ESTIMATE,
-            severity=CheckSeverity.WARN,  # Don't block, just warn
-            message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
-            f"~{available / 1e9:.1f}GB {memory_type} available "
-            f"({ratio:.1f}x over limit).",
-            suggestion="Use a smaller model, more aggressive quantization, "
-            "or reduce max_model_len.",
-            details=details,
-        )
+        # Calculate how much to offload to RAM (with some buffer)
+        overflow_bytes = estimated_bytes - available
+        offload_gb = int((overflow_bytes / 1e9) + 2)  # Add 2GB buffer
+
+        # Check if we have enough RAM to offload
+        if platform.has_gpu and platform.cpu_ram_bytes > (offload_gb * 1e9 * 1.5):
+            details["cpu_offload_gb"] = offload_gb
+            return CheckResult(
+                check_id=CheckId.OOM_ESTIMATE,
+                severity=CheckSeverity.AUTOFIX,
+                message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
+                f"~{available / 1e9:.1f}GB {memory_type} available. "
+                f"Offloading {offload_gb}GB to RAM.",
+                auto_fixed=True,
+                details=details,
+            )
+        else:
+            return CheckResult(
+                check_id=CheckId.OOM_ESTIMATE,
+                severity=CheckSeverity.WARN,
+                message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
+                f"~{available / 1e9:.1f}GB {memory_type} available "
+                f"({ratio:.1f}x over limit).",
+                suggestion="Use a smaller model, more aggressive quantization, "
+                "or reduce max_model_len.",
+                details=details,
+            )
     elif ratio > 0.85:  # Warning zone
         return CheckResult(
             check_id=CheckId.OOM_ESTIMATE,
@@ -1066,6 +1083,11 @@ async def preflight_check(
                 # bfloat16 -> float16 fallback
                 if check.details.get("fixed_dtype"):
                     engine_overrides["dtype"] = check.details["fixed_dtype"]
+
+            elif check.check_id == CheckId.OOM_ESTIMATE:
+                # CPU offload for models that don't fit in VRAM
+                if check.details.get("cpu_offload_gb"):
+                    engine_overrides["cpu_offload_gb"] = check.details["cpu_offload_gb"]
 
     result.engine_overrides = engine_overrides
     return result
