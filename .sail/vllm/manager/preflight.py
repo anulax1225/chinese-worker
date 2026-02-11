@@ -90,7 +90,9 @@ class PlatformInfo:
     has_gpu: bool
     gpu_name: Optional[str] = None
     gpu_memory_bytes: int = 0
-    gpu_compute_capability: Optional[tuple[int, int]] = None
+    gpu_compute_capability: Optional[tuple[int, int]] = None  # NVIDIA SM version
+    gpu_arch: Optional[str] = None  # AMD GCN arch string (e.g. "gfx942", "gfx1100")
+    is_rocm: bool = False  # True if AMD ROCm platform
     cpu_ram_bytes: int = 0
     is_wsl: bool = False
     vllm_version: Optional[str] = None
@@ -105,7 +107,7 @@ class PlatformInfo:
             cpu_ram_bytes=psutil.virtual_memory().total,
         )
 
-        # Detect GPU
+        # Detect GPU (works for both CUDA and ROCm via HIP compatibility)
         try:
             import torch
 
@@ -114,7 +116,25 @@ class PlatformInfo:
                 info.has_gpu = True
                 info.gpu_name = props.name
                 info.gpu_memory_bytes = props.total_memory
-                info.gpu_compute_capability = (props.major, props.minor)
+
+                # Detect if ROCm (AMD) or CUDA (NVIDIA)
+                # ROCm exposes torch.cuda via HIP compatibility layer
+                is_rocm = hasattr(torch.version, "hip") and torch.version.hip is not None
+                info.is_rocm = is_rocm
+
+                if is_rocm:
+                    # AMD GPU — compute_capability from props is not meaningful
+                    # Extract GCN arch from device name or gcnArchName
+                    info.gpu_compute_capability = None
+                    gcn_arch = getattr(props, "gcnArchName", None)
+                    if gcn_arch:
+                        info.gpu_arch = gcn_arch.lower()
+                    elif info.gpu_name:
+                        # Fallback: some ROCm versions expose arch in name
+                        info.gpu_arch = info.gpu_name.lower()
+                else:
+                    # NVIDIA GPU
+                    info.gpu_compute_capability = (props.major, props.minor)
         except ImportError:
             pass
 
@@ -184,6 +204,9 @@ class PreflightResult:
                     else None
                 ),
                 "gpu_compute_capability": self.platform.gpu_compute_capability,
+                "gpu_arch": self.platform.gpu_arch,
+                "is_rocm": self.platform.is_rocm,
+                "is_wsl": self.platform.is_wsl,
                 "cpu_ram_gb": round(self.platform.cpu_ram_bytes / 1e9, 1),
                 "vllm_version": self.platform.vllm_version,
             }
@@ -575,11 +598,20 @@ def _try_bnb_quantization(
         # Unusual dtype — might be pre-quantized in a non-standard way
         return None
 
-    # 2. Check GPU compute capability >= 7.0 (BnB requirement)
-    if platform.gpu_compute_capability is None:
-        return None
-    if platform.gpu_compute_capability < (7, 0):
-        return None
+    # 2. Check GPU compatibility for BnB
+    if platform.is_rocm:
+        # AMD/ROCm: BnB only works on RDNA3+ (gfx11xx, warp size 32).
+        # NOT supported on gfx9 (MI300 series, warp size 64).
+        arch = platform.gpu_arch or ""
+        if not arch.startswith("gfx11"):
+            # gfx9xx (MI300), gfx10xx (RDNA2), or unknown — BnB not supported
+            return None
+    else:
+        # NVIDIA: BnB requires compute capability >= 7.0 (Turing+)
+        if platform.gpu_compute_capability is None:
+            return None
+        if platform.gpu_compute_capability < (7, 0):
+            return None
 
     # 3. Check system RAM can hold full-precision weights during BnB loading
     # BnB loads full FP16 weights into CPU RAM, then quantizes layer-by-layer
@@ -668,7 +700,9 @@ def check_oom_estimate(
             offload_gb = int((offload_bytes / 1e9) + 1)  # Round up + buffer
 
             if platform.cpu_ram_bytes > (offload_gb * 1e9 * 1.5):
-                # vLLM V1 cpu_offload uses UVA (CUDA pinned memory).
+                # vLLM V1 cpu_offload uses UVA (pinned memory).
+                # On NVIDIA: requires CUDA pinned memory (cudaHostAlloc).
+                # On AMD/ROCm: requires HIP pinned memory (hipHostMalloc).
                 # Check if the environment supports it.
                 pin_memory_ok = False
 
@@ -705,8 +739,12 @@ def check_oom_estimate(
                         return bnb_result
 
                     # BnB not possible either — BLOCK
-                    reason = "WSL does not support CUDA pinned memory (UVA)" if platform.is_wsl else \
-                        "CUDA pinned memory (UVA) is not available in this environment"
+                    if platform.is_wsl:
+                        reason = "WSL does not support pinned memory (UVA)"
+                    elif platform.is_rocm:
+                        reason = "HIP pinned memory is not available on this AMD GPU"
+                    else:
+                        reason = "CUDA pinned memory (UVA) is not available in this environment"
                     return CheckResult(
                         check_id=CheckId.OOM_ESTIMATE,
                         severity=CheckSeverity.BLOCK,
@@ -935,8 +973,59 @@ def check_gpu_compute_cap_too_low(
     """
     Check #10: Check if GPU compute capability supports the quantization method.
     Also checks bfloat16 compatibility.
+    Handles both NVIDIA (compute capability) and AMD (GCN arch) GPUs.
     """
-    if not platform.has_gpu or not platform.gpu_compute_capability:
+    if not platform.has_gpu:
+        return None
+
+    quant = (quantization or "").lower()
+    config_quant = (
+        model_config.get("quantization_config", {}).get("quant_method", "").lower()
+    )
+    detected = quant or config_quant
+
+    if platform.is_rocm:
+        # AMD/ROCm-specific quantization checks
+        arch = platform.gpu_arch or ""
+
+        # Quantization methods that are NVIDIA-only (use CUDA kernels)
+        nvidia_only_quants = {"marlin", "awq_marlin", "gptq_marlin", "exl2", "mxfp4", "nvfp4"}
+        if detected in nvidia_only_quants:
+            return CheckResult(
+                check_id=CheckId.GPU_COMPUTE_CAP_TOO_LOW,
+                severity=CheckSeverity.BLOCK,
+                message=f"Quantization '{detected}' uses NVIDIA-only CUDA kernels "
+                f"and is not supported on AMD/ROCm ({platform.gpu_name}).",
+                suggestion="Use AWQ (via Triton), GPTQ, FP8, or GGUF on AMD GPUs.",
+                details={"quant_method": detected, "gpu_arch": arch},
+            )
+
+        # FP8 requires MI300+ (gfx94x)
+        if detected == "fp8" and not arch.startswith("gfx94"):
+            return CheckResult(
+                check_id=CheckId.GPU_COMPUTE_CAP_TOO_LOW,
+                severity=CheckSeverity.BLOCK,
+                message=f"FP8 quantization on ROCm requires MI300+ (gfx94x) "
+                f"but your GPU has architecture '{arch}'.",
+                suggestion="Use AWQ, GPTQ, or GGUF instead.",
+                details={"quant_method": detected, "gpu_arch": arch},
+            )
+
+        # BnB requires RDNA3 (gfx11xx, warp size 32)
+        if detected == "bitsandbytes" and not arch.startswith("gfx11"):
+            return CheckResult(
+                check_id=CheckId.GPU_COMPUTE_CAP_TOO_LOW,
+                severity=CheckSeverity.BLOCK,
+                message=f"BitsAndBytes on ROCm requires RDNA3+ (gfx11xx, warp size 32) "
+                f"but your GPU has architecture '{arch}' (warp size 64).",
+                suggestion="Use AWQ, GPTQ, or FP8 instead.",
+                details={"quant_method": detected, "gpu_arch": arch},
+            )
+
+        return None
+
+    # NVIDIA-specific checks
+    if not platform.gpu_compute_capability:
         return None
 
     sm = platform.gpu_compute_capability
