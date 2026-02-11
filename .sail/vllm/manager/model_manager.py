@@ -162,6 +162,7 @@ class ModelManager:
                 max_model_len=engine_overrides.get(
                     "max_model_len", self.config.vllm_max_model_len
                 ),
+                max_seq_len=2048,
                 max_num_seqs=4,
                 quantization=engine_overrides.get(
                     "quantization", self.config.vllm_quantization or None
