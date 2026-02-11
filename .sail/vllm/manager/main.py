@@ -125,11 +125,11 @@ async def chat_completions(request: Request):
         raise HTTPException(status_code=400, detail="'messages' field is required")
 
     # Verify model is in cache
-    if not cache.is_cached(model):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Model '{model}' not found in cache. Pull it first with POST /api/pull."
-        )
+    if not cache.is_cached(model): pass
+        # raise HTTPException(
+        #     status_code=404,
+        #     detail=f"Model '{model}' not found in cache. Pull it first with POST /api/pull."
+        # )
 
     # Ensure model is loaded (auto-switch if different)
     try:
