@@ -57,6 +57,7 @@ class CheckId(str, Enum):
     OOM_KV_CACHE = "OOM_KV_CACHE"
     CUDA_TOOLKIT_MISMATCH = "CUDA_TOOLKIT_MISMATCH"
     CUDA_GRAPH_ERROR = "CUDA_GRAPH_ERROR"
+    INCOMPATIBLE_REMOTE_CODE = "INCOMPATIBLE_REMOTE_CODE"
     UNKNOWN_ENGINE_ERROR = "UNKNOWN_ENGINE_ERROR"
 
 
@@ -91,6 +92,7 @@ class PlatformInfo:
     gpu_memory_bytes: int = 0
     gpu_compute_capability: Optional[tuple[int, int]] = None
     cpu_ram_bytes: int = 0
+    is_wsl: bool = False
     vllm_version: Optional[str] = None
 
     @classmethod
@@ -114,6 +116,16 @@ class PlatformInfo:
                 info.gpu_memory_bytes = props.total_memory
                 info.gpu_compute_capability = (props.major, props.minor)
         except ImportError:
+            pass
+
+        # Detect WSL (Windows Subsystem for Linux)
+        # WSL does not support CUDA pinned memory (UVA), which breaks cpu_offload
+        try:
+            with open("/proc/version", "r") as f:
+                version_str = f.read().lower()
+                if "microsoft" in version_str or "wsl" in version_str:
+                    info.is_wsl = True
+        except Exception:
             pass
 
         # Detect vLLM version
@@ -529,6 +541,82 @@ def check_trust_remote_code(
     return None
 
 
+def _try_bnb_quantization(
+    model_config: dict,
+    platform: PlatformInfo,
+    weight_bytes: int,
+    kv_cache_bytes: int,
+    available_vram: int,
+    details: dict,
+) -> Optional[CheckResult]:
+    """
+    Check if BitsAndBytes on-the-fly 4-bit quantization can make the model fit.
+
+    BnB quantizes FP16/BF16 weights to NF4 at load time (~4x weight reduction).
+    Requirements:
+      - Model must NOT already be quantized (can't double-quantize)
+      - GPU compute capability >= 7.0 (Turing+)
+      - Enough system RAM to hold full-precision weights during loading
+      - Quantized size must fit in VRAM
+
+    Returns CheckResult(AUTOFIX) if viable, None otherwise.
+    """
+    # 1. Check model is not already quantized
+    quant_config = model_config.get("quantization_config", {})
+    existing_quant = quant_config.get("quant_method", "").lower()
+    if existing_quant:
+        # Already quantized — BnB on top would be double-quantizing
+        return None
+
+    # Also check if weights on disk look pre-quantized by examining dtype/bpw
+    # If torch_dtype is float16/bfloat16 and no quant_config, it's unquantized
+    torch_dtype = model_config.get("torch_dtype", "").lower()
+    if torch_dtype not in ("float16", "bfloat16", "float32", ""):
+        # Unusual dtype — might be pre-quantized in a non-standard way
+        return None
+
+    # 2. Check GPU compute capability >= 7.0 (BnB requirement)
+    if platform.gpu_compute_capability is None:
+        return None
+    if platform.gpu_compute_capability < (7, 0):
+        return None
+
+    # 3. Check system RAM can hold full-precision weights during BnB loading
+    # BnB loads full FP16 weights into CPU RAM, then quantizes layer-by-layer
+    # Need at least 1.2x the weight size in available RAM
+    ram_available = platform.cpu_ram_bytes * 0.8  # Reserve 20% for OS
+    if weight_bytes > ram_available:
+        return None
+
+    # 4. Estimate quantized memory usage
+    # BnB NF4: ~4x reduction on weights, KV cache stays same size
+    bnb_weight_bytes = weight_bytes / 4
+    cuda_context_bytes = 1 * 1024 * 1024 * 1024  # 1GB
+    bnb_activation_overhead = int((bnb_weight_bytes + kv_cache_bytes) * 0.20)
+    bnb_total = bnb_weight_bytes + kv_cache_bytes + cuda_context_bytes + bnb_activation_overhead
+
+    if bnb_total > available_vram:
+        # Even with BnB, model won't fit
+        return None
+
+    # BnB quantization is viable!
+    details["bnb_quantize"] = True
+    details["bnb_estimated_vram"] = int(bnb_total)
+    details["bnb_weight_bytes"] = int(bnb_weight_bytes)
+
+    return CheckResult(
+        check_id=CheckId.OOM_ESTIMATE,
+        severity=CheckSeverity.AUTOFIX,
+        message=f"Weights ({weight_bytes/1e9:.1f}GB) exceed {available_vram/1e9:.1f}GB VRAM. "
+        f"Auto-enabling BitsAndBytes NF4 on-the-fly quantization "
+        f"(~{bnb_weight_bytes/1e9:.1f}GB quantized weights + "
+        f"{kv_cache_bytes/1e9:.1f}GB KV cache ≈ {bnb_total/1e9:.1f}GB total). "
+        f"Note: loading will be slower as full-precision weights are quantized at startup.",
+        auto_fixed=True,
+        details=details,
+    )
+
+
 def check_oom_estimate(
     snapshot_path: Path,
     model_config: dict,
@@ -580,25 +668,74 @@ def check_oom_estimate(
             offload_gb = int((offload_bytes / 1e9) + 1)  # Round up + buffer
 
             if platform.cpu_ram_bytes > (offload_gb * 1e9 * 1.5):
-                details["cpu_offload_gb"] = offload_gb
-                return CheckResult(
-                    check_id=CheckId.OOM_ESTIMATE,
-                    severity=CheckSeverity.AUTOFIX,
-                    message=f"Weights ({weight_bytes/1e9:.1f}GB) + KV cache ({kv_cache_bytes/1e9:.1f}GB) "
-                    f"exceed {available/1e9:.1f}GB VRAM. Offloading {offload_gb}GB weights to RAM.",
-                    auto_fixed=True,
-                    details=details,
-                )
+                # vLLM V1 cpu_offload uses UVA (CUDA pinned memory).
+                # Check if the environment supports it.
+                pin_memory_ok = False
 
-        # Can't offload (no GPU, KV cache alone exceeds VRAM, or not enough RAM)
+                if platform.is_wsl:
+                    # WSL does NOT support CUDA pinned memory (UVA).
+                    # torch.empty(pin_memory=True) silently succeeds on WSL
+                    # but vLLM's internal check correctly detects no UVA support.
+                    pin_memory_ok = False
+                else:
+                    try:
+                        import torch
+                        t = torch.empty(1, pin_memory=True)
+                        del t
+                        pin_memory_ok = True
+                    except Exception:
+                        pass
+
+                if pin_memory_ok:
+                    details["cpu_offload_gb"] = offload_gb
+                    return CheckResult(
+                        check_id=CheckId.OOM_ESTIMATE,
+                        severity=CheckSeverity.AUTOFIX,
+                        message=f"Weights ({weight_bytes/1e9:.1f}GB) + KV cache ({kv_cache_bytes/1e9:.1f}GB) "
+                        f"exceed {available/1e9:.1f}GB VRAM. Offloading {offload_gb}GB weights to RAM.",
+                        auto_fixed=True,
+                        details=details,
+                    )
+                else:
+                    # Pin memory not available — try BnB on-the-fly quantization
+                    bnb_result = _try_bnb_quantization(
+                        model_config, platform, weight_bytes, kv_cache_bytes, available, details,
+                    )
+                    if bnb_result is not None:
+                        return bnb_result
+
+                    # BnB not possible either — BLOCK
+                    reason = "WSL does not support CUDA pinned memory (UVA)" if platform.is_wsl else \
+                        "CUDA pinned memory (UVA) is not available in this environment"
+                    return CheckResult(
+                        check_id=CheckId.OOM_ESTIMATE,
+                        severity=CheckSeverity.BLOCK,
+                        message=f"Weights ({weight_bytes/1e9:.1f}GB) + KV cache ({kv_cache_bytes/1e9:.1f}GB) "
+                        f"exceed {available/1e9:.1f}GB VRAM. CPU offloading is not possible: {reason}. "
+                        f"BitsAndBytes on-the-fly quantization is also not viable.",
+                        suggestion="Use a smaller/more quantized model that fits in GPU VRAM. "
+                        f"You have ~{available/1e9:.1f}GB usable VRAM — look for models under "
+                        f"~{available/1e9 * 0.8:.0f}GB (e.g. 3-4B parameter quantized models).",
+                        details=details,
+                    )
+
+        # Can't cpu_offload (no GPU, KV cache alone exceeds VRAM, or not enough RAM)
+        # Try BnB on-the-fly quantization as last resort
+        if platform.has_gpu:
+            bnb_result = _try_bnb_quantization(
+                model_config, platform, weight_bytes, kv_cache_bytes, available, details,
+            )
+            if bnb_result is not None:
+                return bnb_result
+
         return CheckResult(
             check_id=CheckId.OOM_ESTIMATE,
-            severity=CheckSeverity.WARN,
+            severity=CheckSeverity.BLOCK,
             message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
             f"~{available / 1e9:.1f}GB {memory_type} available "
-            f"({ratio:.1f}x over limit).",
-            suggestion="Use a smaller model, more aggressive quantization, "
-            "or reduce max_model_len.",
+            f"({ratio:.1f}x over limit). Cannot offload to CPU.",
+            suggestion="Use a smaller model or more aggressive quantization that "
+            f"fits within ~{available / 1e9 * 0.8:.0f}GB.",
             details=details,
         )
     elif ratio > 0.85:  # Warning zone
@@ -1024,6 +1161,27 @@ async def preflight_check(
     # Preserve model config for capabilities detection
     result.model_config = model_config
 
+    # Pre-compute effective max_model_len BEFORE running checks.
+    # This ensures OOM estimate uses the capped context length, not the
+    # raw max_position_embeddings (which can be 128K-262K and produce
+    # wildly inflated KV cache estimates).
+    effective_max_model_len = config.vllm_max_model_len
+    if effective_max_model_len is None:
+        max_pos_embed = model_config.get(
+            "max_position_embeddings",
+            model_config.get("max_sequence_length", 4096),
+        )
+        if max_pos_embed > 32768:
+            # Same logic as check_context_length_mismatch
+            reasonable_cap = 8192
+            if platform.has_gpu and platform.gpu_memory_bytes:
+                gpu_gb = platform.gpu_memory_bytes / 1e9
+                if gpu_gb >= 24:
+                    reasonable_cap = 16384
+                elif gpu_gb >= 16:
+                    reasonable_cap = 12288
+            effective_max_model_len = reasonable_cap
+
     # Run all checks
     checks_to_run = [
         # BLOCK checks first
@@ -1040,7 +1198,7 @@ async def preflight_check(
             model_config,
             platform,
             config.vllm_gpu_memory_utilization,
-            config.vllm_max_model_len,
+            effective_max_model_len,  # Use pre-capped value
         ),
         # AUTOFIX checks
         check_vllm_v1_cpu_incompatible(config.is_cpu),
@@ -1104,7 +1262,9 @@ async def preflight_check(
                 engine_overrides["dtype"] = "bfloat16"
 
             elif check.check_id == CheckId.VLLM_V1_CPU_INCOMPATIBLE:
-                engine_overrides["disable_v1"] = True
+                # In newer vLLM (0.12+), V0 was removed. CPU backend
+                # may work differently. Flag for logging only.
+                engine_overrides["cpu_backend_warning"] = True
 
             elif check.check_id == CheckId.ENFORCE_EAGER_LOW_VRAM:
                 engine_overrides["enforce_eager"] = True
@@ -1118,6 +1278,10 @@ async def preflight_check(
                 # CPU offload for models that don't fit in VRAM
                 if check.details.get("cpu_offload_gb"):
                     engine_overrides["cpu_offload_gb"] = check.details["cpu_offload_gb"]
+                # BitsAndBytes on-the-fly quantization fallback
+                elif check.details.get("bnb_quantize"):
+                    engine_overrides["quantization"] = "bitsandbytes"
+                    engine_overrides["load_format"] = "bitsandbytes"
 
     result.engine_overrides = engine_overrides
     return result
@@ -1203,6 +1367,16 @@ def classify_engine_error(error: Exception) -> CheckResult:
             suggestion="Use a different quantization or upgrade GPU.",
         )
 
+    if "bitsandbytes" in msg and ("not support" in msg or "not compatible" in msg):
+        return CheckResult(
+            check_id=CheckId.OOM_ESTIMATE,
+            severity=CheckSeverity.BLOCK,
+            message="BitsAndBytes quantization failed: model architecture or "
+            "GPU is not compatible with BitsAndBytes.",
+            suggestion="Use a pre-quantized model (AWQ or GPTQ) that fits in "
+            "GPU VRAM, or use a smaller model.",
+        )
+
     if "bfloat16 is only supported" in msg:
         return CheckResult(
             check_id=CheckId.CPU_DTYPE_INCOMPATIBLE,
@@ -1217,6 +1391,30 @@ def classify_engine_error(error: Exception) -> CheckResult:
             severity=CheckSeverity.BLOCK,
             message="CUDA graph error during execution.",
             suggestion="Try setting VLLM_ENFORCE_EAGER=1.",
+        )
+
+    if "cannot import name" in msg or "no module named" in msg:
+        # Model's custom code (trust_remote_code) is incompatible with
+        # the installed transformers/torch version. Common case: model
+        # uses old import paths like PreTrainedConfig vs PretrainedConfig.
+        error_str = str(error)  # preserve original case for the message
+        return CheckResult(
+            check_id=CheckId.INCOMPATIBLE_REMOTE_CODE,
+            severity=CheckSeverity.BLOCK,
+            message=f"Model's custom code is incompatible with installed packages: {error_str}",
+            suggestion="The model author needs to update their code. "
+            "Try a different model, or report the issue to the model's repository.",
+        )
+
+    if "uva" in msg or ("pin" in msg and "memory" in msg):
+        return CheckResult(
+            check_id=CheckId.OOM_ESTIMATE,
+            severity=CheckSeverity.BLOCK,
+            message="CPU offloading failed: CUDA pinned memory (UVA) is not "
+            "available in this environment.",
+            suggestion="Use a smaller/more quantized model that fits in GPU VRAM, "
+            "or ensure Docker is configured with --gpus all and "
+            "nvidia-container-toolkit is properly installed.",
         )
 
     # Generic fallback
@@ -1242,6 +1440,7 @@ def get_recovery_hint(check_id: CheckId) -> str:
         CheckId.MISSING_TOKENIZER: "Set VLLM_TOKENIZER to the base model ID",
         CheckId.CUDA_TOOLKIT_MISMATCH: "Install cuda-compat package or update NVIDIA drivers",
         CheckId.CUDA_GRAPH_ERROR: "Try setting VLLM_ENFORCE_EAGER=1",
+        CheckId.INCOMPATIBLE_REMOTE_CODE: "Model's custom code is incompatible with installed packages. Try a different model.",
         CheckId.VLLM_V1_CPU_INCOMPATIBLE: "Running on CPU, V1 engine auto-disabled",
         CheckId.GATED_MODEL_NO_TOKEN: "Set HUGGING_FACE_HUB_TOKEN with a valid token",
         CheckId.MOE_ON_CPU: "Consider using a dense model for CPU inference",

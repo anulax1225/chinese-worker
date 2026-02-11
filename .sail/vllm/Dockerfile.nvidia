@@ -5,7 +5,7 @@ FROM vllm/vllm-openai:latest
 # Install manager dependencies
 COPY manager/requirements.txt /opt/vllm-manager/requirements.txt
 RUN pip install --no-cache-dir -r /opt/vllm-manager/requirements.txt
-
+RUN pip install --upgrade transformers
 # Copy manager code
 COPY manager/ /opt/vllm-manager/
 

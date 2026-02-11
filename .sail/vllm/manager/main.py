@@ -109,9 +109,8 @@ async def chat_completions(request: Request):
     OpenAI-compatible chat completions.
     Auto-loads/switches model based on request body (Ollama behavior).
 
-    If the model supports tool calling or reasoning and OpenAIServingChat is
-    initialized, delegates to vLLM's serving layer for proper parsing.
-    Otherwise falls back to direct engine.generate() calls.
+    Uses vLLM's native parsers (via OutputParser) for reasoning extraction
+    and tool call parsing on raw engine output.
     """
     mgr: ModelManager = request.app.state.model_mgr
     cache: HFCacheManager = request.app.state.cache_mgr
@@ -162,30 +161,15 @@ async def chat_completions(request: Request):
     if mgr.engine is None:
         raise HTTPException(status_code=503, detail="Model not ready")
 
-    # Generate completion
+    # Generate completion (unified path with native output parsing)
     try:
-        # Use OpenAI serving layer if available (handles tool calls, reasoning parsing)
-        if mgr.serving_chat is not None:
-            from vllm.entrypoints.openai.protocol import ChatCompletionRequest
-
-            # Build vLLM's ChatCompletionRequest from the body
-            chat_request = ChatCompletionRequest(**body)
-            result = await mgr.serving_chat.create_chat_completion(
-                chat_request, request
-            )
-
-            # Handle keep_alive=0 (unload after request)
-            if keep_alive == 0:
-                asyncio.create_task(mgr.unload())
-
-            return result
-
-        # Fallback: direct engine.generate() for basic models
         response = await mgr.chat_completion(
             messages=messages,
             temperature=body.get("temperature", 0.7),
             max_tokens=body.get("max_tokens", 2048),
             stream=stream,
+            tools=body.get("tools"),
+            tool_choice=body.get("tool_choice", "auto"),
             top_p=body.get("top_p", 1.0),
             frequency_penalty=body.get("frequency_penalty", 0.0),
             presence_penalty=body.get("presence_penalty", 0.0),

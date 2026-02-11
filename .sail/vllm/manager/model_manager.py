@@ -19,12 +19,10 @@ from typing import AsyncIterator, Optional
 import torch
 from vllm import AsyncLLMEngine, SamplingParams
 from vllm.engine.arg_utils import AsyncEngineArgs
-from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
-from vllm.entrypoints.openai.serving_models import OpenAIServingModels
-
 from cache_manager import HFCacheManager
 from config import ManagerConfig
 from model_capabilities import ModelCapabilities, detect_capabilities
+from output_parser import OutputParser, ParsedOutput
 from preflight import PreflightError, classify_engine_error, preflight_check
 from tokenizer_resolver import ensure_tokenizer_available, resolve_tokenizer
 
@@ -57,7 +55,7 @@ class ModelManager:
         self.error_message: Optional[str] = None
         self._last_preflight = None  # Store last preflight result for debugging
         self.caps: Optional[ModelCapabilities] = None  # Detected model capabilities
-        self.serving_chat: Optional[OpenAIServingChat] = None  # OpenAI serving layer
+        self.parser: Optional[OutputParser] = None  # Output parser for reasoning/tools
 
         # Keep-alive
         self.last_used: float = 0
@@ -102,7 +100,6 @@ class ModelManager:
 
     async def _load(self, model: str) -> None:
         """Create vLLM engine for the given model."""
-        import os
 
         # Unload current model if any
         if self.engine is not None:
@@ -143,11 +140,6 @@ class ModelManager:
 
                 engine_overrides = preflight_result.engine_overrides
 
-                # Apply V1 engine disable if needed
-                if engine_overrides.get("disable_v1"):
-                    os.environ["VLLM_USE_V1"] = "0"
-                    logger.info("Disabled vLLM V1 engine for CPU compatibility")
-
             # Detect model capabilities from config
             model_config = (
                 preflight_result.model_config
@@ -159,8 +151,8 @@ class ModelManager:
             )
 
             # Build engine args with preflight overrides
-            # Note: enable_auto_tool_choice, tool_call_parser, reasoning_parser
-            # are NOT engine args — they go to OpenAIServingChat
+            # Note: tool_call_parser, reasoning_parser are NOT engine args —
+            # they are used by OutputParser (instantiated after engine creation)
             engine_args = AsyncEngineArgs(
                 model=model,
                 tokenizer=tokenizer or model,
@@ -169,7 +161,12 @@ class ModelManager:
                 max_model_len=engine_overrides.get(
                     "max_model_len", self.config.vllm_max_model_len
                 ),
-                quantization=self.config.vllm_quantization or None,
+                quantization=engine_overrides.get(
+                    "quantization", self.config.vllm_quantization or None
+                ),
+                load_format=engine_overrides.get(
+                    "load_format", "auto"
+                ),
                 trust_remote_code=engine_overrides.get(
                     "trust_remote_code", self.config.vllm_trust_remote_code
                 ),
@@ -178,7 +175,6 @@ class ModelManager:
                     "enforce_eager", self.config.vllm_enforce_eager
                 ),
                 cpu_offload_gb=engine_overrides.get("cpu_offload_gb", 0),
-                chat_template=self.caps.chat_template,  # This one IS an engine arg
             )
 
             # CPU-specific settings
@@ -192,33 +188,17 @@ class ModelManager:
             # Get tokenizer for chat template
             self.tokenizer = await maybe_await(self.engine.get_tokenizer())
 
-            # Create OpenAI serving layer for tool/reasoning parsing
-            if self.caps.supports_thinking or self.caps.supports_tools:
-                model_config = await maybe_await(self.engine.get_model_config())
-                self.serving_chat = OpenAIServingChat(
-                    engine_client=self.engine,
-                    model_config=model_config,
-                    models=OpenAIServingModels(
-                        engine_client=self.engine,
-                        model_config=model_config,
-                        base_model_paths=[model],
-                    ),
-                    response_role="assistant",
-                    request_logger=None,
-                    chat_template=self.caps.chat_template,
-                    chat_template_content_format="auto",
-                    enable_auto_tools=self.caps.enable_tool_choice,
-                    tool_parser=self.caps.tool_call_parser,
-                    enable_reasoning=self.caps.supports_thinking,
-                    reasoning_parser=self.caps.reasoning_parser,
-                )
-                logger.info(
-                    f"OpenAI serving layer initialized: "
-                    f"tools={self.caps.tool_call_parser}, "
-                    f"reasoning={self.caps.reasoning_parser}"
-                )
-            else:
-                self.serving_chat = None
+            # Create output parser using vLLM's native parser classes
+            self.parser = OutputParser(
+                tokenizer=self.tokenizer,
+                reasoning_parser_name=self.caps.reasoning_parser,
+                tool_parser_name=self.caps.tool_call_parser,
+            )
+            logger.info(
+                f"Output parser initialized: "
+                f"reasoning={self.caps.reasoning_parser}, "
+                f"tools={self.caps.tool_call_parser}"
+            )
 
             self.state = "ready"
             self.last_used = time.time()
@@ -232,7 +212,7 @@ class ModelManager:
             self._last_preflight = e.result
             self.engine = None
             self.tokenizer = None
-            self.serving_chat = None
+            self.parser = None
             logger.error(f"Preflight blocked {model}: {e.result.block_reason}")
             raise
 
@@ -256,7 +236,7 @@ class ModelManager:
         """Nuclear GPU cleanup after failed load attempts."""
         self.engine = None
         self.tokenizer = None
-        self.serving_chat = None
+        self.parser = None
 
         # Aggressive garbage collection
         gc.collect()
@@ -292,7 +272,7 @@ class ModelManager:
         self.tokenizer = None
         self.current_model = None
         self.caps = None
-        self.serving_chat = None
+        self.parser = None
         del engine
 
         # Force GPU memory release
@@ -317,23 +297,40 @@ class ModelManager:
         temperature: float = 0.7,
         max_tokens: int = 2048,
         stream: bool = False,
+        tools: list = None,
+        tool_choice: str = "auto",
         **kwargs,
     ):
         """
         Generate chat completion using the loaded model.
         Returns OpenAI-compatible response format.
+
+        Uses vLLM's native parsers (via OutputParser) for reasoning
+        and tool call extraction from raw engine output.
         """
         if self.engine is None or self.tokenizer is None:
             raise RuntimeError("No model loaded")
 
         self.last_used = time.time()
 
-        # Apply chat template
+        # Build a minimal request object for parser consumption
+        parser_request = self._build_parser_request(
+            messages=messages, tools=tools, tool_choice=tool_choice
+        )
+
+        # Apply chat template (include tools and custom template if applicable)
+        template_kwargs = {}
+        if tools and self.caps and self.caps.supports_tools:
+            template_kwargs["tools"] = tools
+        if self.caps and self.caps.chat_template:
+            template_kwargs["chat_template"] = self.caps.chat_template
+
         try:
             prompt = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
                 add_generation_prompt=True,
+                **template_kwargs,
             )
         except Exception as e:
             logger.warning(f"Chat template failed, using fallback: {e}")
@@ -356,17 +353,22 @@ class ModelManager:
         request_id = str(uuid.uuid4())
 
         if stream:
-            return self._stream_chat_completion(prompt, sampling_params, request_id)
+            return self._stream_chat_completion(
+                prompt, sampling_params, request_id, parser_request
+            )
         else:
-            return await self._complete_chat(prompt, sampling_params, request_id)
+            return await self._complete_chat(
+                prompt, sampling_params, request_id, parser_request
+            )
 
     async def _complete_chat(
         self,
         prompt: str,
         sampling_params: SamplingParams,
         request_id: str,
+        parser_request=None,
     ) -> dict:
-        """Non-streaming chat completion."""
+        """Non-streaming chat completion with reasoning/tool parsing."""
         results_generator = self.engine.generate(prompt, sampling_params, request_id)
 
         final_output = None
@@ -377,6 +379,37 @@ class ModelManager:
             raise RuntimeError("No output generated")
 
         output = final_output.outputs[0]
+        raw_text = output.text
+        raw_finish_reason = self._map_finish_reason(output.finish_reason)
+
+        # Parse output for reasoning and tool calls
+        if self.parser and (self.parser.has_reasoning or self.parser.has_tools):
+            parsed = self.parser.parse(
+                model_output=raw_text,
+                request=parser_request,
+                finish_reason=raw_finish_reason,
+            )
+        else:
+            parsed = ParsedOutput(content=raw_text, finish_reason=raw_finish_reason)
+
+        # Build message
+        message = {"role": "assistant", "content": parsed.content}
+
+        if parsed.reasoning_content is not None:
+            message["reasoning_content"] = parsed.reasoning_content
+
+        if parsed.tools_called:
+            message["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in parsed.tool_calls
+            ]
 
         return {
             "id": f"chatcmpl-{request_id}",
@@ -386,17 +419,15 @@ class ModelManager:
             "choices": [
                 {
                     "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": output.text,
-                    },
-                    "finish_reason": self._map_finish_reason(output.finish_reason),
+                    "message": message,
+                    "finish_reason": parsed.finish_reason,
                 }
             ],
             "usage": {
                 "prompt_tokens": len(final_output.prompt_token_ids),
                 "completion_tokens": len(output.token_ids),
-                "total_tokens": len(final_output.prompt_token_ids) + len(output.token_ids),
+                "total_tokens": len(final_output.prompt_token_ids)
+                + len(output.token_ids),
             },
         }
 
@@ -405,52 +436,120 @@ class ModelManager:
         prompt: str,
         sampling_params: SamplingParams,
         request_id: str,
+        parser_request=None,
     ) -> AsyncIterator[str]:
-        """Streaming chat completion (SSE)."""
+        """Streaming chat completion (SSE) with reasoning/tool parsing."""
         results_generator = self.engine.generate(prompt, sampling_params, request_id)
 
+        # Per-request parser instance (streaming parsers have internal state)
+        has_parsers = self.parser and (
+            self.parser.has_reasoning or self.parser.has_tools
+        )
+        if has_parsers:
+            request_parser = OutputParser(
+                tokenizer=self.tokenizer,
+                reasoning_parser_name=self.caps.reasoning_parser if self.caps else None,
+                tool_parser_name=self.caps.tool_call_parser if self.caps else None,
+            )
+        else:
+            request_parser = None
+
         previous_text = ""
+        previous_token_ids: list[int] = []
 
         async for request_output in results_generator:
             if not request_output.outputs:
                 continue
 
             output = request_output.outputs[0]
-            new_text = output.text[len(previous_text):]
-            previous_text = output.text
+            current_text = output.text
+            current_token_ids = list(output.token_ids)
+            delta_text = current_text[len(previous_text):]
+            delta_token_ids = current_token_ids[len(previous_token_ids):]
+            is_finished = output.finish_reason is not None
 
-            if new_text:
-                chunk = {
-                    "id": f"chatcmpl-{request_id}",
-                    "object": "chat.completion.chunk",
-                    "created": int(time.time()),
-                    "model": self.current_model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {"content": new_text},
-                            "finish_reason": None,
-                        }
-                    ],
-                }
-                yield f"data: {json.dumps(chunk)}\n\n"
+            if delta_text or is_finished:
+                # Build SSE chunk delta
+                chunk_delta = {}
 
-            # Send finish reason on last chunk
-            if output.finish_reason:
-                chunk = {
-                    "id": f"chatcmpl-{request_id}",
-                    "object": "chat.completion.chunk",
-                    "created": int(time.time()),
-                    "model": self.current_model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {},
-                            "finish_reason": self._map_finish_reason(output.finish_reason),
-                        }
-                    ],
-                }
-                yield f"data: {json.dumps(chunk)}\n\n"
+                if request_parser and delta_text:
+                    delta_msg = request_parser.parse_streaming(
+                        previous_text=previous_text,
+                        current_text=current_text,
+                        delta_text=delta_text,
+                        previous_token_ids=previous_token_ids,
+                        current_token_ids=current_token_ids,
+                        delta_token_ids=delta_token_ids,
+                        request=parser_request,
+                    )
+
+                    if delta_msg is not None:
+                        if getattr(delta_msg, "reasoning_content", None) is not None:
+                            chunk_delta["reasoning_content"] = (
+                                delta_msg.reasoning_content
+                            )
+                        if getattr(delta_msg, "content", None) is not None:
+                            chunk_delta["content"] = delta_msg.content
+                        if getattr(delta_msg, "tool_calls", None):
+                            chunk_delta["tool_calls"] = [
+                                tc.model_dump()
+                                if hasattr(tc, "model_dump")
+                                else tc
+                                for tc in delta_msg.tool_calls
+                            ]
+                    else:
+                        # Parser returned None — pass raw delta as content
+                        chunk_delta["content"] = delta_text
+                elif delta_text:
+                    # No parser — raw delta is content
+                    chunk_delta["content"] = delta_text
+
+                # Emit content/reasoning chunk if we have delta
+                if chunk_delta:
+                    chunk = {
+                        "id": f"chatcmpl-{request_id}",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": self.current_model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": chunk_delta,
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+
+                # Send finish reason on last chunk
+                if is_finished:
+                    finish_reason = self._map_finish_reason(output.finish_reason)
+
+                    # Check if tools were called across the full output
+                    if self.parser and self.parser.has_tools and parser_request:
+                        full_parsed = self.parser.parse(
+                            current_text, parser_request
+                        )
+                        if full_parsed.tools_called:
+                            finish_reason = "tool_calls"
+
+                    chunk = {
+                        "id": f"chatcmpl-{request_id}",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": self.current_model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {},
+                                "finish_reason": finish_reason,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+
+            previous_text = current_text
+            previous_token_ids = current_token_ids
 
         yield "data: [DONE]\n\n"
 
@@ -464,7 +563,41 @@ class ModelManager:
             return "stop"
         elif "length" in reason_str:
             return "length"
+        elif "tool" in reason_str:
+            return "tool_calls"
         return "stop"
+
+    def _build_parser_request(
+        self,
+        messages: list,
+        tools: list = None,
+        tool_choice: str = "auto",
+    ):
+        """Build a minimal request object for parser consumption.
+
+        vLLM's parsers expect a ChatCompletionRequest. We try to construct one;
+        if it fails (Pydantic validation too strict), we return None and parsers
+        will fall back gracefully.
+        """
+        if not self.parser or (
+            not self.parser.has_reasoning and not self.parser.has_tools
+        ):
+            return None
+
+        try:
+            from vllm.entrypoints.openai.protocol import ChatCompletionRequest
+
+            return ChatCompletionRequest(
+                model=self.current_model,
+                messages=messages,
+                tools=tools,
+                tool_choice=tool_choice if tools else "none",
+            )
+        except Exception as e:
+            logger.debug(
+                f"Could not build ChatCompletionRequest, parsers will use None: {e}"
+            )
+            return None
 
     def _get_user_overrides(self) -> dict:
         """Collect explicit user overrides that should not be auto-detected."""
