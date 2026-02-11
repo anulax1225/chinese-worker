@@ -1135,13 +1135,22 @@ def check_enforce_eager_low_vram(
     ratio = estimated_bytes / usable
 
     if ratio > 0.70:
+        # For tight VRAM, also reduce max_num_seqs to lower memory pressure.
+        # Default is 256 which allocates memory for 256 concurrent sequences.
+        # On small GPUs, 16 is much more reasonable.
+        suggested_max_num_seqs = 16 if gpu_gb <= 12 else 32
         return CheckResult(
             check_id=CheckId.ENFORCE_EAGER_LOW_VRAM,
             severity=CheckSeverity.AUTOFIX,
             message=f"Model uses ~{ratio:.0%} of {gpu_gb:.0f}GB VRAM. "
-            "Auto-enabling enforce_eager to avoid CUDA graph memory overhead.",
+            "Auto-enabling enforce_eager and reducing max_num_seqs to "
+            f"{suggested_max_num_seqs} to reduce memory overhead.",
             auto_fixed=True,
-            details={"vram_ratio": ratio, "gpu_gb": gpu_gb},
+            details={
+                "vram_ratio": ratio,
+                "gpu_gb": gpu_gb,
+                "max_num_seqs": suggested_max_num_seqs,
+            },
         )
 
     return None
@@ -1357,6 +1366,8 @@ async def preflight_check(
 
             elif check.check_id == CheckId.ENFORCE_EAGER_LOW_VRAM:
                 engine_overrides["enforce_eager"] = True
+                if check.details.get("max_num_seqs"):
+                    engine_overrides["max_num_seqs"] = check.details["max_num_seqs"]
 
             elif check.check_id == CheckId.GPU_COMPUTE_CAP_TOO_LOW:
                 # bfloat16 -> float16 fallback

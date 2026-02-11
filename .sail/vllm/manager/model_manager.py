@@ -156,14 +156,14 @@ class ModelManager:
             engine_args = AsyncEngineArgs(
                 model=model,
                 tokenizer=tokenizer or model,
-                
                 gpu_memory_utilization=self.config.vllm_gpu_memory_utilization,
                 tensor_parallel_size=self.config.vllm_tensor_parallel_size,
                 max_model_len=engine_overrides.get(
                     "max_model_len", self.config.vllm_max_model_len
                 ),
-                max_seq_len=2048,
-                max_num_seqs=4,
+                max_num_seqs=engine_overrides.get(
+                    "max_num_seqs", self.config.vllm_max_num_seqs
+                ),
                 quantization=engine_overrides.get(
                     "quantization", self.config.vllm_quantization or None
                 ),
