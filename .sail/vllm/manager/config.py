@@ -63,7 +63,7 @@ class ManagerConfig(BaseSettings):
     # vLLM engine settings
     vllm_gpu_memory_utilization: float = 0.7
     vllm_tensor_parallel_size: int = 1
-    vllm_max_model_len: Optional[int] = None
+    vllm_max_model_len: Optional[int] = 32000
     vllm_quantization: str = ""
     vllm_target_device: str = ""  # "cpu" for CPU mode, empty for GPU
     vllm_tokenizer: str = ""  # Explicit tokenizer override for community-quantized models
