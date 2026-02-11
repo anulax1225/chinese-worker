@@ -264,6 +264,15 @@ class PullManager:
             job.completed_at = time.time()
             logger.error(f"Pull failed for {job.model_id}: {e}")
 
+            # Delete manifest on failure to allow retry
+            try:
+                manifest_path = self._get_manifest_path(job.model_id)
+                if manifest_path.exists():
+                    manifest_path.unlink()
+                    logger.debug(f"[PULL] Deleted manifest for failed download: {job.model_id}")
+            except Exception:
+                pass
+
         self._notify(job)
 
     def _notify(self, job: PullJob) -> None:

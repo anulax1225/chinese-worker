@@ -24,7 +24,7 @@ class HFCacheManager:
         self.cache_dir = Path.home() / ".cache" / "huggingface" / "hub"
 
     def list_models(self) -> list[dict]:
-        """List all downloaded models in the HF cache (Ollama /api/tags format)."""
+        """List all complete downloaded models in the HF cache (Ollama /api/tags format)."""
         try:
             cache_info = scan_cache_dir()
         except Exception as e:
@@ -34,6 +34,10 @@ class HFCacheManager:
         models = []
         for repo in cache_info.repos:
             if repo.repo_type != "model":
+                continue
+
+            # Only include complete models (verified against manifest if exists)
+            if not self.is_cached(repo.repo_id):
                 continue
 
             total_size = repo.size_on_disk
