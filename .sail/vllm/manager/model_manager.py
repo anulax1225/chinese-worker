@@ -19,6 +19,8 @@ from typing import AsyncIterator, Optional
 import torch
 from vllm import AsyncLLMEngine, SamplingParams
 from vllm.engine.arg_utils import AsyncEngineArgs
+from vllm.entrypoints.openai.serving_chat import OpenAIServingChat
+from vllm.entrypoints.openai.serving_models import OpenAIServingModels
 
 from cache_manager import HFCacheManager
 from config import ManagerConfig
@@ -55,6 +57,7 @@ class ModelManager:
         self.error_message: Optional[str] = None
         self._last_preflight = None  # Store last preflight result for debugging
         self.caps: Optional[ModelCapabilities] = None  # Detected model capabilities
+        self.serving_chat: Optional[OpenAIServingChat] = None  # OpenAI serving layer
 
         # Keep-alive
         self.last_used: float = 0
@@ -155,7 +158,9 @@ class ModelManager:
                 model, model_config, self._get_user_overrides()
             )
 
-            # Build engine args with preflight overrides and capabilities
+            # Build engine args with preflight overrides
+            # Note: enable_auto_tool_choice, tool_call_parser, reasoning_parser
+            # are NOT engine args — they go to OpenAIServingChat
             engine_args = AsyncEngineArgs(
                 model=model,
                 tokenizer=tokenizer or model,
@@ -173,10 +178,7 @@ class ModelManager:
                     "enforce_eager", self.config.vllm_enforce_eager
                 ),
                 cpu_offload_gb=engine_overrides.get("cpu_offload_gb", 0),
-                # Capabilities-based args
-                enable_auto_tool_choice=self.caps.enable_tool_choice,
-                tool_call_parser=self.caps.tool_call_parser,
-                chat_template=self.caps.chat_template,
+                chat_template=self.caps.chat_template,  # This one IS an engine arg
             )
 
             # CPU-specific settings
@@ -190,6 +192,34 @@ class ModelManager:
             # Get tokenizer for chat template
             self.tokenizer = await maybe_await(self.engine.get_tokenizer())
 
+            # Create OpenAI serving layer for tool/reasoning parsing
+            if self.caps.supports_thinking or self.caps.supports_tools:
+                model_config = await maybe_await(self.engine.get_model_config())
+                self.serving_chat = OpenAIServingChat(
+                    engine_client=self.engine,
+                    model_config=model_config,
+                    models=OpenAIServingModels(
+                        engine_client=self.engine,
+                        model_config=model_config,
+                        base_model_paths=[model],
+                    ),
+                    response_role="assistant",
+                    request_logger=None,
+                    chat_template=self.caps.chat_template,
+                    chat_template_content_format="auto",
+                    enable_auto_tools=self.caps.enable_tool_choice,
+                    tool_parser=self.caps.tool_call_parser,
+                    enable_reasoning=self.caps.supports_thinking,
+                    reasoning_parser=self.caps.reasoning_parser,
+                )
+                logger.info(
+                    f"OpenAI serving layer initialized: "
+                    f"tools={self.caps.tool_call_parser}, "
+                    f"reasoning={self.caps.reasoning_parser}"
+                )
+            else:
+                self.serving_chat = None
+
             self.state = "ready"
             self.last_used = time.time()
             self._start_keep_alive_timer()
@@ -202,6 +232,7 @@ class ModelManager:
             self._last_preflight = e.result
             self.engine = None
             self.tokenizer = None
+            self.serving_chat = None
             logger.error(f"Preflight blocked {model}: {e.result.block_reason}")
             raise
 
@@ -225,6 +256,7 @@ class ModelManager:
         """Nuclear GPU cleanup after failed load attempts."""
         self.engine = None
         self.tokenizer = None
+        self.serving_chat = None
 
         # Aggressive garbage collection
         gc.collect()
@@ -260,6 +292,7 @@ class ModelManager:
         self.tokenizer = None
         self.current_model = None
         self.caps = None
+        self.serving_chat = None
         del engine
 
         # Force GPU memory release

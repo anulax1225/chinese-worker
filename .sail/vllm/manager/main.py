@@ -108,6 +108,10 @@ async def chat_completions(request: Request):
     """
     OpenAI-compatible chat completions.
     Auto-loads/switches model based on request body (Ollama behavior).
+
+    If the model supports tool calling or reasoning and OpenAIServingChat is
+    initialized, delegates to vLLM's serving layer for proper parsing.
+    Otherwise falls back to direct engine.generate() calls.
     """
     mgr: ModelManager = request.app.state.model_mgr
     cache: HFCacheManager = request.app.state.cache_mgr
@@ -160,6 +164,23 @@ async def chat_completions(request: Request):
 
     # Generate completion
     try:
+        # Use OpenAI serving layer if available (handles tool calls, reasoning parsing)
+        if mgr.serving_chat is not None:
+            from vllm.entrypoints.openai.protocol import ChatCompletionRequest
+
+            # Build vLLM's ChatCompletionRequest from the body
+            chat_request = ChatCompletionRequest(**body)
+            result = await mgr.serving_chat.create_chat_completion(
+                chat_request, request
+            )
+
+            # Handle keep_alive=0 (unload after request)
+            if keep_alive == 0:
+                asyncio.create_task(mgr.unload())
+
+            return result
+
+        # Fallback: direct engine.generate() for basic models
         response = await mgr.chat_completion(
             messages=messages,
             temperature=body.get("temperature", 0.7),
