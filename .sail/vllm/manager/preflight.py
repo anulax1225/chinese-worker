@@ -226,6 +226,26 @@ def _load_model_config(snapshot_path: Path) -> Optional[dict]:
     return None
 
 
+def kv_cache_per_token(config: dict) -> int:
+    """
+    Calculate bytes per token for KV cache.
+
+    Formula: 2 (K+V) × num_layers × num_kv_heads × head_dim × dtype_bytes
+
+    Example for Qwen2.5-7B (28 layers, 4 KV heads, 128 head_dim):
+        2 × 28 × 4 × 128 × 2 = 57,344 bytes ≈ 56 KB per token
+        For 32K context: 56 KB × 32,768 = 1.79 GB
+    """
+    num_layers = config.get("num_hidden_layers", 32)
+    num_attention_heads = config.get("num_attention_heads", 32)
+    hidden_size = config.get("hidden_size", 4096)
+    head_dim = config.get("head_dim", hidden_size // num_attention_heads)
+    num_kv_heads = config.get("num_key_value_heads", num_attention_heads)  # GQA fallback
+    dtype_bytes = 2  # float16/bfloat16 for KV cache
+
+    return 2 * num_layers * num_kv_heads * head_dim * dtype_bytes
+
+
 def estimate_model_memory(
     snapshot_path: Path,
     model_config: dict,
@@ -263,21 +283,14 @@ def estimate_model_memory(
 
     details["weight_bytes"] = weight_bytes
 
-    # KV cache estimation
+    # KV cache estimation using helper
     context_len = max_model_len or model_config.get(
         "max_position_embeddings",
         model_config.get("max_sequence_length", 4096),
     )
-    hidden_size = model_config.get("hidden_size", 4096)
-    num_layers = model_config.get("num_hidden_layers", 32)
-    num_kv_heads = model_config.get(
-        "num_key_value_heads", model_config.get("num_attention_heads", 32)
-    )
-    head_dim = hidden_size // model_config.get("num_attention_heads", 32)
-
-    # KV cache: 2 (k+v) * heads * head_dim * layers * context * dtype_size
-    kv_per_token = 2 * num_kv_heads * head_dim * 2  # Assume FP16 for KV
-    kv_cache_bytes = kv_per_token * context_len * num_layers
+    kv_per_token = kv_cache_per_token(model_config)
+    kv_cache_bytes = kv_per_token * context_len
+    details["kv_per_token"] = kv_per_token
     details["kv_cache_bytes"] = kv_cache_bytes
     details["context_len"] = context_len
 
@@ -547,33 +560,40 @@ def check_oom_estimate(
     ratio = estimated_bytes / available
 
     if ratio > 1.2:  # More than 20% over available
-        # Calculate how much to offload to RAM (with some buffer)
-        overflow_bytes = estimated_bytes - available
-        offload_gb = int((overflow_bytes / 1e9) + 2)  # Add 2GB buffer
+        # Only weights can be offloaded to RAM, KV cache must stay on GPU
+        weight_bytes = details.get("weight_bytes", 0)
+        kv_cache_bytes = details.get("kv_cache_bytes", 0)
 
-        # Check if we have enough RAM to offload
-        if platform.has_gpu and platform.cpu_ram_bytes > (offload_gb * 1e9 * 1.5):
-            details["cpu_offload_gb"] = offload_gb
-            return CheckResult(
-                check_id=CheckId.OOM_ESTIMATE,
-                severity=CheckSeverity.AUTOFIX,
-                message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
-                f"~{available / 1e9:.1f}GB {memory_type} available. "
-                f"Offloading {offload_gb}GB to RAM.",
-                auto_fixed=True,
-                details=details,
-            )
-        else:
-            return CheckResult(
-                check_id=CheckId.OOM_ESTIMATE,
-                severity=CheckSeverity.WARN,
-                message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
-                f"~{available / 1e9:.1f}GB {memory_type} available "
-                f"({ratio:.1f}x over limit).",
-                suggestion="Use a smaller model, more aggressive quantization, "
-                "or reduce max_model_len.",
-                details=details,
-            )
+        # Calculate VRAM available for weights (after reserving space for KV cache)
+        vram_for_weights = available - kv_cache_bytes
+
+        # Check if we can offload weights to fit
+        if platform.has_gpu and vram_for_weights > 0 and weight_bytes > vram_for_weights:
+            offload_bytes = weight_bytes - vram_for_weights
+            offload_gb = int((offload_bytes / 1e9) + 1)  # Round up + buffer
+
+            if platform.cpu_ram_bytes > (offload_gb * 1e9 * 1.5):
+                details["cpu_offload_gb"] = offload_gb
+                return CheckResult(
+                    check_id=CheckId.OOM_ESTIMATE,
+                    severity=CheckSeverity.AUTOFIX,
+                    message=f"Weights ({weight_bytes/1e9:.1f}GB) + KV cache ({kv_cache_bytes/1e9:.1f}GB) "
+                    f"exceed {available/1e9:.1f}GB VRAM. Offloading {offload_gb}GB weights to RAM.",
+                    auto_fixed=True,
+                    details=details,
+                )
+
+        # Can't offload (no GPU, KV cache alone exceeds VRAM, or not enough RAM)
+        return CheckResult(
+            check_id=CheckId.OOM_ESTIMATE,
+            severity=CheckSeverity.WARN,
+            message=f"Model requires ~{estimated_bytes / 1e9:.1f}GB but only "
+            f"~{available / 1e9:.1f}GB {memory_type} available "
+            f"({ratio:.1f}x over limit).",
+            suggestion="Use a smaller model, more aggressive quantization, "
+            "or reduce max_model_len.",
+            details=details,
+        )
     elif ratio > 0.85:  # Warning zone
         return CheckResult(
             check_id=CheckId.OOM_ESTIMATE,
