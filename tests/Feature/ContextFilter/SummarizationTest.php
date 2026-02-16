@@ -171,7 +171,7 @@ describe('SummarizationService', function () {
 
         $messages = array_map(
             fn ($m) => $m->toChatMessage(),
-            $conversation->conversationMessages->all()
+            $conversation->conversationMessages()->with(['toolCalls', 'attachments'])->get()->all()
         );
 
         $summary = $service->summarize($conversation, $messages, ['min_messages' => 5]);

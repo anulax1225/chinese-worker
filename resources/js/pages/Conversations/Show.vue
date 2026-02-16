@@ -236,8 +236,8 @@ const connectToStream = () => {
             streamingPhases.value = [];
             isSubmitting.value = false;
         },
-        onStatusChanged: (status) => {
-            console.log('Status changed:', status);
+        onStatusChanged: (_status) => {
+            // Status change handled - can add UI feedback here if needed
         },
     });
 };

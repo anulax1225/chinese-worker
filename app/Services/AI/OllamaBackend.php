@@ -728,4 +728,68 @@ class OllamaBackend implements AIBackendInterface
     {
         return $this->normalizedConfig?->contextLength ?? 4096;
     }
+
+    /**
+     * Generate embeddings for the given texts.
+     *
+     * @param  array<string>  $texts  Array of texts to embed
+     * @param  string|null  $model  Optional model override (default: nomic-embed-text)
+     * @return array<array<float>> Array of embedding vectors
+     *
+     * @throws RuntimeException If embedding generation fails
+     */
+    public function generateEmbeddings(array $texts, ?string $model = null): array
+    {
+        $embeddingModel = $model ?? 'nomic-embed-text';
+        $embeddings = [];
+
+        try {
+            foreach ($texts as $text) {
+                $response = $this->client->post('/api/embed', [
+                    'json' => [
+                        'model' => $embeddingModel,
+                        'input' => $text,
+                    ],
+                    'timeout' => 60,
+                ]);
+
+                $data = json_decode($response->getBody()->getContents(), true);
+
+                if (isset($data['embeddings'][0])) {
+                    $embeddings[] = $data['embeddings'][0];
+                } elseif (isset($data['embedding'])) {
+                    $embeddings[] = $data['embedding'];
+                } else {
+                    throw new RuntimeException('Invalid embedding response from Ollama');
+                }
+            }
+
+            return $embeddings;
+        } catch (GuzzleException $e) {
+            throw new RuntimeException(
+                "Failed to generate embeddings: {$e->getMessage()}",
+                $e->getCode(),
+                $e
+            );
+        }
+    }
+
+    /**
+     * Get the embedding dimensions for a model.
+     *
+     * @param  string|null  $model  Optional model name
+     * @return int The number of dimensions in the embedding vector
+     */
+    public function getEmbeddingDimensions(?string $model = null): int
+    {
+        $model = $model ?? 'nomic-embed-text';
+
+        return match ($model) {
+            'nomic-embed-text' => 768,
+            'mxbai-embed-large' => 1024,
+            'all-minilm' => 384,
+            'snowflake-arctic-embed' => 1024,
+            default => 768,
+        };
+    }
 }

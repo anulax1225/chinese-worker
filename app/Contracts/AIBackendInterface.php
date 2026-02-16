@@ -109,4 +109,23 @@ interface AIBackendInterface
      * @return int The maximum context length in tokens
      */
     public function getContextLimit(): int;
+
+    /**
+     * Generate embeddings for the given texts.
+     *
+     * @param  array<string>  $texts  Array of texts to embed
+     * @param  string|null  $model  Optional model override
+     * @return array<array<float>> Array of embedding vectors
+     *
+     * @throws \RuntimeException If embeddings are not supported or generation fails
+     */
+    public function generateEmbeddings(array $texts, ?string $model = null): array;
+
+    /**
+     * Get the embedding dimensions for a model.
+     *
+     * @param  string|null  $model  Optional model name
+     * @return int The number of dimensions in the embedding vector
+     */
+    public function getEmbeddingDimensions(?string $model = null): int;
 }

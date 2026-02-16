@@ -3,6 +3,7 @@
 import json
 import os
 import platform
+import stat
 from pathlib import Path
 from typing import Optional
 
@@ -22,7 +23,7 @@ def _get_config_dir() -> Path:
 def _get_token_file() -> Path:
     """Get platform-appropriate token file path."""
     config_dir = _get_config_dir()
-    config_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     return config_dir / "token.json"
 
 
@@ -49,11 +50,13 @@ class AuthManager:
 
     @classmethod
     def set_token(cls, token: str) -> None:
-        """Store authentication token in file."""
+        """Store authentication token in file with secure permissions."""
         token_file = cls._token_file()
-        token_file.parent.mkdir(parents=True, exist_ok=True)
+        token_file.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with open(token_file, "w") as f:
             json.dump({"token": token}, f)
+        # Set restrictive permissions (owner read/write only)
+        os.chmod(token_file, stat.S_IRUSR | stat.S_IWUSR)
 
     @classmethod
     def clear_token(cls) -> None:

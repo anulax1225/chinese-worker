@@ -24,8 +24,8 @@ services:
         networks:
             - sail
         depends_on:
-            mysql:
-                condition: service_started
+            pgsql:
+                condition: service_healthy
             redis:
                 condition: service_started
             rustfs:
@@ -41,45 +41,45 @@ services:
             #     required: false
             searxng:
                 condition: service_started
-    mysql:
-        image: 'mysql:8.4'
+    pgsql:
+        image: 'pgvector/pgvector:pg16'
         ports:
-            - '${FORWARD_DB_PORT:-3306}:3306'
+            - '${FORWARD_DB_PORT:-5432}:5432'
         environment:
-            MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
-            MYSQL_ROOT_HOST: '%'
-            MYSQL_DATABASE: '${DB_DATABASE}'
-            MYSQL_USER: '${DB_USERNAME}'
-            MYSQL_PASSWORD: '${DB_PASSWORD}'
-            MYSQL_ALLOW_EMPTY_PASSWORD: 1
-            MYSQL_EXTRA_OPTIONS: '${MYSQL_EXTRA_OPTIONS:-}'
+            POSTGRES_DB: '${DB_DATABASE}'
+            POSTGRES_USER: '${DB_USERNAME}'
+            POSTGRES_PASSWORD: '${DB_PASSWORD}'
         volumes:
-            - 'sail-mysql:/var/lib/mysql'
-            - './vendor/laravel/sail/database/mysql/create-testing-database.sh:/docker-entrypoint-initdb.d/10-create-testing-database.sh'
+            - 'sail-pgsql:/var/lib/postgresql/data'
+            - './vendor/laravel/sail/database/pgsql/create-testing-database.sql:/docker-entrypoint-initdb.d/10-create-testing-database.sql'
         networks:
             - sail
         healthcheck:
             test:
                 - CMD
-                - mysqladmin
-                - ping
-                - '-p${DB_PASSWORD}'
+                - pg_isready
+                - '-q'
+                - '-d'
+                - '${DB_DATABASE}'
+                - '-U'
+                - '${DB_USERNAME}'
             retries: 3
             timeout: 5s
-    phpmyadmin:
-        image: 'phpmyadmin/phpmyadmin:latest'
+    pgadmin:
+        image: 'dpage/pgadmin4:latest'
         ports:
-            - '${FORWARD_PHPMYADMIN_PORT:-8080}:80'
+            - '${FORWARD_PGADMIN_PORT:-8080}:80'
         environment:
-            PMA_HOST: mysql
-            PMA_PORT: 3306
-            PMA_USER: '${DB_USERNAME}'
-            PMA_PASSWORD: '${DB_PASSWORD}'
-            UPLOAD_LIMIT: 256M
+            PGADMIN_DEFAULT_EMAIL: '${PGADMIN_EMAIL:-admin@localhost.com}'
+            PGADMIN_DEFAULT_PASSWORD: '${PGADMIN_PASSWORD:-password}'
+            PGADMIN_CONFIG_SERVER_MODE: 'False'
+            PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+        volumes:
+            - 'sail-pgadmin:/var/lib/pgadmin'
         networks:
             - sail
         depends_on:
-            - mysql
+            - pgsql
     redis:
         image: 'redis:alpine'
         ports:
@@ -138,11 +138,14 @@ services:
             OLLAMA_CONTEXT_LENGTH: 1000000
             OLLAMA_KEEP_ALIVE: 3600
         # Vulkan adapter if not an nvidia card
-        #     OLLAMA_VULKAN: 1
-        # devices:
-        #     - /dev/dri
+            OLLAMA_VULKAN: 1
+        devices:
+            # - /dev/kfd
+            - /dev/dri
+        group_add:
+           - video
         # if it's an nvdia card (also install nvidia-container-kit for integration with docker)
-        gpus: all
+        # gpus: all
         ports:
             - '${FORWARD_OLLAMA_PORT:-11434}:11434'
         volumes:
@@ -163,28 +166,28 @@ services:
     vllm-gpu:
         build:
             context: './.sail/vllm'
-            dockerfile: Dockerfile.nvidia
-            # dockerfile: Dockerfile.rocm
-        image: 'sail/vllm-managed-gpu-nvidia:latest'
-        # image: 'sail/vllm-managed-gpu-rocm:latest'
+            # dockerfile: Dockerfile.nvidia
+            dockerfile: Dockerfile.rocm
+        # image: 'sail/vllm-managed-gpu-nvidia:latest'
+        image: 'sail/vllm-managed-gpu-rocm:latest'
         # if it's an nvidia card (also install nvidia-container-kit for integration with docker)
-        deploy:
-            resources:
-                reservations:
-                    devices:
-                        - driver: nvidia
-                          count: all
-                          capabilities: [gpu]
-        ulimits:
-            memlock:
-                soft: -1
-                hard: -1        # ← unlimited locked memory for CUDA pinned alloc
+        # deploy:
+        #     resources:
+        #         reservations:
+        #             devices:
+        #                 - driver: nvidia
+        #                   count: all
+        #                   capabilities: [gpu]
+        # ulimits:
+        #     memlock:
+        #         soft: -1
+        #         hard: -1        # ← unlimited locked memory for CUDA pinned alloc
         # Vulkan / AMD ROCm alternative (requires changing base image in Dockerfile):
-        # devices:
-        #     - /dev/kfd
-        #     - /dev/dri
-        # group_add:
-        #    - video
+        devices:
+            # - /dev/kfd
+            - /dev/dri
+        group_add:
+           - video
         restart: 'no'
         ports:
             - '${FORWARD_VLLM_GPU_PORT:-8001}:8000'
@@ -279,7 +282,9 @@ networks:
     sail:
         driver: bridge
 volumes:
-    sail-mysql:
+    sail-pgsql:
+        driver: local
+    sail-pgadmin:
         driver: local
     sail-redis:
         driver: local

@@ -2,6 +2,6 @@
 
 from .client import APIClient
 from .auth import AuthManager
-from .sse_client import SSEClient, SSEEventHandler
+from .sse_client import SSEClient, SSEEventHandler, ModelPullSSEClient
 
-__all__ = ["APIClient", "AuthManager", "SSEClient", "SSEEventHandler"]
+__all__ = ["APIClient", "AuthManager", "SSEClient", "SSEEventHandler", "ModelPullSSEClient"]

@@ -19,6 +19,15 @@ from rich.table import Table
 from rich.text import Text
 
 from .api import APIClient, AuthManager, SSEClient, SSEEventHandler
+from .commands import (
+    agents as agents_group,
+    tools as tools_group,
+    prompts as prompts_group,
+    docs as docs_group,
+    backends as backends_group,
+    files as files_group,
+    conversations as conversations_group,
+)
 from .tools import (
     # Shell tools
     BashTool,
@@ -132,11 +141,26 @@ def safe_get(data: Any, *keys, default=None) -> Any:
     return data
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.version_option()
-def main():
+@click.pass_context
+def main(ctx):
     """Chinese Worker CLI - AI agent execution platform."""
-    pass
+    if ctx.invoked_subcommand is None:
+        # No subcommand - launch TUI
+        from .tui import CWApp
+        app = CWApp()
+        app.run()
+
+
+# Register command groups
+main.add_command(agents_group)
+main.add_command(tools_group)
+main.add_command(prompts_group)
+main.add_command(docs_group)
+main.add_command(backends_group)
+main.add_command(files_group)
+main.add_command(conversations_group)
 
 
 @main.command()
@@ -203,169 +227,10 @@ def whoami(api_url: str):
         raise click.Abort()
 
 
-@main.command()
-@click.option("--api-url", default=get_default_api_url(), help="API base URL")
-def agents(api_url: str):
-    """List your agents."""
-    if not AuthManager.is_authenticated():
-        console.print("[yellow]![/yellow] You are not logged in")
-        console.print("Run 'cw login' to authenticate")
-        return
-
-    client = APIClient(api_url)
-
-    try:
-        agents_list = client.list_agents()
-
-        if not agents_list:
-            console.print("[yellow]![/yellow] You don't have any agents yet")
-            return
-
-        console.print(f"\n[bold]Your Agents ({len(agents_list)}):[/bold]\n")
-
-        for agent in agents_list:
-            console.print(
-                f"  [cyan]{agent['id']}[/cyan] - {agent['name']} "
-                f"[dim]({agent['ai_backend']})[/dim]"
-            )
-            if agent.get("description"):
-                console.print(f"      {agent['description']}")
-            console.print()
-
-    except Exception as e:
-        console.print(f"[red]✗[/red] Failed to list agents: {str(e)}")
-        raise click.Abort()
-
-
-@main.command()
-@click.option("--api-url", default=get_default_api_url(), help="API base URL")
-@click.option("--agent-id", type=int, help="Filter by agent ID")
-@click.option("--status", help="Filter by status (active, completed, etc.)")
-def conversations(api_url: str, agent_id: Optional[int], status: Optional[str]):
-    """List your conversations."""
-    if not AuthManager.is_authenticated():
-        console.print("[yellow]![/yellow] You are not logged in")
-        console.print("Run 'cw login' to authenticate")
-        return
-
-    client = APIClient(api_url)
-
-    try:
-        conversations_list = client.list_conversations(
-            agent_id=agent_id,
-            status=status
-        )
-
-        if not conversations_list:
-            console.print("[yellow]![/yellow] No conversations found")
-            return
-
-        table = Table(show_header=True, header_style="bold cyan", title=f"\nConversations ({len(conversations_list)})")
-        table.add_column("ID", style="cyan", width=8)
-        table.add_column("Agent ID", width=10)
-        table.add_column("Status", width=12)
-        table.add_column("Messages", width=10)
-        table.add_column("Turns", width=8)
-        table.add_column("Last Activity", width=20)
-
-        for conv in conversations_list:
-            msg_count = len(conv.get("messages", []))
-            last_activity = conv.get("last_activity_at", "")
-            if last_activity:
-                # Format timestamp nicely
-                last_activity = last_activity.split(".")[0].replace("T", " ")
-
-            # Color status
-            status_val = conv.get("status", "unknown")
-            if status_val == "active":
-                status_str = f"[green]{status_val}[/green]"
-            elif status_val == "completed":
-                status_str = f"[blue]{status_val}[/blue]"
-            elif status_val == "failed":
-                status_str = f"[red]{status_val}[/red]"
-            elif status_val == "cancelled":
-                status_str = f"[yellow]{status_val}[/yellow]"
-            else:
-                status_str = status_val
-
-            table.add_row(
-                str(conv["id"]),
-                str(conv["agent_id"]),
-                status_str,
-                str(msg_count),
-                str(conv.get("turn_count", 0)),
-                last_activity
-            )
-
-        console.print(table)
-        console.print()
-
-    except Exception as e:
-        console.print(f"[red]✗[/red] Failed to list conversations: {str(e)}")
-        raise click.Abort()
-
-
-@main.command("stop")
-@click.argument("conversation_id", type=int)
-@click.option("--api-url", default=get_default_api_url(), help="API base URL")
-def stop_conversation(conversation_id: int, api_url: str):
-    """Stop a running conversation."""
-    if not AuthManager.is_authenticated():
-        console.print("[yellow]![/yellow] You are not logged in")
-        console.print("Run 'cw login' to authenticate")
-        return
-
-    client = APIClient(api_url)
-
-    try:
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console,
-        ) as progress:
-            progress.add_task("Stopping conversation...", total=None)
-            result = client.stop_conversation(conversation_id)
-
-        status = result.get("status", "unknown")
-        if status == "cancelled":
-            console.print(f"[green]✓[/green] Conversation {conversation_id} stopped")
-        else:
-            console.print(f"[yellow]![/yellow] {result.get('message', 'Conversation was not running')}")
-
-    except Exception as e:
-        console.print(f"[red]✗[/red] Failed to stop conversation: {str(e)}")
-        raise click.Abort()
-
-
-@main.command("delete")
-@click.argument("conversation_id", type=int)
-@click.option("--api-url", default=get_default_api_url(), help="API base URL")
-@click.option("--force", "-f", is_flag=True, help="Skip confirmation")
-def delete_conversation_cmd(conversation_id: int, api_url: str, force: bool):
-    """Delete a conversation."""
-    if not AuthManager.is_authenticated():
-        console.print("[yellow]![/yellow] You are not logged in")
-        console.print("Run 'cw login' to authenticate")
-        return
-
-    client = APIClient(api_url)
-
-    if not force:
-        confirm = Prompt.ask(
-            f"[yellow]Delete conversation {conversation_id}?[/yellow]",
-            choices=["y", "n"],
-            default="n"
-        )
-        if confirm != "y":
-            console.print("[dim]Cancelled[/dim]")
-            return
-
-    try:
-        client.delete_conversation(conversation_id)
-        console.print(f"[green]✓[/green] Conversation {conversation_id} deleted")
-    except Exception as e:
-        console.print(f"[red]✗[/red] Failed to delete conversation: {str(e)}")
-        raise click.Abort()
+# Backwards compatibility aliases - import specific commands from the module
+from .commands.conversations import stop_conversation, delete_conversation
+main.add_command(stop_conversation, name="stop")
+main.add_command(delete_conversation, name="delete")
 
 
 @main.command()

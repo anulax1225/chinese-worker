@@ -771,4 +771,26 @@ class HuggingFaceBackend implements AIBackendInterface
             ],
         ]);
     }
+
+    /**
+     * Generate embeddings for the given texts.
+     *
+     * HuggingFace embeddings are not implemented yet.
+     *
+     * @throws RuntimeException Always throws as embeddings are not yet implemented
+     */
+    public function generateEmbeddings(array $_texts, ?string $_model = null): array
+    {
+        throw new RuntimeException('Embeddings are not yet implemented for HuggingFace backend. Use OpenAI or Ollama backend for embeddings.');
+    }
+
+    /**
+     * Get the embedding dimensions for a model.
+     *
+     * @throws RuntimeException Always throws as embeddings are not yet implemented
+     */
+    public function getEmbeddingDimensions(?string $_model = null): int
+    {
+        throw new RuntimeException('Embeddings are not yet implemented for HuggingFace backend.');
+    }
 }

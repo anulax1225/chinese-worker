@@ -88,6 +88,47 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | RAG (Retrieval-Augmented Generation) Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These options control the RAG system including embedding generation,
+    | vector storage, and retrieval strategies.
+    |
+    */
+
+    'rag' => [
+        'enabled' => env('RAG_ENABLED', false),
+
+        // Embedding configuration
+        'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:0.6b'),
+        'embedding_backend' => env('RAG_EMBEDDING_BACKEND', 'ollama'),
+        'embedding_dimensions' => env('RAG_EMBEDDING_DIMENSIONS', 1536),
+        'embedding_batch_size' => 100,
+        'cache_embeddings' => true,
+
+        // Search configuration
+        'search_type' => env('RAG_SEARCH_TYPE', 'hybrid'), // dense, sparse, hybrid
+        'top_k' => 10,
+        'similarity_threshold' => 0.3,
+        'max_context_tokens' => 4000,
+
+        // Logging
+        'log_retrievals' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI Backend Configurations
+    |--------------------------------------------------------------------------
+    |
+    | Here you may configure multiple AI backends. Each backend can use
+    | a different driver (ollama, anthropic, openai) and has its own
+    | configuration options.
+    |
+    */
+
     'backends' => [
         'ollama' => [
             'driver' => 'ollama',

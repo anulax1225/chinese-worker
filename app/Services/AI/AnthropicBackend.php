@@ -830,4 +830,26 @@ class AnthropicBackend implements AIBackendInterface
             ],
         ]);
     }
+
+    /**
+     * Generate embeddings for the given texts.
+     *
+     * Anthropic does not provide an embeddings API.
+     *
+     * @throws RuntimeException Always throws as embeddings are not supported
+     */
+    public function generateEmbeddings(array $_texts, ?string $_model = null): array
+    {
+        throw new RuntimeException('Embeddings are not supported by Anthropic API. Use OpenAI or Ollama backend for embeddings.');
+    }
+
+    /**
+     * Get the embedding dimensions for a model.
+     *
+     * @throws RuntimeException Always throws as embeddings are not supported
+     */
+    public function getEmbeddingDimensions(?string $_model = null): int
+    {
+        throw new RuntimeException('Embeddings are not supported by Anthropic API.');
+    }
 }

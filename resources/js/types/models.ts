@@ -23,7 +23,7 @@ export interface ModelConfig {
 
 export interface Agent {
     id: number;
-    user_id: number;
+    user?: User; // Optional relation loaded via AgentResource
     name: string;
     description: string | null;
     code: string;

@@ -833,4 +833,63 @@ class OpenAIBackend implements AIBackendInterface
             ],
         ]);
     }
+
+    /**
+     * Generate embeddings for the given texts.
+     *
+     * @param  array<string>  $texts  Array of texts to embed
+     * @param  string|null  $model  Optional model override (default: text-embedding-3-small)
+     * @return array<array<float>> Array of embedding vectors
+     *
+     * @throws RuntimeException If embedding generation fails
+     */
+    public function generateEmbeddings(array $texts, ?string $model = null): array
+    {
+        $embeddingModel = $model ?? 'text-embedding-3-small';
+
+        try {
+            $response = $this->client->post('embeddings', [
+                'json' => [
+                    'model' => $embeddingModel,
+                    'input' => $texts,
+                ],
+                'timeout' => 60,
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            if (! isset($data['data']) || ! \is_array($data['data'])) {
+                throw new RuntimeException('Invalid embedding response from OpenAI');
+            }
+
+            // Sort by index to ensure correct order
+            $sorted = collect($data['data'])->sortBy('index')->values();
+
+            return $sorted->map(fn ($item) => $item['embedding'])->toArray();
+        } catch (GuzzleException $e) {
+            throw new RuntimeException(
+                "Failed to generate embeddings: {$e->getMessage()}",
+                $e->getCode(),
+                $e
+            );
+        }
+    }
+
+    /**
+     * Get the embedding dimensions for a model.
+     *
+     * @param  string|null  $model  Optional model name
+     * @return int The number of dimensions in the embedding vector
+     */
+    public function getEmbeddingDimensions(?string $model = null): int
+    {
+        $model = $model ?? 'text-embedding-3-small';
+
+        return match ($model) {
+            'text-embedding-3-small' => 1536,
+            'text-embedding-3-large' => 3072,
+            'text-embedding-ada-002' => 1536,
+            default => 1536,
+        };
+    }
 }

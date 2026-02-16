@@ -74,4 +74,61 @@ class DocumentChunkFactory extends Factory
             'section_title' => $title,
         ]);
     }
+
+    /**
+     * Indicate that the chunk has an embedding.
+     */
+    public function withEmbedding(?string $model = null): static
+    {
+        $model = $model ?? 'text-embedding-3-small';
+        $dimensions = $model === 'nomic-embed-text' ? 768 : 1536;
+
+        return $this->state(fn () => [
+            'embedding_raw' => array_map(
+                fn () => fake()->randomFloat(6, -1, 1),
+                range(1, $dimensions)
+            ),
+            'embedding_model' => $model,
+            'embedding_generated_at' => now(),
+            'embedding_dimensions' => $dimensions,
+            'chunk_type' => 'standard',
+            'quality_score' => 1.0,
+        ]);
+    }
+
+    /**
+     * Indicate that the chunk needs embedding (no embedding generated).
+     */
+    public function needsEmbedding(): static
+    {
+        return $this->state(fn () => [
+            'embedding_raw' => null,
+            'embedding_model' => null,
+            'embedding_generated_at' => null,
+            'embedding_dimensions' => 1536,
+        ]);
+    }
+
+    /**
+     * Indicate the chunk type.
+     */
+    public function ofType(string $type): static
+    {
+        return $this->state(fn () => [
+            'chunk_type' => $type,
+        ]);
+    }
+
+    /**
+     * Indicate specific content for the chunk.
+     */
+    public function withContent(string $content): static
+    {
+        return $this->state(fn () => [
+            'content' => $content,
+            'token_count' => (int) (mb_strlen($content) / 4),
+            'end_offset' => mb_strlen($content),
+            'content_hash' => hash('sha256', $content),
+        ]);
+    }
 }

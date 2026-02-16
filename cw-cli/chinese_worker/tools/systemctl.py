@@ -1,9 +1,13 @@
 """Systemctl tool for managing Linux systemd services."""
 
+import re
 import subprocess
 from typing import Any, Dict, Tuple
 
 from .base import BaseTool
+
+# Valid systemd service name pattern (alphanumeric, @, ., _, -)
+SERVICE_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9@._-]+$")
 
 
 class SystemctlTool(BaseTool):
@@ -64,6 +68,10 @@ class SystemctlTool(BaseTool):
         if action not in ["list"] and not service:
             return False, "", f"Missing 'service' argument for '{action}' action"
 
+        # Validate service name to prevent command injection
+        if service and not self._validate_service_name(service):
+            return False, "", f"Invalid service name: {service}"
+
         try:
             if action == "list":
                 return self._list_services(user_mode)
@@ -75,6 +83,12 @@ class SystemctlTool(BaseTool):
             return False, "", "systemctl not found - this tool is Linux only"
         except Exception as e:
             return False, "", f"Systemctl operation failed: {str(e)}"
+
+    def _validate_service_name(self, service: str) -> bool:
+        """Validate service name to prevent command injection."""
+        if not service or len(service) > 256:
+            return False
+        return bool(SERVICE_NAME_PATTERN.match(service))
 
     def _service_action(self, action: str, service: str, user_mode: bool) -> Tuple[bool, str, str]:
         """Execute a service action (status, start, stop, restart, enable, disable)."""

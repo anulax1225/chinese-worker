@@ -159,3 +159,134 @@ describe('Database Schema', function () {
         expect($foreignKeys)->not()->toBeEmpty();
     });
 });
+
+describe('Vector Storage Schema', function () {
+    test('pgvector extension is enabled', function () {
+        $extensions = DB::select("SELECT extname FROM pg_extension WHERE extname = 'vector'");
+
+        expect($extensions)->not->toBeEmpty()
+            ->and($extensions[0]->extname)->toBe('vector');
+    });
+
+    test('document_chunks has embedding vector column', function () {
+        $columns = DB::select("
+            SELECT column_name, udt_name
+            FROM information_schema.columns
+            WHERE table_name = 'document_chunks'
+            AND column_name = 'embedding'
+        ");
+
+        expect($columns)->not->toBeEmpty()
+            ->and($columns[0]->udt_name)->toBe('vector');
+    });
+
+    test('document_chunks has HNSW index', function () {
+        $indexes = DB::select("
+            SELECT indexname, indexdef
+            FROM pg_indexes
+            WHERE tablename = 'document_chunks'
+            AND indexname = 'idx_chunks_embedding_hnsw'
+        ");
+
+        expect($indexes)->not->toBeEmpty()
+            ->and($indexes[0]->indexdef)->toContain('hnsw');
+    });
+
+    test('document_chunks has full-text search index', function () {
+        $indexes = DB::select("
+            SELECT indexname
+            FROM pg_indexes
+            WHERE tablename = 'document_chunks'
+            AND indexname = 'idx_chunks_content_fts'
+        ");
+
+        expect($indexes)->not->toBeEmpty();
+    });
+
+    test('document_chunks has vector-related columns', function () {
+        expect(Schema::hasColumns('document_chunks', [
+            'embedding_raw',
+            'embedding_model',
+            'embedding_generated_at',
+            'embedding_dimensions',
+            'sparse_vector',
+            'quality_score',
+            'chunk_type',
+            'content_hash',
+        ]))->toBeTrue();
+    });
+
+    test('embedding_cache table exists with correct structure', function () {
+        expect(Schema::hasTable('embedding_cache'))->toBeTrue();
+
+        expect(Schema::hasColumns('embedding_cache', [
+            'id',
+            'content_hash',
+            'embedding_raw',
+            'embedding_model',
+            'language',
+            'created_at',
+            'updated_at',
+        ]))->toBeTrue();
+    });
+
+    test('embedding_cache has unique constraint', function () {
+        $constraints = DB::select("
+            SELECT constraint_name
+            FROM information_schema.table_constraints
+            WHERE table_name = 'embedding_cache'
+            AND constraint_type = 'UNIQUE'
+        ");
+
+        expect($constraints)->not->toBeEmpty();
+    });
+
+    test('retrieval_logs table exists with correct structure', function () {
+        expect(Schema::hasTable('retrieval_logs'))->toBeTrue();
+
+        expect(Schema::hasColumns('retrieval_logs', [
+            'id',
+            'conversation_id',
+            'user_id',
+            'query',
+            'query_expansion',
+            'retrieved_chunks',
+            'retrieval_strategy',
+            'retrieval_scores',
+            'execution_time_ms',
+            'chunks_found',
+            'average_score',
+            'user_found_helpful',
+            'created_at',
+            'updated_at',
+        ]))->toBeTrue();
+    });
+
+    test('retrieval_logs has foreign key to conversations', function () {
+        $constraints = DB::select("
+            SELECT constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.table_name = 'retrieval_logs'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'conversation_id'
+        ");
+
+        expect($constraints)->not->toBeEmpty();
+    });
+
+    test('retrieval_logs has foreign key to users', function () {
+        $constraints = DB::select("
+            SELECT constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+            WHERE tc.table_name = 'retrieval_logs'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'user_id'
+        ");
+
+        expect($constraints)->not->toBeEmpty();
+    });
+});

@@ -13,9 +13,9 @@ return new class extends Migration
     {
         Schema::create('tools', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('name', 255);
-            $table->enum('type', ['api', 'function', 'command']);
+            $table->string('type', 20)->default('function');
             $table->json('config');
             $table->timestamps();
 

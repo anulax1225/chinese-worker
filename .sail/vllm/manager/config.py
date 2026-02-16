@@ -4,7 +4,7 @@ vLLM Manager Configuration.
 Uses pydantic-settings for env var parsing with sensible defaults.
 """
 
-import re
+import re, os
 from typing import Optional
 
 from pydantic import field_validator

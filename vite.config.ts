@@ -24,4 +24,14 @@ export default defineConfig({
             formVariants: true,
         }),
     ],
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    'vue-vendor': ['vue', '@inertiajs/vue3'],
+                    'ui-vendor': ['lucide-vue-next', 'markdown-it'],
+                },
+            },
+        },
+    },
 });

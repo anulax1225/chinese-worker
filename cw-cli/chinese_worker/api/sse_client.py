@@ -203,3 +203,97 @@ class SSEEventHandler:
             return True
 
         return True  # Unknown event, continue
+
+
+class ModelPullSSEClient:
+    """SSE client for model pull progress updates."""
+
+    def __init__(
+        self,
+        base_url: str,
+        backend: str,
+        pull_id: str,
+        headers: Dict[str, str],
+        timeout: int = 600,
+    ):
+        """
+        Initialize model pull SSE client.
+
+        Args:
+            base_url: Base URL of the API
+            backend: Backend name (e.g., 'ollama')
+            pull_id: Pull ID from the pull request
+            headers: Authentication headers
+            timeout: Read timeout in seconds (default 10 min for large models)
+        """
+        self.url = f"{base_url}/api/v1/ai-backends/{backend}/models/pull/{pull_id}/stream"
+        self.headers = {
+            **headers,
+            "Accept": "text/event-stream",
+            "Cache-Control": "no-cache",
+        }
+        self.timeout = timeout
+        self._response: Optional[httpx.Response] = None
+
+    def events(self) -> Iterator[Tuple[str, Dict[str, Any]]]:
+        """
+        Connect to SSE stream and yield pull progress events.
+
+        Yields:
+            Tuple of (event_type, data_dict) for each event
+            Event types: progress, completed, failed
+
+        Raises:
+            httpx.HTTPStatusError: If connection fails
+            httpx.ReadTimeout: If connection times out
+        """
+        with httpx.stream(
+            "GET",
+            self.url,
+            headers=self.headers,
+            timeout=httpx.Timeout(connect=5.0, read=self.timeout, write=5.0, pool=5.0),
+        ) as response:
+            self._response = response
+            response.raise_for_status()
+
+            event_type: Optional[str] = None
+            data_buffer: str = ""
+
+            try:
+                for line in response.iter_lines():
+                    # Skip comments (padding)
+                    if line.startswith(":"):
+                        continue
+
+                    # Empty line signals end of event
+                    if line == "":
+                        if event_type and data_buffer:
+                            try:
+                                data = json.loads(data_buffer)
+                                yield (event_type, data)
+                            except json.JSONDecodeError:
+                                pass  # Skip malformed data
+
+                            # Check for terminal events
+                            if event_type in ("completed", "failed"):
+                                return
+
+                        event_type = None
+                        data_buffer = ""
+                        continue
+
+                    if line.startswith("event:"):
+                        event_type = line[6:].strip()
+                    elif line.startswith("data:"):
+                        data_buffer += line[5:].strip()
+            finally:
+                self._response = None
+
+    def close(self) -> None:
+        """Close the SSE connection explicitly."""
+        if self._response:
+            try:
+                self._response.close()
+            except Exception:
+                pass  # Ignore close errors
+            self._response = None

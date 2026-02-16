@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Services\Search\SearchService;
 use App\Services\WebFetch\WebFetchService;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->register(AIServiceProvider::class);
         $this->app->register(HorizonServiceProvider::class);
         $this->app->register(DocumentServiceProvider::class);
+        $this->app->register(RAGServiceProvider::class);
         if ($this->app->environment('local') && class_exists(\Laravel\Telescope\TelescopeServiceProvider::class)) {
             $this->app->register(\Laravel\Telescope\TelescopeServiceProvider::class);
             $this->app->register(TelescopeServiceProvider::class);
@@ -59,6 +61,9 @@ class AppServiceProvider extends ServiceProvider
         DB::prohibitDestructiveCommands(
             app()->isProduction(),
         );
+
+        // Prevent N+1 queries in non-production environments
+        Model::preventLazyLoading(! app()->isProduction());
 
         Password::defaults(
             fn (): ?Password => app()->isProduction()
