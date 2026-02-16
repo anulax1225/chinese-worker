@@ -120,6 +120,7 @@ class VLLMBackend implements AIBackendInterface
 
             $body = $response->getBody();
             $fullContent = '';
+            $fullThinking = '';
             $toolCalls = [];
             $lastData = [];
             $currentToolCalls = [];
@@ -162,12 +163,23 @@ class VLLMBackend implements AIBackendInterface
                         foreach ($choices as $choice) {
                             $delta = $choice['delta'] ?? [];
 
+                            // Handle reasoning/thinking streaming (before content).
+                            // vLLM uses "reasoning_content" (<=0.11) or "reasoning" (>=0.12)
+                            // in the SSE delta, similar to Ollama's "thinking" field.
+                            $thinking = $delta['reasoning_content'] ?? $delta['reasoning'] ?? null;
+                            if ($thinking !== null && $thinking !== '') {
+                                $fullThinking .= $thinking;
+                                $callback($thinking, 'thinking');
+                            }
+
+                            // Handle content streaming
                             if (isset($delta['content']) && $delta['content'] !== '') {
                                 $content = $delta['content'];
                                 $fullContent .= $content;
                                 $callback($content, 'content');
                             }
 
+                            // Handle streamed tool call deltas
                             if (isset($delta['tool_calls'])) {
                                 foreach ($delta['tool_calls'] as $toolCallDelta) {
                                     $index = $toolCallDelta['index'] ?? 0;
@@ -209,7 +221,7 @@ class VLLMBackend implements AIBackendInterface
                     $toolCalls[] = $tc;
                 }
 
-                return $this->buildAIResponse($fullContent, $lastData, $toolCalls);
+                return $this->buildAIResponse($fullContent, $lastData, $toolCalls, $fullThinking ?: null);
             } finally {
                 $body->close();
             }
@@ -506,7 +518,10 @@ class VLLMBackend implements AIBackendInterface
         $content = $message['content'] ?? '';
         $toolCalls = $message['tool_calls'] ?? [];
 
-        return $this->buildAIResponse($content, $data, $toolCalls);
+        // vLLM returns reasoning in "reasoning_content" (<=0.11) or "reasoning" (>=0.12)
+        $thinking = $message['reasoning_content'] ?? $message['reasoning'] ?? null;
+
+        return $this->buildAIResponse($content, $data, $toolCalls, $thinking);
     }
 
     /**
@@ -515,7 +530,7 @@ class VLLMBackend implements AIBackendInterface
      * @param  array<string, mixed>  $data
      * @param  array<array<string, mixed>>  $toolCallsData
      */
-    protected function buildAIResponse(string $content, array $data, array $toolCallsData): AIResponse
+    protected function buildAIResponse(string $content, array $data, array $toolCallsData, ?string $thinking = null): AIResponse
     {
         $toolCalls = array_map(
             fn ($tc) => $this->parseToolCall($tc),
@@ -524,6 +539,7 @@ class VLLMBackend implements AIBackendInterface
 
         Log::info('Building vLLM AI response', [
             'content_length' => strlen($content),
+            'thinking_length' => $thinking ? strlen($thinking) : 0,
             'tool_calls_count' => count($toolCalls),
         ]);
 
@@ -556,7 +572,7 @@ class VLLMBackend implements AIBackendInterface
                 'total_tokens' => $usage['total_tokens'] ?? 0,
                 'completion_id' => $data['id'] ?? null,
             ],
-            thinking: null
+            thinking: $thinking
         );
     }
 
