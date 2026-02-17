@@ -4,16 +4,11 @@ use App\Contracts\AIBackendInterface;
 use App\Contracts\TokenEstimator;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
-use App\DTOs\FilterContext;
 use App\Events\ConversationSummarized;
 use App\Exceptions\SummarizationException;
-use App\Models\Agent;
 use App\Models\Conversation;
 use App\Models\ConversationSummary;
-use App\Models\Message;
-use App\Models\User;
 use App\Services\AIBackendManager;
-use App\Services\ContextFilter\Strategies\SummarizationStrategy;
 use App\Services\ContextFilter\SummarizationService;
 use Illuminate\Support\Facades\Event;
 
@@ -68,53 +63,6 @@ describe('ConversationSummary Model', function () {
         expect($summary->conversation)
             ->toBeInstanceOf(Conversation::class)
             ->id->toBe($conversation->id);
-    });
-});
-
-describe('Message Model Summarization Fields', function () {
-    test('message can be marked as synthetic', function () {
-        $message = Message::factory()->synthetic()->create();
-
-        expect($message->is_synthetic)->toBeTrue();
-        expect($message->role)->toBe('system');
-    });
-
-    test('message can be marked as summarized', function () {
-        $summary = ConversationSummary::factory()->create();
-        $message = Message::factory()->summarized($summary->id)->create();
-
-        expect($message->summarized)->toBeTrue();
-        expect($message->summary_id)->toBe($summary->id);
-    });
-
-    test('scopeNotSummarized excludes summarized messages', function () {
-        $conversation = Conversation::factory()->create();
-
-        Message::factory()->for($conversation)->create(['summarized' => false]);
-        Message::factory()->for($conversation)->create(['summarized' => true]);
-        Message::factory()->for($conversation)->create(['summarized' => false]);
-
-        $notSummarized = Message::query()
-            ->where('conversation_id', $conversation->id)
-            ->notSummarized()
-            ->get();
-
-        expect($notSummarized)->toHaveCount(2);
-    });
-
-    test('scopeSynthetic returns only synthetic messages', function () {
-        $conversation = Conversation::factory()->create();
-
-        Message::factory()->for($conversation)->create(['is_synthetic' => false]);
-        Message::factory()->for($conversation)->synthetic()->create();
-        Message::factory()->for($conversation)->create(['is_synthetic' => false]);
-
-        $synthetic = Message::query()
-            ->where('conversation_id', $conversation->id)
-            ->synthetic()
-            ->get();
-
-        expect($synthetic)->toHaveCount(1);
     });
 });
 
@@ -185,136 +133,6 @@ describe('SummarizationService', function () {
             'id' => $summary->id,
             'conversation_id' => $conversation->id,
         ]);
-    });
-
-    test('marks messages as summarized', function () {
-        $conversation = Conversation::factory()->create();
-        $summary = ConversationSummary::factory()->create([
-            'conversation_id' => $conversation->id,
-        ]);
-
-        $messages = Message::factory()
-            ->for($conversation)
-            ->count(3)
-            ->create();
-
-        $messageIds = $messages->pluck('id')->toArray();
-
-        $service = app(SummarizationService::class);
-        $service->markAsSummarized($messageIds, $summary);
-
-        foreach ($messageIds as $id) {
-            $this->assertDatabaseHas('messages', [
-                'id' => $id,
-                'summarized' => true,
-                'summary_id' => $summary->id,
-            ]);
-        }
-    });
-});
-
-describe('SummarizationStrategy', function () {
-    test('falls back to token_budget when not enough messages to summarize', function () {
-        $user = User::factory()->create();
-        $agent = Agent::factory()->create();
-        $conversation = Conversation::factory()
-            ->for($user)
-            ->for($agent)
-            ->create([
-                'context_limit' => 100,
-            ]);
-
-        // Add messages that will exceed budget but not enough to summarize (min 10)
-        $conversation->addMessage(['role' => 'system', 'content' => 'System prompt']);
-        for ($i = 0; $i < 4; $i++) {
-            $conversation->addMessage([
-                'role' => $i % 2 === 0 ? 'user' : 'assistant',
-                'content' => str_repeat('Word ', 20),
-            ]);
-        }
-
-        $strategy = app(SummarizationStrategy::class);
-
-        $context = new FilterContext(
-            messages: $conversation->getMessages(),
-            contextLimit: 100,
-            maxOutputTokens: 50,
-            toolDefinitionTokens: 0,
-            options: ['min_messages' => 10], // Require more messages than we have
-            agent: $agent,
-            conversation: $conversation,
-        );
-
-        $result = $strategy->filter($context);
-
-        // Should fall back because we don't have enough messages to summarize
-        expect($result->strategyUsed)->toContain('fallback');
-    });
-
-    test('falls back to token_budget when summarization is disabled', function () {
-        config(['ai.summarization.enabled' => false]);
-
-        $user = User::factory()->create();
-        $agent = Agent::factory()->create();
-        $conversation = Conversation::factory()
-            ->for($user)
-            ->for($agent)
-            ->create([
-                'context_limit' => 100,
-            ]);
-
-        // Add many messages
-        for ($i = 0; $i < 10; $i++) {
-            $conversation->addMessage([
-                'role' => $i % 2 === 0 ? 'user' : 'assistant',
-                'content' => str_repeat('Word ', 50),
-            ]);
-        }
-
-        $strategy = app(SummarizationStrategy::class);
-
-        $context = new FilterContext(
-            messages: $conversation->getMessages(),
-            contextLimit: 100,
-            maxOutputTokens: 50,
-            toolDefinitionTokens: 0,
-            options: [],
-            agent: $agent,
-            conversation: $conversation,
-        );
-
-        $result = $strategy->filter($context);
-
-        expect($result->strategyUsed)->toContain('fallback');
-    });
-
-    test('returns noOp when no messages would be removed', function () {
-        $user = User::factory()->create();
-        $agent = Agent::factory()->create();
-        $conversation = Conversation::factory()
-            ->for($user)
-            ->for($agent)
-            ->create([
-                'context_limit' => 100000,
-            ]);
-
-        $conversation->addMessage(['role' => 'user', 'content' => 'Hello']);
-
-        $strategy = app(SummarizationStrategy::class);
-
-        $context = new FilterContext(
-            messages: $conversation->getMessages(),
-            contextLimit: 100000,
-            maxOutputTokens: 1000,
-            toolDefinitionTokens: 0,
-            options: [],
-            agent: $agent,
-            conversation: $conversation,
-        );
-
-        $result = $strategy->filter($context);
-
-        expect($result->hasRemovedMessages())->toBeFalse();
     });
 });
 

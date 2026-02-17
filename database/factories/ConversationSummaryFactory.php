@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\SummaryStatus;
 use App\Models\Conversation;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -21,6 +22,7 @@ class ConversationSummaryFactory extends Factory
 
         return [
             'conversation_id' => Conversation::factory(),
+            'status' => SummaryStatus::Completed,
             'from_position' => 1,
             'to_position' => 10,
             'content' => fake()->paragraphs(2, true),
@@ -31,5 +33,54 @@ class ConversationSummaryFactory extends Factory
             'original_token_count' => $originalTokenCount,
             'metadata' => null,
         ];
+    }
+
+    /**
+     * Configure the summary as pending.
+     */
+    public function pending(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => SummaryStatus::Pending,
+            'content' => null,
+            'token_count' => null,
+            'backend_used' => null,
+            'model_used' => null,
+            'summarized_message_ids' => null,
+            'original_token_count' => null,
+        ]);
+    }
+
+    /**
+     * Configure the summary as processing.
+     */
+    public function processing(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => SummaryStatus::Processing,
+            'content' => null,
+            'token_count' => null,
+            'backend_used' => null,
+            'model_used' => null,
+            'summarized_message_ids' => null,
+            'original_token_count' => null,
+        ]);
+    }
+
+    /**
+     * Configure the summary as failed.
+     */
+    public function failed(string $errorMessage = 'Summarization failed'): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => SummaryStatus::Failed,
+            'error_message' => $errorMessage,
+            'content' => null,
+            'token_count' => null,
+            'backend_used' => null,
+            'model_used' => null,
+            'summarized_message_ids' => null,
+            'original_token_count' => null,
+        ]);
     }
 }

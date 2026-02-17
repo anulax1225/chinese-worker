@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\ConversationController;
+use App\Http\Controllers\Api\V1\ConversationSummaryController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\FileController;
 use App\Http\Controllers\Api\V1\SystemPromptController;
@@ -48,6 +49,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('conversations/{conversation}/stream', [ConversationController::class, 'stream']);
         Route::post('conversations/{conversation}/tool-results', [ConversationController::class, 'submitToolResult']);
         Route::delete('conversations/{conversation}', [ConversationController::class, 'destroy']);
+
+        // Conversation Summaries
+        Route::get('conversations/{conversation}/summaries', [ConversationSummaryController::class, 'index']);
+        Route::post('conversations/{conversation}/summaries', [ConversationSummaryController::class, 'store']);
+        Route::get('conversations/{conversation}/summaries/{summary}', [ConversationSummaryController::class, 'show']);
 
         // AI Backends
         Route::get('ai-backends', [AIBackendController::class, 'index']);

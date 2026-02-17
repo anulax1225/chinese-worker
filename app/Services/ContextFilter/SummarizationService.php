@@ -10,7 +10,6 @@ use App\Exceptions\SummarizationException;
 use App\Models\Agent;
 use App\Models\Conversation;
 use App\Models\ConversationSummary;
-use App\Models\Message;
 use App\Services\AIBackendManager;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -152,55 +151,6 @@ class SummarizationService
         }
 
         return $this->summarize($conversation, $messages, $options);
-    }
-
-    /**
-     * Create a synthetic message from a summary.
-     */
-    public function createSyntheticMessage(
-        ConversationSummary $summary,
-        int $position,
-    ): Message {
-        $content = "[Conversation Summary]\n\n".$summary->content;
-
-        $message = Message::create([
-            'conversation_id' => $summary->conversation_id,
-            'position' => $position,
-            'role' => 'system',
-            'content' => $content,
-            'is_synthetic' => true,
-            'token_count' => $summary->token_count,
-            'counted_at' => now(),
-        ]);
-
-        Log::debug('[Summarization] Created synthetic message', [
-            'conversation_id' => $summary->conversation_id,
-            'summary_id' => $summary->id,
-            'message_id' => $message->id,
-            'position' => $position,
-        ]);
-
-        return $message;
-    }
-
-    /**
-     * Mark messages as summarized.
-     *
-     * @param  array<string>  $messageIds
-     */
-    public function markAsSummarized(
-        array $messageIds,
-        ConversationSummary $summary,
-    ): void {
-        Message::whereIn('id', $messageIds)->update([
-            'summarized' => true,
-            'summary_id' => $summary->id,
-        ]);
-
-        Log::debug('[Summarization] Marked messages as summarized', [
-            'summary_id' => $summary->id,
-            'message_count' => count($messageIds),
-        ]);
     }
 
     /**

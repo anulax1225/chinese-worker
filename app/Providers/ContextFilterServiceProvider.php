@@ -10,7 +10,7 @@ use App\Services\AIBackendManager;
 use App\Services\ContextFilter\ContextFilterManager;
 use App\Services\ContextFilter\Strategies\NoOpStrategy;
 use App\Services\ContextFilter\Strategies\SlidingWindowStrategy;
-use App\Services\ContextFilter\Strategies\SummarizationStrategy;
+use App\Services\ContextFilter\Strategies\SummaryBoundaryStrategy;
 use App\Services\ContextFilter\Strategies\TokenBudgetStrategy;
 use App\Services\ContextFilter\SummarizationService;
 use App\Services\ContextFilter\TokenEstimators\CharRatioEstimator;
@@ -41,21 +41,15 @@ class ContextFilterServiceProvider extends ServiceProvider
             );
         });
 
-        // Register summarization strategy (composes with TokenBudgetStrategy)
-        $this->app->singleton(SummarizationStrategy::class, function ($app) {
-            return new SummarizationStrategy(
-                tokenBudgetStrategy: $app->make(TokenBudgetStrategy::class),
-                summarizationService: $app->make(SummarizationService::class),
-                tokenEstimator: $app->make(TokenEstimator::class),
-            );
-        });
+        // Register summary boundary strategy
+        $this->app->singleton(SummaryBoundaryStrategy::class);
 
         // Tag all strategies for container resolution
         $this->app->tag([
             NoOpStrategy::class,
             SlidingWindowStrategy::class,
             TokenBudgetStrategy::class,
-            SummarizationStrategy::class,
+            SummaryBoundaryStrategy::class,
         ], ContextFilterStrategy::class);
 
         // Register the manager

@@ -83,27 +83,4 @@ class MessageFactory extends Factory
             'thinking' => $this->faker->paragraph(),
         ]);
     }
-
-    /**
-     * Configure the message as a synthetic summary message.
-     */
-    public function synthetic(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'role' => Message::ROLE_SYSTEM,
-            'is_synthetic' => true,
-            'content' => '[Conversation Summary]'."\n\n".$this->faker->paragraph(),
-        ]);
-    }
-
-    /**
-     * Configure the message as summarized (included in a summary).
-     */
-    public function summarized(?string $summaryId = null): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'summarized' => true,
-            'summary_id' => $summaryId,
-        ]);
-    }
 }

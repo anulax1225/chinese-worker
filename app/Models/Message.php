@@ -42,9 +42,6 @@ class Message extends Model
         'tool_call_id',
         'counted_at',
         'pinned',
-        'is_synthetic',
-        'summarized',
-        'summary_id',
     ];
 
     /**
@@ -59,8 +56,6 @@ class Message extends Model
             'token_count' => 'integer',
             'counted_at' => 'datetime',
             'pinned' => 'boolean',
-            'is_synthetic' => 'boolean',
-            'summarized' => 'boolean',
         ];
     }
 
@@ -141,38 +136,6 @@ class Message extends Model
     public function scopePinned(Builder $query): Builder
     {
         return $query->where('pinned', true);
-    }
-
-    /**
-     * Scope to exclude summarized messages.
-     */
-    public function scopeNotSummarized(Builder $query): Builder
-    {
-        return $query->where('summarized', false);
-    }
-
-    /**
-     * Scope to exclude synthetic messages.
-     */
-    public function scopeNotSynthetic(Builder $query): Builder
-    {
-        return $query->where('is_synthetic', false);
-    }
-
-    /**
-     * Scope to only synthetic messages.
-     */
-    public function scopeSynthetic(Builder $query): Builder
-    {
-        return $query->where('is_synthetic', true);
-    }
-
-    /**
-     * Get the summary that includes this message.
-     */
-    public function summary(): BelongsTo
-    {
-        return $this->belongsTo(ConversationSummary::class, 'summary_id');
     }
 
     /**
