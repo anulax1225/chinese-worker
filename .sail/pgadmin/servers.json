@@ -1,0 +1,13 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "Chinese Worker",
+            "Group": "Servers",
+            "Host": "pgsql",
+            "Port": 5432,
+            "MaintenanceDB": "postgres",
+            "Username": "sail",
+            "PassFile": "/pgadmin4/pgpassfile"
+        }
+    }
+}
