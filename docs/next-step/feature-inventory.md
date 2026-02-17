@@ -42,7 +42,8 @@ Agents are the core unit of the platform. Each agent is independently configurab
 - System prompts: ordered set of Blade templates attached to the agent
 - Tools: choose which tools the agent has access to
 - Context variables: custom key-value pairs available in prompt templates
-- Context strategy: `token_budget` (default), `sliding_window`, `noop`, or `summarization`
+- Context strategy: `token_budget` (default), `sliding_window`, `noop`, or `summary_boundary`
+- Context strategies: array of strategies to run as a pipeline (e.g., `["summary_boundary", "token_budget"]`)
 - Context threshold: when to trigger filtering (0.0-1.0, default 0.8)
 
 **System prompt templating:**
@@ -101,7 +102,7 @@ Multi-turn stateful conversations between users and agents.
 
 ## 4. Tool Framework
 
-13 system tools always available + custom user-defined tools.
+15 system tools always available + custom user-defined tools.
 
 ### System Tools (server-executed, always available)
 
@@ -135,6 +136,14 @@ Available only when documents are attached to a conversation.
 | `document_get_chunks` | `document_id`, `start_index` (required), `end_index` | Read specific chunks (max 10 at a time) |
 | `document_read_file` | `document_id` (required) | Read entire document content (small/medium docs) |
 | `document_search` | `query` (required), `document_id`, `max_results` (max 10) | Search text within attached documents |
+
+#### Conversation Memory Tools (2 tools)
+Available only when RAG is enabled. Search previous conversation messages using semantic similarity.
+
+| Tool | Parameters | What it does |
+|------|-----------|--------------|
+| `conversation_recall` | `query` (required), `max_results` (default 5), `threshold` (0-1) | Semantic search in conversation history |
+| `conversation_memory_status` | _(none)_ | Check how many messages are indexed for search |
 
 ### Client Tools (CLI-executed)
 These tools pause the conversation and request execution from the connected client (CLI/UI):
@@ -257,15 +266,27 @@ Automatic context management to prevent conversations from exceeding model conte
 | **token_budget** (default) | Fits messages within calculated token budget | `budget_percentage` (0.8), `reserve_tokens` (1000) |
 | **sliding_window** | Keeps N most recent messages | `window_size` (50) |
 | **noop** | Pass-through, no filtering | _(none)_ |
-| **summarization** | Compresses old messages into AI-generated summaries | `min_messages` (5), `target_tokens` (500) |
+| **summary_boundary** | Clips at latest completed summary, injects summary as context | _(read-only, uses existing summaries)_ |
+
+### Strategy Pipeline
+
+Agents can configure multiple strategies to run in sequence via `context_strategies` array:
+
+```json
+["summary_boundary", "token_budget"]
+```
+
+**Pipeline behavior:**
+- Strategies run sequentially, each receiving the output of the previous
+- Removed message IDs accumulate across all strategies
+- `strategyUsed` field shows combined strategies (e.g., `summary_boundary+token_budget`)
+- Falls back to single `context_strategy` if `context_strategies` is not set
 
 **Key behaviors:**
 - View-only filtering: original messages stay in database
 - Preservation rules: system prompt, pinned messages, and tool call chains always kept
 - Fail-open: sends all messages on error
-- Per-agent configuration of strategy and threshold
-- Summarization falls back to `token_budget` on AI failure
-- Summaries cached in `conversation_summaries` table
+- Per-agent configuration of strategy/strategies and threshold
 
 **Token estimation ratios:**
 - English prose: 4.0 chars/token
@@ -277,7 +298,91 @@ Automatic context management to prevent conversations from exceeding model conte
 
 ---
 
-## 8. Web Search & Fetch
+## 8. Conversation Summaries
+
+Client-driven API for creating and managing conversation summaries.
+
+### Summary Lifecycle
+
+| Status | Description |
+|--------|-------------|
+| **pending** | Summary queued for processing |
+| **processing** | AI is generating the summary |
+| **completed** | Summary ready (content populated) |
+| **failed** | Generation failed (error_message explains why) |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/conversations/{id}/summaries` | Create summary (async, returns 202) |
+| `GET` | `/conversations/{id}/summaries` | List all summaries |
+| `GET` | `/conversations/{id}/summaries/{summary}` | Get summary details |
+
+### Summary Creation
+
+- Specify optional `from_position` and `to_position` to summarize a range
+- `CreateConversationSummaryJob` processes asynchronously
+- Tracks `original_token_count`, `token_count`, compression ratio
+- Stores which messages were summarized (`summarized_message_ids`)
+
+### Integration with Context Filtering
+
+The `summary_boundary` strategy:
+- Finds the latest completed summary for the conversation
+- Clips messages at the summary boundary
+- Injects summary content as the first user message after system prompt
+- Does NOT automatically create summaries (client must request via API)
+
+**Config:** `config/ai.php` > `summarization`
+
+---
+
+## 9. Conversation Memory
+
+Semantic search within conversation history using message embeddings.
+
+**Toggle:** Requires `RAG_ENABLED=true` in `.env`
+
+### Message Embeddings
+
+- Stored in `message_embeddings` table with pgvector support
+- Only user and assistant messages are embedded (not system/tool)
+- Same embedding model as document chunks
+- `EmbedConversationMessagesJob` processes messages asynchronously
+- Content hash prevents duplicate embedding generation
+
+### Memory API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/conversations/{id}/memory/recall` | Semantic search in message history |
+| `POST` | `/conversations/{id}/memory/embed` | Trigger embedding generation |
+| `GET` | `/conversations/{id}/memory/status` | Check embedding progress |
+
+### Recall Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | string | What to search for (required) |
+| `top_k` | integer | Max results (1-50, default 5) |
+| `threshold` | number | Min similarity 0-1 (default 0.3) |
+| `hybrid` | boolean | Use hybrid search (default false) |
+
+### Agent Tools
+
+Agents can use these tools (when RAG is enabled):
+
+| Tool | Purpose |
+|------|---------|
+| `conversation_recall` | Search previous messages semantically |
+| `conversation_memory_status` | Check how many messages are indexed |
+
+**Source:** `app/Services/Tools/ConversationMemoryToolHandler.php`
+
+---
+
+## 10. Web Search & Fetch
 
 ### Web Search (SearXNG)
 Privacy-respecting metasearch aggregating Google, Bing, DuckDuckGo.
@@ -306,7 +411,7 @@ Fetch and extract main content from any URL.
 
 ---
 
-## 9. Frontend
+## 11. Frontend
 
 Single-page application built with Vue 3 + Inertia.js v2 + Tailwind CSS v4.
 
@@ -344,9 +449,9 @@ Single-page application built with Vue 3 + Inertia.js v2 + Tailwind CSS v4.
 
 ---
 
-## 10. REST API
+## 12. REST API
 
-30+ endpoints at `/api/v1/`, all authenticated via Sanctum tokens.
+35+ endpoints at `/api/v1/`, all authenticated via Sanctum tokens.
 
 ### Endpoints
 
@@ -375,6 +480,16 @@ Single-page application built with Vue 3 + Inertia.js v2 + Tailwind CSS v4.
 - `POST /conversations/{id}/stop` - Cancel
 - `DELETE /conversations/{id}` - Delete
 
+**Conversation Summaries:**
+- `GET /conversations/{id}/summaries` - List summaries
+- `POST /conversations/{id}/summaries` - Create summary (async)
+- `GET /conversations/{id}/summaries/{summary}` - Show summary
+
+**Conversation Memory:**
+- `POST /conversations/{id}/memory/recall` - Semantic search in history
+- `POST /conversations/{id}/memory/embed` - Trigger embedding generation
+- `GET /conversations/{id}/memory/status` - Check embedding progress
+
 **Documents:**
 - `GET /documents/supported-types` - List supported formats
 - `GET|POST /documents`, `GET|DELETE /documents/{id}`
@@ -398,7 +513,7 @@ Single-page application built with Vue 3 + Inertia.js v2 + Tailwind CSS v4.
 
 ---
 
-## 11. Infrastructure
+## 13. Infrastructure
 
 ### Docker Services (compose.yaml)
 
@@ -423,7 +538,9 @@ Single-page application built with Vue 3 + Inertia.js v2 + Tailwind CSS v4.
 |-----|-------|---------|---------|
 | `ProcessConversationTurn` | default | 330s | Main agentic loop |
 | `ProcessDocumentJob` | default | 300s | Document ingestion pipeline |
-| `EmbedDocumentChunksJob` | default | 300s | Generate embeddings for RAG |
+| `EmbedDocumentChunksJob` | default | 600s | Generate embeddings for document chunks |
+| `EmbedConversationMessagesJob` | default | 600s | Generate embeddings for conversation messages |
+| `CreateConversationSummaryJob` | default | 300s | Generate conversation summaries |
 | `PullModelJob` | default | 2h | Download AI models |
 | `CleanupTempFilesJob` | low | 120s | Daily temp file cleanup |
 
@@ -434,7 +551,7 @@ Single-page application built with Vue 3 + Inertia.js v2 + Tailwind CSS v4.
 
 ---
 
-## 12. Security
+## 14. Security
 
 | Layer | Protection |
 |-------|-----------|
@@ -464,14 +581,17 @@ Single-page application built with Vue 3 + Inertia.js v2 + Tailwind CSS v4.
 | Conversations | Ready | `config/agent.php` | `AGENT_MAX_TURNS` |
 | SSE streaming | Ready | - | - |
 | WebSocket (Reverb) | Ready | `config/reverb.php` | `REVERB_*` |
-| System tools (13) | Ready | `config/agent.php` | `AGENT_COMMAND_TIMEOUT` |
+| System tools (15) | Ready | `config/agent.php` | `AGENT_COMMAND_TIMEOUT` |
 | Custom API tools | Ready | `config/agent.php` | `TOOLS_BLOCK_PRIVATE_IPS` |
 | Document ingestion | Ready | `config/document.php` | `CHUNK_MAX_TOKENS`, `DOCUMENT_MAX_SIZE` |
 | RAG system | Ready | `config/ai.php` | `RAG_ENABLED`, `RAG_SEARCH_TYPE`, `RAG_TOP_K` |
 | Context filtering | Ready | `config/ai.php` | - |
+| Context filter pipeline | Ready | `config/ai.php` | - |
+| Conversation summaries | Ready | `config/ai.php` | - |
+| Conversation memory | Ready | `config/ai.php` | `RAG_ENABLED` |
 | Web search | Ready | `config/search.php` | `SEARXNG_URL`, `SEARXNG_ENGINES` |
 | Web fetch | Ready | `config/webfetch.php` | `WEBFETCH_TIMEOUT`, `WEBFETCH_MAX_SIZE` |
 | Frontend (Vue 3) | Ready | - | - |
-| REST API (30+ endpoints) | Ready | - | - |
+| REST API (35+ endpoints) | Ready | - | - |
 | Horizon queues | Ready | `config/horizon.php` | `QUEUE_CONNECTION` |
 | Auth (Sanctum + Fortify) | Ready | `config/sanctum.php` | `SANCTUM_STATEFUL_DOMAINS` |
