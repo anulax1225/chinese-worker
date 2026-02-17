@@ -71,8 +71,8 @@ class SSEClient:
                             except json.JSONDecodeError:
                                 pass  # Skip malformed data
 
-                            # Check for terminal events
-                            if event_type in ("completed", "failed", "cancelled", "tool_request"):
+                            # Check for terminal events (tool_request is NOT terminal - server continues after tool execution)
+                            if event_type in ("completed", "failed", "cancelled"):
                                 return
 
                         event_type = None
