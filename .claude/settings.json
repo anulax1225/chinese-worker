@@ -3,7 +3,18 @@
     "allow": [
       "Bash(curl:*)",
       "WebFetch(domain:docs.anthropic.com)",
-      "WebFetch(domain:platform.openai.com)"
+      "WebFetch(domain:platform.openai.com)",
+      "Bash(./vendor/bin/sail artisan make:migration:*)",
+      "Bash(./vendor/bin/sail artisan make:test:*)",
+      "Bash(./vendor/bin/sail artisan make:request:*)",
+      "Bash(./vendor/bin/sail artisan make:controller:*)",
+      "Bash(tree:*)",
+      "Bash(python -c:*)",
+      "Bash(vendor/bin/sail artisan test:*)",
+      "Bash(php artisan make:test:*)",
+      "Bash(./vendor/bin/sail test:*)",
+      "Bash(./vendor/bin/sail pint:*)",
+      "Bash(ls:*)"
     ]
   }
 }
