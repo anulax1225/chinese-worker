@@ -54,19 +54,19 @@ The default Sail configuration includes:
 | Service | Port | Purpose |
 |---------|------|---------|
 | **laravel.test** | 80 | Main application |
-| **mysql** | 3306 | Database |
+| **pgsql** | 5432 | PostgreSQL database with pgvector |
 | **redis** | 6379 | Cache and queues |
 | **ollama** | 11434 | Local LLM backend |
 | **searxng** | 8888 | Web search |
 | **mailpit** | 8025 | Email testing UI |
-| **phpmyadmin** | 8080 | Database admin |
+| **pgadmin** | 8080 | Database admin |
 | **rustfs** | 9000/9001 | S3-compatible storage |
 
 ### Accessing Services
 
 ```bash
-# MySQL
-./vendor/bin/sail mysql
+# PostgreSQL
+./vendor/bin/sail psql
 
 # Redis
 ./vendor/bin/sail redis
@@ -259,10 +259,10 @@ OPENAI_API_KEY=sk-...
 
 ### Database GUI
 
-phpMyAdmin is available at http://localhost:8080
+pgAdmin is available at http://localhost:8080
 
-Credentials:
-- Server: `mysql`
+The PostgreSQL server is pre-configured. Default credentials:
+- Host: `pgsql`
 - Username: `sail`
 - Password: `password`
 
@@ -396,8 +396,9 @@ APP_ENV=local
 APP_DEBUG=true
 
 # Database
-DB_CONNECTION=mysql
-DB_HOST=mysql
+DB_CONNECTION=pgsql
+DB_HOST=pgsql
+DB_PORT=5432
 DB_DATABASE=laravel
 DB_USERNAME=sail
 DB_PASSWORD=password

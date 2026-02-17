@@ -19,7 +19,7 @@ This document lists all software and service requirements for running Chinese Wo
 - `openssl` - Encryption
 - `pcre` - Regular expressions
 - `pdo` - Database abstraction
-- `pdo_mysql` - MySQL driver (or `pdo_pgsql` for PostgreSQL)
+- `pdo_pgsql` - PostgreSQL driver
 - `redis` - Redis client (phpredis)
 - `tokenizer` - PHP tokenization
 - `xml` - XML parsing
@@ -28,7 +28,7 @@ Most of these come pre-installed with PHP. On Ubuntu/Debian:
 
 ```bash
 sudo apt install php8.3 php8.3-bcmath php8.3-curl php8.3-dom \
-    php8.3-mbstring php8.3-mysql php8.3-redis php8.3-xml php8.3-zip
+    php8.3-mbstring php8.3-pgsql php8.3-redis php8.3-xml php8.3-zip
 ```
 
 ### Composer
@@ -59,36 +59,26 @@ Comes with Node.js. pnpm is also supported.
 
 ## Database
 
-### MySQL (Recommended)
+### PostgreSQL with pgvector
 
-**Version:** 8.0 or higher
+**Version:** 14 or higher (16+ recommended)
 
-```bash
-# Ubuntu/Debian
-sudo apt install mysql-server
-
-# Create database
-mysql -u root -p
-CREATE DATABASE chinese_worker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'app'@'localhost' IDENTIFIED BY 'your_password';
-GRANT ALL PRIVILEGES ON chinese_worker.* TO 'app'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-### PostgreSQL (Alternative)
-
-**Version:** 14 or higher
+The RAG system requires the pgvector extension for vector similarity search.
 
 ```bash
 # Ubuntu/Debian
-sudo apt install postgresql
+sudo apt install postgresql postgresql-16-pgvector
 
-# Create database
+# Create database and enable pgvector
 sudo -u postgres psql
 CREATE DATABASE chinese_worker;
 CREATE USER app WITH PASSWORD 'your_password';
 GRANT ALL PRIVILEGES ON DATABASE chinese_worker TO app;
+\c chinese_worker
+CREATE EXTENSION IF NOT EXISTS vector;
 ```
+
+With Sail, PostgreSQL and pgvector are pre-configured via the `pgvector/pgvector:pg16` Docker image.
 
 ### SQLite (Development Only)
 
@@ -302,16 +292,15 @@ sudo usermod -aG docker $USER
 | Component | Minimum | Recommended | Required |
 |-----------|---------|-------------|----------|
 | PHP | 8.2 | 8.3 | Yes |
-| MySQL | 8.0 | 8.0+ | Yes* |
-| PostgreSQL | 14 | 15+ | Yes* |
+| PostgreSQL | 14 | 16+ | Yes |
+| pgvector | 0.5+ | 0.7+ | Yes |
 | Redis | 6.0 | 7.x | Yes |
 | Node.js | 20.x | 20.x LTS | Yes |
-| Ollama | Latest | Latest | Yes** |
+| Ollama | Latest | Latest | Yes* |
 | SearXNG | Latest | Latest | No |
 | Docker | 24.x | 24.x | No |
 
-\* One database is required (MySQL or PostgreSQL)
-\** At least one AI backend is required (Ollama, Anthropic, or OpenAI)
+\* At least one AI backend is required (Ollama, Anthropic, or OpenAI)
 
 ## Hardware Recommendations
 

@@ -236,7 +236,7 @@ Keep internal services on private networks:
 
 | Service | Recommended Access |
 |---------|-------------------|
-| MySQL | localhost or internal network |
+| PostgreSQL | localhost or internal network |
 | Redis | localhost or internal network |
 | Ollama | localhost or internal network |
 | SearXNG | localhost or internal network |
@@ -293,9 +293,10 @@ add_header Content-Security-Policy "
 
 Enable database encryption if available:
 
-```sql
--- MySQL transparent data encryption
-ALTER TABLE conversations ENCRYPTION='Y';
+PostgreSQL supports Transparent Data Encryption (TDE) via filesystem-level encryption or third-party extensions. For most deployments, encrypting the data directory at the OS level is sufficient:
+
+```bash
+# Use LUKS or similar full-disk encryption on the PostgreSQL data directory
 ```
 
 ### Encryption in Transit
@@ -324,10 +325,10 @@ Encrypt backups:
 
 ```bash
 # Encrypted backup
-mysqldump database | gpg --symmetric --cipher-algo AES256 > backup.sql.gpg
+pg_dump chinese_worker | gpg --symmetric --cipher-algo AES256 > backup.sql.gpg
 
 # Restore
-gpg --decrypt backup.sql.gpg | mysql database
+gpg --decrypt backup.sql.gpg | psql chinese_worker
 ```
 
 ## Audit Logging

@@ -206,7 +206,7 @@ php artisan queue:failed <uuid>
 Common causes:
 - AI backend timeout (increase timeout)
 - Memory limit exceeded (increase worker memory)
-- Database connection lost (check MySQL)
+- Database connection lost (check PostgreSQL)
 
 ### Why can't I connect to Ollama from the app?
 

@@ -430,7 +430,7 @@ docker ps
 ./vendor/bin/sail logs
 
 # Check specific container
-./vendor/bin/sail logs mysql
+./vendor/bin/sail logs pgsql
 ./vendor/bin/sail logs ollama
 ```
 

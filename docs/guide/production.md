@@ -352,10 +352,10 @@ For production, consider:
 
 ```bash
 # Manual backup
-mysqldump -u user -p chinese_worker > backup.sql
+pg_dump -U user chinese_worker > backup.sql
 
 # Automated with cron
-0 2 * * * mysqldump -u user -pPASSWORD chinese_worker | gzip > /backups/db-$(date +\%Y\%m\%d).sql.gz
+0 2 * * * pg_dump -U user chinese_worker | gzip > /backups/db-$(date +\%Y\%m\%d).sql.gz
 ```
 
 ### File Backup
@@ -388,7 +388,7 @@ Increase server resources:
 
 Run multiple application servers:
 
-1. **Shared database:** Single MySQL instance
+1. **Shared database:** Single PostgreSQL instance
 2. **Shared Redis:** For cache, sessions, queues
 3. **Load balancer:** Nginx, HAProxy, or cloud LB
 4. **Sticky sessions:** For WebSocket support
@@ -488,12 +488,13 @@ php artisan up
 
 ### Slow Query Log
 
-Enable in MySQL:
+Enable in PostgreSQL (`postgresql.conf`):
 
-```sql
-SET GLOBAL slow_query_log = 'ON';
-SET GLOBAL long_query_time = 1;
-SET GLOBAL slow_query_log_file = '/var/log/mysql/slow.log';
+```ini
+log_min_duration_statement = 1000  # Log queries taking > 1 second
+log_statement = 'none'             # Don't log all statements
+logging_collector = on
+log_directory = 'pg_log'
 ```
 
 ## Next Steps

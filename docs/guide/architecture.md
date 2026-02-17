@@ -39,8 +39,8 @@ This document describes the high-level architecture of Chinese Worker, including
         ┌───────────────────────────┼───────────────────────────┐
         ▼                           ▼                           ▼
 ┌───────────────┐          ┌───────────────┐          ┌───────────────┐
-│    MySQL      │          │    Redis      │          │    Ollama     │
-│  (Database)   │          │ (Cache/Queue) │          │  (Local LLM)  │
+│  PostgreSQL   │          │    Redis      │          │    Ollama     │
+│  + pgvector   │          │ (Cache/Queue) │          │  (Local LLM)  │
 └───────────────┘          └───────────────┘          └───────────────┘
                                                               │
                                     ┌─────────────────────────┼─────────┐

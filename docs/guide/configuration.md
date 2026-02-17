@@ -314,9 +314,9 @@ APP_KEY=                    # Auto-generated
 ### Database
 
 ```env
-DB_CONNECTION=mysql
+DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
-DB_PORT=3306
+DB_PORT=5432
 DB_DATABASE=chinese_worker
 DB_USERNAME=app
 DB_PASSWORD=secret

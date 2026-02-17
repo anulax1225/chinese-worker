@@ -10,7 +10,7 @@ Ensure you have all [requirements](requirements.md) installed:
 
 - PHP 8.2+ with required extensions
 - Composer 2.x
-- MySQL 8.0+ or PostgreSQL 14+
+- PostgreSQL 14+ with pgvector extension
 - Redis 6.0+
 - Node.js 20.x
 - Nginx or Apache
@@ -50,9 +50,9 @@ APP_DEBUG=false
 APP_URL=https://your-domain.com
 
 # Database
-DB_CONNECTION=mysql
+DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
-DB_PORT=3306
+DB_PORT=5432
 DB_DATABASE=chinese_worker
 DB_USERNAME=your_db_user
 DB_PASSWORD=your_db_password
@@ -95,13 +95,15 @@ REVERB_SCHEME=https
 ## Step 4: Set Up Database
 
 ```bash
-# Create database (MySQL example)
-mysql -u root -p
-CREATE DATABASE chinese_worker CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER 'app'@'localhost' IDENTIFIED BY 'secure_password';
-GRANT ALL PRIVILEGES ON chinese_worker.* TO 'app'@'localhost';
-FLUSH PRIVILEGES;
-exit;
+# Create database and user
+sudo -u postgres psql
+CREATE DATABASE chinese_worker;
+CREATE USER app WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE chinese_worker TO app;
+\q
+
+# Install pgvector extension
+sudo -u postgres psql -d chinese_worker -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 
 # Run migrations
 php artisan migrate --force

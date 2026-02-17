@@ -16,7 +16,7 @@ Review release notes for:
 
 ```bash
 # Database backup
-mysqldump -u user -p chinese_worker > backup-$(date +%Y%m%d).sql
+pg_dump -U user chinese_worker > backup-$(date +%Y%m%d).sql
 
 # Application backup
 tar -czf app-backup-$(date +%Y%m%d).tar.gz /var/www/chinese-worker/
@@ -215,7 +215,7 @@ rm -rf /var/www/chinese-worker
 tar -xzf app-backup-20240101.tar.gz -C /
 
 # Restore database
-mysql -u user -p chinese_worker < backup-20240101.sql
+psql -U user chinese_worker < backup-20240101.sql
 
 # Restore environment
 cp .env.backup-20240101 .env

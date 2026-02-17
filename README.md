@@ -9,6 +9,7 @@ A self-hosted AI agent framework built with Laravel 12. Create intelligent agent
 - **Multi-Turn Conversations** - Stateful conversations with message history and context
 - **Tool Execution** - Built-in tools (bash, file operations, search) plus custom tool definitions
 - **Document Ingestion** - Multi-format document processing with text extraction, cleaning, and chunking
+- **RAG System** - Retrieval-Augmented Generation with pgvector embeddings, hybrid search, and automatic context injection
 - **Web Search & Fetch** - Integrated SearXNG search and web content extraction
 - **Real-Time Streaming** - Server-Sent Events for live response streaming
 - **System Prompt Templating** - Blade-based prompts with variable substitution
@@ -48,7 +49,7 @@ See [Installation Guide](docs/guide/installation.md) for production deployment w
 ## Requirements
 
 - PHP 8.2+
-- MySQL 8.0+ or PostgreSQL
+- PostgreSQL 14+ with pgvector extension
 - Redis
 - Node.js 20+
 - Ollama, Anthropic API, or OpenAI API (at least one AI backend)
@@ -71,8 +72,9 @@ All documentation is in the [`docs/guide/`](docs/guide/) directory:
 - [Configuration](docs/guide/configuration.md) - Configuration reference
 
 ### Features
-- [AI Backends](docs/guide/ai-backends.md) - Configuring Ollama, Claude, and OpenAI
+- [AI Backends](docs/guide/ai-backends.md) - Configuring Ollama, vLLM, Claude, Huggingface and OpenAI
 - [Document Ingestion](docs/guide/document-ingestion.md) - PDF, DOCX, images with OCR
+- [RAG System](docs/guide/rag-system.md) - Embeddings, vector search, and context injection
 - [Search & Web Fetch](docs/guide/search-and-webfetch.md) - Web search and content extraction
 - [Queues & Jobs](docs/guide/queues-and-jobs.md) - Background processing with Horizon
 - [Context Filter](docs/guide/context-filter.md) - Context management and filtering strategies
@@ -120,18 +122,24 @@ composer lint
 │  System  │  │ations     │  │ Exec  │  │Extract →│  │  WebFetch  │
 │  Prompts │  │ Messages  │  │       │  │Clean →  │  │            │
 │          │  │           │  │       │  │Chunk    │  │            │
-└──────────┘  └───────────┘  └───────┘  └─────────┘  └────────────┘
+└──────────┘  └───────────┘  └───────┘  └────┬────┘  └────────────┘
         │             │           │           │              │
         └─────────────┴───────────┼───────────┴──────────────┘
                                   │
 ┌─────────────────────────────────────────────────────────────────┐
+│                     RAG Pipeline                                │
+│  EmbeddingService → RetrievalService → RAGContextBuilder        │
+│  pgvector (dense) │ FTS (sparse) │ Hybrid (RRF)                │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+┌─────────────────────────────────────────────────────────────────┐
 │                       AIBackendManager                          │
-│           Ollama │ Anthropic Claude │ OpenAI                    │
+│           Ollama │ vLLM │ Anthropic Claude │ OpenAI             │
 └─────────────────────────────────────────────────────────────────┘
                                 │
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Background Jobs                             │
-│  ProcessConversationTurn │ ProcessDocumentJob │ PullModelJob    │
+│  ProcessConversationTurn │ ProcessDocumentJob │ EmbedChunksJob  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -142,9 +150,10 @@ composer lint
 | Backend | Laravel 12, PHP 8.2+ |
 | Frontend | Vue 3, Inertia.js v2, TypeScript |
 | Styling | Tailwind CSS v4 |
-| Database | MySQL 8.0+ / PostgreSQL |
+| Database | PostgreSQL 14+ with pgvector |
 | Cache/Queue | Redis |
-| AI Backends | Ollama, Anthropic, OpenAI |
+| AI Backends | Ollama, vLLM, Anthropic, OpenAI |
+| RAG | pgvector embeddings, hybrid search (dense + sparse + RRF) |
 | Search | SearXNG |
 | Queue Monitor | Laravel Horizon |
 | WebSockets | Laravel Reverb |
