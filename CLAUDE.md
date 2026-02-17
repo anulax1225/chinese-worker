@@ -85,6 +85,23 @@ This project has domain-specific skills available. You MUST activate the relevan
 - `vue-development-guides` — A collection of best practices and tips for developing applications using Vue.js. This skill MUST be apply when developing, refactoring or reviewing Vue.js or Nuxt projects.
 - `vue-testing-best-practices` — Use for Vue.js testing. Covers Vitest, Vue Test Utils, component testing, mocking, testing patterns, and Playwright for E2E testing.
 
+## Workflow Requirements
+
+### Commits
+
+- You MUST make a commit for every meaningful change to the codebase (feat, fix, docs, refactor, test, chore, etc.).
+- Use conventional commit format: `type(scope): description` (e.g., `feat(api): add summary endpoints`, `fix(auth): resolve token expiration`).
+- Do not batch unrelated changes into a single commit.
+
+### Laravel Sail
+
+- This project uses Laravel Sail for local development. You MUST use `./vendor/bin/sail` for all relevant commands:
+  - `./vendor/bin/sail artisan` instead of `php artisan`
+  - `./vendor/bin/sail test` instead of `php artisan test`
+  - `./vendor/bin/sail composer` instead of `composer`
+  - `./vendor/bin/sail npm` instead of `npm`
+  - `./vendor/bin/sail exec -T laravel.test ./vendor/bin/pint` for running Pint
+
 ## Conventions
 
 - You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
