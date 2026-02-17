@@ -7,15 +7,19 @@ use App\Services\RAG\EmbeddingService;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Queue;
 
+// Use small test embeddings for speed (4 dimensions instead of 1536)
+const TEST_EMBEDDING_DIM = 4;
+
 describe('EmbedDocumentChunksJob', function () {
     beforeEach(function () {
         Config::set('ai.rag', [
             'enabled' => true,
-            'embedding_model' => 'text-embedding-3-small',
+            'embedding_model' => 'test-model',
             'embedding_batch_size' => 100,
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
         ]);
 
-        $this->mockEmbedding = array_fill(0, 1536, 0.1);
+        $this->mockEmbedding = array_fill(0, TEST_EMBEDDING_DIM, 0.1);
     });
 
     test('job processes all document chunks', function () {
@@ -102,7 +106,7 @@ describe('EmbedDocumentChunksJob', function () {
         $tags = $job->tags();
 
         expect($tags)->toContain('document:'.$document->id)
-            ->and($tags)->toContain('embed-chunks');
+            ->and($tags)->toContain('embedding');
     });
 
     test('job has correct retry settings', function () {

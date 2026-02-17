@@ -77,18 +77,15 @@ class DocumentChunkFactory extends Factory
 
     /**
      * Indicate that the chunk has an embedding.
+     *
+     * Uses small 4-dimension embeddings by default for fast tests.
+     * Pass dimensions parameter for specific sizes.
      */
-    public function withEmbedding(?string $model = null): static
+    public function withEmbedding(?string $model = null, int $dimensions = 4): static
     {
-        $model = $model ?? 'text-embedding-3-small';
-        $dimensions = $model === 'nomic-embed-text' ? 768 : 1536;
-
         return $this->state(fn () => [
-            'embedding_raw' => array_map(
-                fn () => fake()->randomFloat(6, -1, 1),
-                range(1, $dimensions)
-            ),
-            'embedding_model' => $model,
+            'embedding_raw' => array_fill(0, $dimensions, 0.1),
+            'embedding_model' => $model ?? 'test-model',
             'embedding_generated_at' => now(),
             'embedding_dimensions' => $dimensions,
             'chunk_type' => 'standard',
@@ -105,7 +102,7 @@ class DocumentChunkFactory extends Factory
             'embedding_raw' => null,
             'embedding_model' => null,
             'embedding_generated_at' => null,
-            'embedding_dimensions' => 1536,
+            'embedding_dimensions' => 4,
         ]);
     }
 

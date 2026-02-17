@@ -86,7 +86,7 @@ class RAGPipeline
     /**
      * Check if RAG is enabled and properly configured.
      */
-    public function isEnabled(): bool
+    public static function isEnabled(): bool
     {
         return config('ai.rag.enabled', false);
     }
@@ -113,6 +113,12 @@ class RAGPipeline
  */
 class RAGPipelineResult
 {
+    public readonly bool $success;
+
+    public readonly ?string $reason;
+
+    public readonly int $chunksRetrieved;
+
     public function __construct(
         public string $context,
         public ?RetrievalResult $retrieval,
@@ -120,7 +126,22 @@ class RAGPipelineResult
         public float $executionTimeMs,
         public bool $enabled = true,
         public bool $hasDocuments = true,
-    ) {}
+    ) {
+        // Compute success based on enabled and hasDocuments
+        $this->success = $this->enabled && $this->hasDocuments;
+
+        // Compute reason for failure
+        if (! $this->enabled) {
+            $this->reason = 'disabled';
+        } elseif (! $this->hasDocuments) {
+            $this->reason = 'no_documents';
+        } else {
+            $this->reason = null;
+        }
+
+        // Compute chunks retrieved
+        $this->chunksRetrieved = $this->retrieval?->count() ?? 0;
+    }
 
     /**
      * Check if context was successfully retrieved.
@@ -135,7 +156,7 @@ class RAGPipelineResult
      */
     public function chunkCount(): int
     {
-        return $this->retrieval?->count() ?? 0;
+        return $this->chunksRetrieved;
     }
 
     /**
@@ -182,13 +203,12 @@ class RAGPipelineResult
     public function toArray(): array
     {
         return [
-            'enabled' => $this->enabled,
-            'has_documents' => $this->hasDocuments,
-            'has_context' => $this->hasContext(),
-            'chunk_count' => $this->chunkCount(),
-            'strategy' => $this->strategy(),
-            'execution_time_ms' => round($this->executionTimeMs, 2),
+            'success' => $this->success,
+            'reason' => $this->reason,
+            'context' => $this->context,
             'citations' => $this->citations,
+            'chunks_retrieved' => $this->chunksRetrieved,
+            'execution_time_ms' => round($this->executionTimeMs, 2),
         ];
     }
 }

@@ -8,6 +8,9 @@ use App\Services\RAG\EmbeddingService;
 use App\Services\RAG\RetrievalService;
 use Illuminate\Support\Facades\Config;
 
+// Use small test embeddings for speed (4 dimensions instead of 1536)
+const TEST_EMBEDDING_DIM = 4;
+
 describe('RetrievalService', function () {
     beforeEach(function () {
         Config::set('ai.rag', [
@@ -17,9 +20,11 @@ describe('RetrievalService', function () {
             'similarity_threshold' => 0.7,
             'hybrid_alpha' => 0.7,
             'rrf_k' => 60,
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
+            'log_retrievals' => true,
         ]);
 
-        $this->mockEmbedding = array_fill(0, 1536, 0.1);
+        $this->mockEmbedding = array_fill(0, TEST_EMBEDDING_DIM, 0.1);
 
         $this->mockEmbeddingService = Mockery::mock(EmbeddingService::class);
         $this->mockEmbeddingService->shouldReceive('embed')

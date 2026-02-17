@@ -25,11 +25,6 @@ class EmbedDocumentChunksJob implements ShouldQueue
     public int $tries = 3;
 
     /**
-     * The number of seconds to wait before retrying the job.
-     */
-    public int $backoff = 60;
-
-    /**
      * Indicate if the job should be marked as failed on timeout.
      */
     public bool $failOnTimeout = true;
@@ -38,6 +33,24 @@ class EmbedDocumentChunksJob implements ShouldQueue
         public Document $document,
         public ?string $model = null
     ) {}
+
+    /**
+     * Calculate the number of seconds to wait before retrying the job.
+     *
+     * @return array<int, int>
+     */
+    public function backoff(): array
+    {
+        return [60, 300, 900];
+    }
+
+    /**
+     * Get the unique ID for the job.
+     */
+    public function uniqueId(): string
+    {
+        return (string) $this->document->id;
+    }
 
     /**
      * Get the tags that should be assigned to the job.
@@ -55,6 +68,15 @@ class EmbedDocumentChunksJob implements ShouldQueue
 
     public function handle(EmbeddingService $embeddingService): void
     {
+        // Skip if RAG is disabled
+        if (! config('ai.rag.enabled', false)) {
+            Log::info('Skipping document embedding - RAG is disabled', [
+                'document_id' => $this->document->id,
+            ]);
+
+            return;
+        }
+
         $document = $this->document;
         $startTime = microtime(true);
 

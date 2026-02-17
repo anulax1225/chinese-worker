@@ -9,14 +9,16 @@ use Illuminate\Support\Facades\Config;
 
 // Use small test embeddings for speed (4 dimensions instead of 1536)
 const TEST_EMBEDDING_DIM = 4;
+const TEST_EMBEDDING_MODEL = 'qwen3-embedding:0.6b';
 
 describe('EmbeddingService', function () {
     beforeEach(function () {
         Config::set('ai.rag', [
             'enabled' => true,
-            'embedding_model' => 'test-model',
-            'embedding_backend' => 'openai',
+            'embedding_model' => TEST_EMBEDDING_MODEL,
+            'embedding_backend' => 'ollama',
             'embedding_batch_size' => 100,
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
             'cache_embeddings' => true,
         ]);
 
@@ -27,7 +29,7 @@ describe('EmbeddingService', function () {
         $mockBackend = Mockery::mock(AIBackendInterface::class);
         $mockBackend->shouldReceive('generateEmbeddings')
             ->once()
-            ->with(['Test text'], 'test-model')
+            ->with(['Test text'], TEST_EMBEDDING_MODEL)
             ->andReturn([$this->mockEmbedding]);
 
         $service = new EmbeddingService($mockBackend);
@@ -39,8 +41,8 @@ describe('EmbeddingService', function () {
 
     test('embed uses cache on cache hit', function () {
         EmbeddingCache::factory()->create([
-            'content_hash' => hash('sha256', 'Cached text::test-model'),
-            'embedding_model' => 'test-model',
+            'content_hash' => hash('sha256', 'Cached text::'.TEST_EMBEDDING_MODEL),
+            'embedding_model' => TEST_EMBEDDING_MODEL,
             'embedding_raw' => $this->mockEmbedding,
         ]);
 
@@ -62,7 +64,7 @@ describe('EmbeddingService', function () {
         $service = new EmbeddingService($mockBackend);
         $service->embed('New text to cache');
 
-        $cached = EmbeddingCache::where('content_hash', hash('sha256', 'New text to cache::test-model'))
+        $cached = EmbeddingCache::where('content_hash', hash('sha256', 'New text to cache::'.TEST_EMBEDDING_MODEL))
             ->first();
 
         expect($cached)->not->toBeNull()
@@ -76,7 +78,7 @@ describe('EmbeddingService', function () {
         $mockBackend = Mockery::mock(AIBackendInterface::class);
         $mockBackend->shouldReceive('generateEmbeddings')
             ->once()
-            ->with($texts, 'test-model')
+            ->with($texts, TEST_EMBEDDING_MODEL)
             ->andReturn($embeddings);
 
         $service = new EmbeddingService($mockBackend);
@@ -105,7 +107,7 @@ describe('EmbeddingService', function () {
         $chunk->refresh();
 
         expect($chunk->embedding_raw)->toBe($this->mockEmbedding)
-            ->and($chunk->embedding_model)->toBe('test-model')
+            ->and($chunk->embedding_model)->toBe(TEST_EMBEDDING_MODEL)
             ->and($chunk->embedding_generated_at)->not->toBeNull();
     });
 
@@ -144,7 +146,7 @@ describe('EmbeddingService', function () {
         $mockBackend = Mockery::mock(AIBackendInterface::class);
         $mockBackend->shouldReceive('getEmbeddingDimensions')
             ->once()
-            ->with('test-model')
+            ->with(TEST_EMBEDDING_MODEL)
             ->andReturn(TEST_EMBEDDING_DIM);
 
         $service = new EmbeddingService($mockBackend);

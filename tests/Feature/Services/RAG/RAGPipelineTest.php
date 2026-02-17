@@ -100,7 +100,7 @@ describe('RAGPipeline', function () {
         $mockContextBuilder->shouldReceive('extractCitations')->andReturn([]);
 
         $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
-        $result = $pipeline->executeForConversation('query', $conversation);
+        $result = $pipeline->executeForConversation($conversation, 'query');
 
         expect($result->success)->toBeTrue();
     });
@@ -115,7 +115,7 @@ describe('RAGPipeline', function () {
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
 
         $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
-        $result = $pipeline->executeForConversation('query', $conversation);
+        $result = $pipeline->executeForConversation($conversation, 'query');
 
         expect($result->success)->toBeFalse()
             ->and($result->reason)->toBe('no_documents');
@@ -207,11 +207,23 @@ describe('RAGPipeline', function () {
     });
 
     test('result toArray returns correct structure', function () {
+        $chunks = collect([
+            (object) ['id' => 1],
+            (object) ['id' => 2],
+            (object) ['id' => 3],
+            (object) ['id' => 4],
+            (object) ['id' => 5],
+        ]);
+
+        $retrieval = new RetrievalResult(
+            chunks: $chunks,
+            strategy: 'hybrid',
+        );
+
         $result = new RAGPipelineResult(
-            success: true,
             context: 'Context here',
+            retrieval: $retrieval,
             citations: [['citation' => '[1]']],
-            chunksRetrieved: 5,
             executionTimeMs: 150.5,
         );
 
