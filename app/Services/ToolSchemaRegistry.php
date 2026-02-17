@@ -208,6 +208,36 @@ class ToolSchemaRegistry
                     'required' => ['query'],
                 ],
             ],
+            [
+                'name' => 'conversation_recall',
+                'description' => 'Search previous conversation messages using semantic similarity. Use this to recall earlier discussions, decisions, or context from this conversation.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'query' => [
+                            'type' => 'string',
+                            'description' => 'What to search for in the conversation history',
+                        ],
+                        'max_results' => [
+                            'type' => 'integer',
+                            'description' => 'Maximum messages to return (default: 5, max: 10)',
+                        ],
+                        'threshold' => [
+                            'type' => 'number',
+                            'description' => 'Minimum similarity threshold 0-1 (default: 0.3)',
+                        ],
+                    ],
+                    'required' => ['query'],
+                ],
+            ],
+            [
+                'name' => 'conversation_memory_status',
+                'description' => 'Check the status of conversation memory embeddings - how many messages are indexed for semantic search',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [],
+                ],
+            ],
         ];
     }
 
@@ -234,13 +264,22 @@ class ToolSchemaRegistry
 
         $tools = array_merge($tools, $clientToolSchemas);
 
-        // Add system tools (filter document tools if no documents attached)
+        // Add system tools (filter based on context)
         $systemTools = $this->getSystemToolSchemas();
 
+        // Filter document tools if no documents attached
         if (! $conversation->hasDocuments()) {
             $systemTools = array_values(array_filter(
                 $systemTools,
                 fn ($tool) => ! str_starts_with($tool['name'], 'document_')
+            ));
+        }
+
+        // Filter conversation memory tools if RAG is disabled
+        if (! config('ai.rag.enabled', false)) {
+            $systemTools = array_values(array_filter(
+                $systemTools,
+                fn ($tool) => ! str_starts_with($tool['name'], 'conversation_')
             ));
         }
 

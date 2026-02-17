@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\Auth\LoginController;
 use App\Http\Controllers\Api\V1\Auth\LogoutController;
 use App\Http\Controllers\Api\V1\Auth\RegisterController;
 use App\Http\Controllers\Api\V1\ConversationController;
+use App\Http\Controllers\Api\V1\ConversationMemoryController;
 use App\Http\Controllers\Api\V1\ConversationSummaryController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\FileController;
@@ -54,6 +55,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('conversations/{conversation}/summaries', [ConversationSummaryController::class, 'index']);
         Route::post('conversations/{conversation}/summaries', [ConversationSummaryController::class, 'store']);
         Route::get('conversations/{conversation}/summaries/{summary}', [ConversationSummaryController::class, 'show']);
+
+        // Conversation Memory (Message Embeddings)
+        Route::post('conversations/{conversation}/memory/recall', [ConversationMemoryController::class, 'recall']);
+        Route::post('conversations/{conversation}/memory/embed', [ConversationMemoryController::class, 'embed']);
+        Route::get('conversations/{conversation}/memory/status', [ConversationMemoryController::class, 'status']);
 
         // AI Backends
         Route::get('ai-backends', [AIBackendController::class, 'index']);

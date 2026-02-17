@@ -12,6 +12,7 @@ use App\Services\ConversationEventBroadcaster;
 use App\Services\ConversationService;
 use App\Services\Prompts\PromptAssembler;
 use App\Services\RAG\RAGPipeline;
+use App\Services\Tools\ConversationMemoryToolHandler;
 use App\Services\Tools\DocumentToolHandler;
 use App\Services\Tools\TodoToolHandler;
 use App\Services\Tools\ToolArgumentValidator;
@@ -416,6 +417,15 @@ class ProcessConversationTurn implements ShouldQueue
                 $handler = new DocumentToolHandler(
                     $this->conversation,
                     app(RAGPipeline::class),
+                );
+
+                return $handler->execute($toolCall->name, $toolCall->arguments);
+            }
+
+            if (str_starts_with($toolCall->name, 'conversation_')) {
+                $handler = new ConversationMemoryToolHandler(
+                    $this->conversation,
+                    app(\App\Services\RAG\EmbeddingService::class),
                 );
 
                 return $handler->execute($toolCall->name, $toolCall->arguments);
