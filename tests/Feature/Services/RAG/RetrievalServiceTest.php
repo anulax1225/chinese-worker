@@ -4,12 +4,12 @@ use App\DTOs\RetrievalResult;
 use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Models\RetrievalLog;
+use App\Services\AI\FakeBackend;
 use App\Services\RAG\EmbeddingService;
 use App\Services\RAG\RetrievalService;
 use Illuminate\Support\Facades\Config;
 
-// Use small test embeddings for speed (4 dimensions instead of 1536)
-const TEST_EMBEDDING_DIM = 4;
+defined('TEST_EMBEDDING_DIM') || define('TEST_EMBEDDING_DIM', 4);
 
 describe('RetrievalService', function () {
     beforeEach(function () {
@@ -20,17 +20,25 @@ describe('RetrievalService', function () {
             'similarity_threshold' => 0.7,
             'hybrid_alpha' => 0.7,
             'rrf_k' => 60,
+            'embedding_model' => 'test-model',
+            'embedding_backend' => 'fake',
             'embedding_dimensions' => TEST_EMBEDDING_DIM,
+            'cache_embeddings' => false,
             'log_retrievals' => true,
         ]);
 
-        $this->mockEmbedding = array_fill(0, TEST_EMBEDDING_DIM, 0.1);
+        Config::set('ai.backends.fake', [
+            'driver' => 'fake',
+            'model' => 'test-model',
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
+        ]);
 
-        $this->mockEmbeddingService = Mockery::mock(EmbeddingService::class);
-        $this->mockEmbeddingService->shouldReceive('embed')
-            ->andReturn($this->mockEmbedding);
-        $this->mockEmbeddingService->shouldReceive('generateSparseEmbedding')
-            ->andReturn(['test' => 1.0, 'query' => 0.8]);
+        $fakeBackend = new FakeBackend([
+            'model' => 'test-model',
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
+        ]);
+
+        $this->embeddingService = new EmbeddingService($fakeBackend);
     });
 
     describe('retrieve', function () {
@@ -41,7 +49,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test query', collect([$document]));
 
             expect($result)->toBeInstanceOf(RetrievalResult::class);
@@ -56,7 +64,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test query', collect([$document]));
 
             expect($result->strategy)->toBe('dense');
@@ -69,7 +77,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $service->retrieve('test query', collect([$document]), [
                 'conversation_id' => null,
                 'user_id' => null,
@@ -86,7 +94,7 @@ describe('RetrievalService', function () {
             $document = Document::factory()->create();
             // No chunks created
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test query', collect([$document]));
 
             expect($result->hasChunks())->toBeFalse()
@@ -100,7 +108,7 @@ describe('RetrievalService', function () {
             DocumentChunk::factory()->for($doc1)->withEmbedding()->create();
             DocumentChunk::factory()->for($doc2)->withEmbedding()->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test', collect([$doc1]));
 
             // Should only include chunks from doc1
@@ -119,7 +127,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test', collect([$document]));
 
             expect($result->count())->toBeLessThanOrEqual(2);
@@ -135,7 +143,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test query', collect([$document]), [
                 'strategy' => 'dense',
             ]);
@@ -154,12 +162,29 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('Laravel framework', collect([$document]), [
                 'strategy' => 'sparse',
             ]);
 
             expect($result->strategy)->toBe('sparse');
+        });
+
+        test('sparse search returns results from chunks without embeddings', function () {
+            $document = Document::factory()->create();
+            $chunk = DocumentChunk::factory()
+                ->for($document)
+                ->withContent('This document discusses the penguin migration patterns in Antarctica')
+                ->needsEmbedding()
+                ->create();
+
+            $service = new RetrievalService($this->embeddingService);
+            $result = $service->retrieve('penguin migration', collect([$document]), [
+                'strategy' => 'sparse',
+            ]);
+
+            expect($result->strategy)->toBe('sparse')
+                ->and($result->chunks->pluck('id'))->toContain($chunk->id);
         });
     });
 
@@ -174,7 +199,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test query', collect([$document]));
 
             expect($result->strategy)->toBe('hybrid');
@@ -189,7 +214,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test', collect([$document]), [
                 'strategy' => 'hybrid',
             ]);
@@ -206,7 +231,7 @@ describe('RetrievalService', function () {
                 ->withEmbedding()
                 ->create();
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test', $document);
 
             expect($result)->toBeInstanceOf(RetrievalResult::class);
@@ -218,7 +243,7 @@ describe('RetrievalService', function () {
                 DocumentChunk::factory()->for($doc)->withEmbedding()->create();
             }
 
-            $service = new RetrievalService($this->mockEmbeddingService);
+            $service = new RetrievalService($this->embeddingService);
             $result = $service->retrieve('test', $documents->all());
 
             expect($result)->toBeInstanceOf(RetrievalResult::class);

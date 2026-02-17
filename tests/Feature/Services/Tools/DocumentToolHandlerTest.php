@@ -5,6 +5,7 @@ use App\Models\Conversation;
 use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Models\User;
+use App\Services\RAG\RAGPipeline;
 use App\Services\Tools\DocumentToolHandler;
 
 beforeEach(function () {
@@ -14,7 +15,10 @@ beforeEach(function () {
         'user_id' => $this->user->id,
         'agent_id' => $this->agent->id,
     ]);
-    $this->handler = new DocumentToolHandler($this->conversation);
+    $this->handler = new DocumentToolHandler(
+        $this->conversation,
+        app(RAGPipeline::class),
+    );
 });
 
 describe('document_list', function () {
@@ -479,6 +483,7 @@ describe('document_search', function () {
         $result = $this->handler->execute('document_search', ['query' => 'Laravel']);
 
         expect($result->success)->toBeTrue();
+        expect($result->output)->toContain('Search results for');
         expect($result->output)->toContain('Laravel');
         expect($result->output)->toContain('Chunk 0');
         expect($result->output)->toContain('Chunk 2');
@@ -542,8 +547,8 @@ describe('document_search', function () {
         ]);
 
         expect($result->success)->toBeTrue();
-        // Should respect max_results limit
-        $matchCount = substr_count($result->output, 'Chunk');
+        // Should respect max_results limit - count result entries by the "[Doc" prefix
+        $matchCount = substr_count($result->output, '[Doc');
         expect($matchCount)->toBeLessThanOrEqual(3);
     });
 

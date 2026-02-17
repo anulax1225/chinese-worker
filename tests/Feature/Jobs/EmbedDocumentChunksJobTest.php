@@ -8,14 +8,23 @@ use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Queue;
 
 // Use small test embeddings for speed (4 dimensions instead of 1536)
-const TEST_EMBEDDING_DIM = 4;
+defined('TEST_EMBEDDING_DIM') || define('TEST_EMBEDDING_DIM', 4);
 
 describe('EmbedDocumentChunksJob', function () {
     beforeEach(function () {
         Config::set('ai.rag', [
             'enabled' => true,
             'embedding_model' => 'test-model',
+            'embedding_backend' => 'fake',
             'embedding_batch_size' => 100,
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
+            'cache_embeddings' => false,
+        ]);
+
+        Config::set('ai.default', 'fake');
+        Config::set('ai.backends.fake', [
+            'driver' => 'fake',
+            'model' => 'test-model',
             'embedding_dimensions' => TEST_EMBEDDING_DIM,
         ]);
 
@@ -33,7 +42,7 @@ describe('EmbedDocumentChunksJob', function () {
         $mockService = Mockery::mock(EmbeddingService::class);
         $mockService->shouldReceive('embedChunks')
             ->once()
-            ->with(Mockery::on(fn ($arg) => $arg->count() === 3));
+            ->with(Mockery::on(fn ($arg) => $arg->count() === 3), Mockery::any());
 
         app()->instance(EmbeddingService::class, $mockService);
 
@@ -55,7 +64,7 @@ describe('EmbedDocumentChunksJob', function () {
         $mockService = Mockery::mock(EmbeddingService::class);
         $mockService->shouldReceive('embedChunks')
             ->once()
-            ->andReturnUsing(function ($chunks) {
+            ->andReturnUsing(function ($chunks, $model = null) {
                 foreach ($chunks as $chunk) {
                     $chunk->update([
                         'embedding_generated_at' => now(),
@@ -91,7 +100,7 @@ describe('EmbedDocumentChunksJob', function () {
         $mockService = Mockery::mock(EmbeddingService::class);
         $mockService->shouldReceive('embedChunks')
             ->once()
-            ->with(Mockery::on(fn ($arg) => $arg->count() === 1 && $arg->first()->id === $needsEmbedding->id));
+            ->with(Mockery::on(fn ($arg) => $arg->count() === 1 && $arg->first()->id === $needsEmbedding->id), Mockery::any());
 
         app()->instance(EmbeddingService::class, $mockService);
 
@@ -181,7 +190,7 @@ describe('EmbedDocumentChunksJob', function () {
         $mockService = Mockery::mock(EmbeddingService::class);
         $mockService->shouldReceive('embedChunks')
             ->times(3) // 5 chunks / 2 batch = 3 calls
-            ->andReturnUsing(function () use (&$callCount) {
+            ->andReturnUsing(function ($chunks, $model = null) use (&$callCount) {
                 $callCount++;
             });
 

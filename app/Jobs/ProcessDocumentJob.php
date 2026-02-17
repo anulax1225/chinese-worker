@@ -81,6 +81,11 @@ class ProcessDocumentJob implements ShouldQueue
             // Mark as ready
             $document->markAs(DocumentStatus::Ready);
 
+            // Dispatch embedding job if RAG is enabled
+            if (config('ai.rag.enabled', true)) {
+                EmbedDocumentChunksJob::dispatch($document);
+            }
+
             $duration = microtime(true) - $startTime;
             Log::info('Document processing completed', [
                 'document_id' => $document->id,

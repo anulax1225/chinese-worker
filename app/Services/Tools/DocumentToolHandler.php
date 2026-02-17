@@ -6,11 +6,13 @@ use App\DTOs\ToolResult;
 use App\Models\Conversation;
 use App\Models\Document;
 use App\Models\DocumentChunk;
+use App\Services\RAG\RAGPipeline;
 
 class DocumentToolHandler
 {
     public function __construct(
-        protected Conversation $conversation
+        protected Conversation $conversation,
+        protected RAGPipeline $ragPipeline,
     ) {}
 
     /**
@@ -277,7 +279,7 @@ class DocumentToolHandler
     }
 
     /**
-     * Search within document content.
+     * Search within document content using RAG pipeline (with keyword fallback).
      *
      * @param  array<string, mixed>  $args
      */
@@ -295,24 +297,7 @@ class DocumentToolHandler
         $documentId = $args['document_id'] ?? null;
         $maxResults = min($args['max_results'] ?? 5, 10);
 
-        // Get document IDs attached to this conversation
-        $documentIds = $this->conversation->getDocumentIds();
-
-        if (empty($documentIds)) {
-            return new ToolResult(
-                success: true,
-                output: 'No documents attached to search.',
-                error: null
-            );
-        }
-
-        // Build query - search in specific document or all attached documents
-        $chunksQuery = DocumentChunk::query()
-            ->whereIn('document_id', $documentIds)
-            ->search($query)
-            ->ordered()
-            ->limit($maxResults);
-
+        // Resolve documents to search
         if ($documentId) {
             $document = $this->findDocument($documentId);
             if (! $document) {
@@ -322,10 +307,78 @@ class DocumentToolHandler
                     error: "Document not found or not attached: {$documentId}"
                 );
             }
-            $chunksQuery->forDocument($document);
+            $documents = collect([$document]);
+        } else {
+            $documents = $this->conversation->documents;
         }
 
-        $chunks = $chunksQuery->with('document')->get();
+        if ($documents->isEmpty()) {
+            return new ToolResult(
+                success: true,
+                output: 'No documents attached to search.',
+                error: null
+            );
+        }
+
+        // Try RAG pipeline first
+        $ragResult = $this->ragPipeline->execute($query, $documents, [
+            'top_k' => $maxResults,
+            'conversation_id' => $this->conversation->id,
+            'user_id' => $this->conversation->user_id,
+        ]);
+
+        if ($ragResult->success && $ragResult->hasContext()) {
+            return $this->formatRagResults($query, $ragResult);
+        }
+
+        // Fallback to keyword search when RAG is disabled or no embeddings
+        return $this->keywordSearch($query, $documents, $maxResults);
+    }
+
+    /**
+     * Format RAG pipeline results into a tool result.
+     */
+    protected function formatRagResults(string $query, \App\Services\RAG\RAGPipelineResult $ragResult): ToolResult
+    {
+        $output = "Search results for \"{$query}\" (strategy: {$ragResult->strategy()}):\n";
+        $output .= str_repeat('-', 60)."\n";
+
+        foreach ($ragResult->retrieval->chunks as $chunk) {
+            $docTitle = $chunk->document->title ?? 'Untitled';
+            $score = $ragResult->retrieval->scores[$chunk->id] ?? null;
+            $scoreStr = $score !== null ? sprintf(' [score: %.3f]', $score) : '';
+            $output .= "[Doc {$chunk->document_id}: {$docTitle}] Chunk {$chunk->chunk_index}{$scoreStr}\n";
+            $output .= $chunk->getPreview(300)."\n\n";
+        }
+
+        if (! empty($ragResult->citations)) {
+            $output .= "\nSources:\n";
+            foreach ($ragResult->citations as $citation) {
+                $output .= "- {$citation['citation']}\n";
+            }
+        }
+
+        return new ToolResult(
+            success: true,
+            output: trim($output),
+            error: null
+        );
+    }
+
+    /**
+     * Keyword-based fallback search.
+     *
+     * @param  \Illuminate\Support\Collection<int, Document>  $documents
+     */
+    protected function keywordSearch(string $query, \Illuminate\Support\Collection $documents, int $maxResults): ToolResult
+    {
+        $chunks = DocumentChunk::query()
+            ->whereIn('document_id', $documents->pluck('id'))
+            ->search($query)
+            ->ordered()
+            ->limit($maxResults)
+            ->with('document')
+            ->get();
 
         if ($chunks->isEmpty()) {
             return new ToolResult(
@@ -335,7 +388,7 @@ class DocumentToolHandler
             );
         }
 
-        $output = "Search results for \"{$query}\":\n";
+        $output = "Search results for \"{$query}\" (keyword search):\n";
         $output .= str_repeat('-', 60)."\n";
 
         foreach ($chunks as $chunk) {

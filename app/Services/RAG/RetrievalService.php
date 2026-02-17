@@ -82,8 +82,9 @@ class RetrievalService
         // Build base query
         $baseQuery = $this->buildBaseQuery($documents);
 
-        // Perform semantic search using pgvector
-        $results = $baseQuery
+        // Try pgvector search first
+        $pgvectorQuery = clone $baseQuery;
+        $results = $pgvectorQuery
             ->selectRaw(
                 '*, (1 - (embedding <=> ?::vector)) as similarity',
                 [$embeddingString]
@@ -96,9 +97,30 @@ class RetrievalService
             ->limit($topK)
             ->get();
 
-        $scores = $results->mapWithKeys(fn ($chunk) => [
-            $chunk->id => (float) $chunk->similarity,
-        ])->toArray();
+        $scores = [];
+
+        if ($results->isNotEmpty()) {
+            $scores = $results->mapWithKeys(fn ($chunk) => [
+                $chunk->id => (float) $chunk->similarity,
+            ])->toArray();
+        } else {
+            // Fallback to PHP-based cosine similarity using embedding_raw
+            $candidates = $baseQuery->whereNotNull('embedding_raw')->get();
+
+            foreach ($candidates as $chunk) {
+                $sim = $this->cosineSimilarity($queryEmbedding, $chunk->embedding_raw);
+                if ($sim > $threshold) {
+                    $scores[$chunk->id] = $sim;
+                }
+            }
+
+            arsort($scores);
+            $topIds = \array_slice(array_keys($scores), 0, $topK);
+            $scores = \array_slice($scores, 0, $topK, true);
+            $results = $candidates->whereIn('id', $topIds)
+                ->sortBy(fn ($c) => array_search($c->id, $topIds))
+                ->values();
+        }
 
         return new RetrievalResult(
             chunks: $results,
@@ -123,8 +145,8 @@ class RetrievalService
     ): RetrievalResult {
         $topK = $options['top_k'] ?? config('ai.rag.top_k', 10);
 
-        // Build base query
-        $baseQuery = $this->buildBaseQuery($documents);
+        // Build base query (sparse search doesn't need embeddings)
+        $baseQuery = $this->buildBaseQuery($documents, requireEmbeddings: false);
 
         // Use PostgreSQL full-text search
         $results = $baseQuery
@@ -211,12 +233,16 @@ class RetrievalService
     /**
      * Build base query with document filtering.
      *
+     * @param  bool  $requireEmbeddings  Whether to filter for chunks with embeddings (false for sparse search)
      * @return \Illuminate\Database\Eloquent\Builder
      */
-    protected function buildBaseQuery(Collection|array|Document $documents)
+    protected function buildBaseQuery(Collection|array|Document $documents, bool $requireEmbeddings = true)
     {
-        $query = DocumentChunk::with('document')
-            ->whereNotNull('embedding_generated_at');
+        $query = DocumentChunk::with('document');
+
+        if ($requireEmbeddings) {
+            $query->whereNotNull('embedding_generated_at');
+        }
 
         if ($documents instanceof Document) {
             $query->where('document_id', $documents->id);
@@ -228,6 +254,33 @@ class RetrievalService
         }
 
         return $query;
+    }
+
+    /**
+     * Compute cosine similarity between two vectors.
+     *
+     * @param  array<float>  $a
+     * @param  array<float>  $b
+     */
+    protected function cosineSimilarity(array $a, array $b): float
+    {
+        if (\count($a) !== \count($b) || empty($a)) {
+            return 0.0;
+        }
+
+        $dotProduct = 0.0;
+        $normA = 0.0;
+        $normB = 0.0;
+
+        for ($i = 0, $len = \count($a); $i < $len; $i++) {
+            $dotProduct += $a[$i] * $b[$i];
+            $normA += $a[$i] * $a[$i];
+            $normB += $b[$i] * $b[$i];
+        }
+
+        $denominator = sqrt($normA) * sqrt($normB);
+
+        return $denominator > 0 ? $dotProduct / $denominator : 0.0;
     }
 
     /**

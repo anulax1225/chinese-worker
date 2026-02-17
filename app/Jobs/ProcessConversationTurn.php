@@ -10,6 +10,7 @@ use App\Services\AIBackendManager;
 use App\Services\ClientToolRegistry;
 use App\Services\ConversationEventBroadcaster;
 use App\Services\Prompts\PromptAssembler;
+use App\Services\RAG\RAGPipeline;
 use App\Services\Tools\DocumentToolHandler;
 use App\Services\Tools\TodoToolHandler;
 use App\Services\Tools\ToolArgumentValidator;
@@ -402,7 +403,10 @@ class ProcessConversationTurn implements ShouldQueue
             }
 
             if (str_starts_with($toolCall->name, 'document_')) {
-                $handler = new DocumentToolHandler($this->conversation);
+                $handler = new DocumentToolHandler(
+                    $this->conversation,
+                    app(RAGPipeline::class),
+                );
 
                 return $handler->execute($toolCall->name, $toolCall->arguments);
             }
