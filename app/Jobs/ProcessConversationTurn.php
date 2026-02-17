@@ -9,6 +9,7 @@ use App\Models\Conversation;
 use App\Services\AIBackendManager;
 use App\Services\ClientToolRegistry;
 use App\Services\ConversationEventBroadcaster;
+use App\Services\ConversationService;
 use App\Services\Prompts\PromptAssembler;
 use App\Services\RAG\RAGPipeline;
 use App\Services\Tools\DocumentToolHandler;
@@ -80,7 +81,7 @@ class ProcessConversationTurn implements ShouldQueue
         ];
     }
 
-    public function handle(AIBackendManager $aiBackendManager, ToolService $toolService): void
+    public function handle(AIBackendManager $aiBackendManager, ToolService $toolService, ConversationService $conversationService): void
     {
         // Check if cancelled before starting
         $this->conversation->refresh();
@@ -138,9 +139,18 @@ class ProcessConversationTurn implements ShouldQueue
             }
 
             // Prepare context with turn info and assembled prompt
+            $toolSchemas = $this->getAllToolSchemas();
+            $toolDefinitionTokens = (int) ceil(mb_strlen((string) json_encode($toolSchemas)) / 4);
+
+            $filteredMessages = $conversationService->getMessagesForAI(
+                conversation: $this->conversation,
+                maxOutputTokens: 4096,
+                toolDefinitionTokens: $toolDefinitionTokens,
+            );
+
             $context = [
-                'messages' => $this->conversation->getMessages(),
-                'tools' => $this->getAllToolSchemas(),
+                'messages' => $filteredMessages,
+                'tools' => $toolSchemas,
                 'request_turn' => $this->conversation->getRequestTurnCount(),
                 'max_turns' => $this->conversation->getMaxTurns(),
                 'system_prompt' => $systemPrompt,
