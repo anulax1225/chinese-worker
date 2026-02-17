@@ -201,7 +201,7 @@ return [
     'defaults' => [
         // AI conversation processing - long-running jobs
         'ai-workers' => [
-            'connection' => 'redis',
+            'connection' => 'database',
             'queue' => ['high', 'default'],
             'balance' => 'auto',
             'autoScalingStrategy' => 'time',
@@ -216,7 +216,7 @@ return [
 
         // Low priority background tasks
         'low-priority' => [
-            'connection' => 'redis',
+            'connection' => 'database',
             'queue' => ['low'],
             'balance' => 'simple',
             'maxProcesses' => 1,
