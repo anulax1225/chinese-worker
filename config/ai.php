@@ -98,6 +98,25 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Conversation Memory Configuration
+    |--------------------------------------------------------------------------
+    |
+    | These options control the conversation memory system which enables
+    | semantic search over previous messages in a conversation. Messages
+    | are embedded and can be recalled using the conversation_recall tool.
+    |
+    */
+
+    'conversation_memory' => [
+        'enabled' => env('CONVERSATION_MEMORY_ENABLED', true),
+        'max_recall_tokens' => 2000,
+        'recall_top_k' => 5,
+        'recall_threshold' => 0.4,
+        'embedding_model' => null, // null = use rag.embedding_model
+    ],
+
     'rag' => [
         'enabled' => env('RAG_ENABLED', true),
 
