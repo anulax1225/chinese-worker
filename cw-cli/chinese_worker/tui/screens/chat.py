@@ -1,17 +1,15 @@
 """Main chat screen."""
 
 import asyncio
-import platform
 from typing import Optional, Dict, Any, List
 
 from textual.app import ComposeResult
-from textual.containers import Container, Vertical, VerticalScroll
+from textual.containers import Container, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Input, Static
 from textual.binding import Binding
-from rich.markdown import Markdown
 
-from ..widgets import StatusBar, MessageWidget, ToolApprovalModal
+from ..widgets import StatusBar, MessageWidget, ToolApprovalModal, ThinkingBlock
 from ..handlers import SSEHandler, CommandHandler, ToolHandler
 
 
@@ -111,8 +109,9 @@ class ChatScreen(Screen):
                 message_list.mount(widget)
             elif role == "assistant":
                 if thinking:
-                    widget = MessageWidget(thinking, role="thinking")
-                    message_list.mount(widget)
+                    thinking_widget = ThinkingBlock(thinking)
+                    thinking_widget.finalize()
+                    message_list.mount(thinking_widget)
                 if content:
                     widget = MessageWidget(content, role="assistant")
                     message_list.mount(widget)
@@ -204,6 +203,7 @@ class ChatScreen(Screen):
 
         accumulated_content = ""
         accumulated_thinking = ""
+        thinking_widget = None
 
         try:
             async for event_type, data in self.current_sse_handler.stream():
@@ -213,8 +213,18 @@ class ChatScreen(Screen):
 
                     if chunk_type == "thinking":
                         accumulated_thinking += chunk
-                        # Could show thinking in a separate widget
+                        # Create or update thinking widget
+                        if not thinking_widget:
+                            thinking_widget = ThinkingBlock(accumulated_thinking)
+                            # Insert thinking widget before response widget
+                            message_list.mount(thinking_widget, before=response_widget)
+                        else:
+                            thinking_widget.update_content(accumulated_thinking)
+                        message_list.scroll_end()
                     else:
+                        # Finalize thinking block when content starts
+                        if thinking_widget and accumulated_content == "":
+                            thinking_widget.finalize()
                         accumulated_content += chunk
                         response_widget.update_content(accumulated_content)
                         message_list.scroll_end()
@@ -234,16 +244,22 @@ class ChatScreen(Screen):
                             status.set_status("Tool rejected")
 
                 elif event_type == "completed":
+                    if thinking_widget:
+                        thinking_widget.finalize()
                     response_widget.set_streaming(False)
                     break
 
                 elif event_type == "failed":
+                    if thinking_widget:
+                        thinking_widget.finalize()
                     error = data.get("error", "Unknown error")
                     response_widget.update_content(f"[red]Error: {error}[/red]")
                     response_widget.set_streaming(False)
                     break
 
                 elif event_type == "cancelled":
+                    if thinking_widget:
+                        thinking_widget.finalize()
                     response_widget.set_streaming(False)
                     break
 

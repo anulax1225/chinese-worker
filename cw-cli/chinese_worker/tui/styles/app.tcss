@@ -213,3 +213,29 @@ Screen {
     padding-top: 1;
     border-top: solid $primary-darken-2;
 }
+
+/* Thinking Block */
+.thinking-block {
+    margin: 0 0 1 2;
+    border-left: solid #666666;
+}
+
+.thinking-block > CollapsibleTitle {
+    color: #888888;
+    text-style: italic;
+}
+
+.thinking-text {
+    color: #888888;
+    padding: 0 1;
+}
+
+/* Markdown Widget inside Messages */
+.message-assistant Markdown {
+    margin: 0;
+    padding: 0;
+}
+
+#message-prefix {
+    margin-bottom: 1;
+}

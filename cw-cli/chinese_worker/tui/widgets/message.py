@@ -1,8 +1,7 @@
 """Message widget for displaying chat messages."""
 
 from textual.app import ComposeResult
-from textual.widgets import Static
-from rich.markdown import Markdown
+from textual.widgets import Static, Markdown
 
 
 class MessageWidget(Static):
@@ -25,18 +24,18 @@ class MessageWidget(Static):
 
     def compose(self) -> ComposeResult:
         """Create message content."""
-        yield Static(self._render_content(), id="message-content")
+        if self._role == "assistant":
+            # Use Textual's Markdown widget for proper rendering
+            yield Static("[bold green]Assistant:[/bold green]", id="message-prefix")
+            initial = "" if self._streaming and not self._content else self._content
+            yield Markdown(initial, id="message-content")
+        else:
+            yield Static(self._render_content(), id="message-content")
 
     def _render_content(self) -> str:
-        """Render the message content."""
+        """Render the message content for non-assistant messages."""
         if self._role == "user":
             return f"[bold cyan]You:[/bold cyan] {self._content}"
-        elif self._role == "assistant":
-            if self._streaming and not self._content:
-                return "[dim]...[/dim]"
-            # Try markdown rendering for assistant messages
-            prefix = "[bold green]Assistant:[/bold green]\n"
-            return prefix + self._content
         elif self._role == "thinking":
             return f"[dim italic]💭 {self._content}[/dim italic]"
         elif self._role == "system":
@@ -51,8 +50,15 @@ class MessageWidget(Static):
     def update_content(self, content: str) -> None:
         """Update the message content."""
         self._content = content
-        msg_content = self.query_one("#message-content", Static)
-        msg_content.update(self._render_content())
+
+        if self._role == "assistant":
+            # Update Markdown widget directly
+            md_widget = self.query_one("#message-content", Markdown)
+            md_widget.update(content)
+        else:
+            # Update Static widget
+            msg_content = self.query_one("#message-content", Static)
+            msg_content.update(self._render_content())
 
     def set_streaming(self, streaming: bool) -> None:
         """Set streaming state."""
