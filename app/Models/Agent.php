@@ -33,6 +33,7 @@ class Agent extends Model
         'model_config',
         'metadata',
         'context_strategy',
+        'context_strategies',
         'context_options',
         'context_threshold',
     ];
@@ -49,9 +50,34 @@ class Agent extends Model
             'config' => 'array',
             'model_config' => 'array',
             'metadata' => 'array',
+            'context_strategies' => 'array',
             'context_options' => 'array',
             'context_threshold' => 'float',
         ];
+    }
+
+    /**
+     * Get the effective context strategies to use.
+     *
+     * Returns context_strategies if set, otherwise wraps context_strategy in an array.
+     * Falls back to default strategy if neither is set.
+     *
+     * @return array<string>
+     */
+    public function getEffectiveContextStrategies(): array
+    {
+        // Prefer context_strategies array if set
+        if (! empty($this->context_strategies)) {
+            return $this->context_strategies;
+        }
+
+        // Fall back to single context_strategy wrapped in array
+        if (! empty($this->context_strategy)) {
+            return [$this->context_strategy];
+        }
+
+        // Default strategy
+        return [config('ai.context_filtering.default_strategy', 'token_budget')];
     }
 
     /**
@@ -67,10 +93,20 @@ class Agent extends Model
                 }
             }
 
-            // Validate strategy options match strategy
+            $manager = app(ContextFilterManager::class);
+
+            // Validate context_strategies array if set
+            if (! empty($agent->context_strategies)) {
+                foreach ($agent->context_strategies as $strategyName) {
+                    if (! $manager->hasStrategy($strategyName)) {
+                        throw new InvalidArgumentException("Unknown context strategy: {$strategyName}");
+                    }
+                }
+            }
+
+            // Validate strategy options match strategy (backward compat with single strategy)
             if ($agent->context_strategy !== null && $agent->context_options !== null) {
                 try {
-                    $manager = app(ContextFilterManager::class);
                     $strategy = $manager->resolve($agent->context_strategy);
                     $strategy->validateOptions($agent->context_options);
                 } catch (InvalidOptionsException $e) {

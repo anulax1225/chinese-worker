@@ -52,4 +52,24 @@ readonly class FilterContext
             conversation: $conversation,
         );
     }
+
+    /**
+     * Create a new context with updated messages.
+     *
+     * Used in pipeline filtering to pass filtered messages to the next strategy.
+     *
+     * @param  array<int, ChatMessage>  $messages
+     */
+    public function withMessages(array $messages): self
+    {
+        return new self(
+            messages: $messages,
+            contextLimit: $this->contextLimit,
+            maxOutputTokens: $this->maxOutputTokens,
+            toolDefinitionTokens: $this->toolDefinitionTokens,
+            options: $this->options,
+            agent: $this->agent,
+            conversation: $this->conversation,
+        );
+    }
 }
