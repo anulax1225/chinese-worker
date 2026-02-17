@@ -99,7 +99,7 @@ return [
     */
 
     'rag' => [
-        'enabled' => env('RAG_ENABLED', false),
+        'enabled' => env('RAG_ENABLED', true),
 
         // Embedding configuration
         'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:0.6b'),

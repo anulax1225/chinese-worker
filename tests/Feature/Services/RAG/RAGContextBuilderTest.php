@@ -12,7 +12,7 @@ describe('RAGContextBuilder', function () {
     });
 
     test('build creates formatted context string', function () {
-        $document = Document::factory()->create(['filename' => 'test.pdf']);
+        $document = Document::factory()->create(['title' => 'test.pdf']);
         $chunks = DocumentChunk::factory()
             ->count(2)
             ->for($document)
@@ -38,7 +38,7 @@ describe('RAGContextBuilder', function () {
     });
 
     test('build includes citations', function () {
-        $document = Document::factory()->create(['filename' => 'document.pdf']);
+        $document = Document::factory()->create(['title' => 'document.pdf']);
         $chunk = DocumentChunk::factory()
             ->for($document)
             ->create(['content' => 'Content', 'token_count' => 50]);
@@ -109,7 +109,7 @@ describe('RAGContextBuilder', function () {
     });
 
     test('extractCitations returns citation array', function () {
-        $document = Document::factory()->create(['filename' => 'source.pdf']);
+        $document = Document::factory()->create(['title' => 'source.pdf']);
         $chunks = DocumentChunk::factory()
             ->count(2)
             ->for($document)

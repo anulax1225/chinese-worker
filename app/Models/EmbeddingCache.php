@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class EmbeddingCache extends Model
 {
+    use HasFactory;
+
+    protected $table = 'embedding_cache';
+
     /**
      * The attributes that are mass assignable.
      *

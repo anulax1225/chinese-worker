@@ -21,7 +21,7 @@ class RAGServiceProvider extends ServiceProvider
             // Get the backend configured for embeddings
             $backendName = config('ai.rag.embedding_backend', 'openai');
             $backendManager = $app->make(AIBackendManager::class);
-            $backend = $backendManager->backend($backendName);
+            $backend = $backendManager->driver($backendName);
 
             return new EmbeddingService($backend);
         });

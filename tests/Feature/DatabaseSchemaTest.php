@@ -22,11 +22,18 @@ describe('Database Schema', function () {
 
     test('agents table has foreign key to users', function () {
         $foreignKeys = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'agents'
-            AND COLUMN_NAME = 'user_id'
-            AND REFERENCED_TABLE_NAME = 'users'
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.table_name = 'agents'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'user_id'
+            AND ccu.table_name = 'users'
         ");
 
         expect($foreignKeys)->not()->toBeEmpty();
@@ -57,19 +64,33 @@ describe('Database Schema', function () {
 
     test('conversations table has foreign keys', function () {
         $agentForeignKey = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'conversations'
-            AND COLUMN_NAME = 'agent_id'
-            AND REFERENCED_TABLE_NAME = 'agents'
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.table_name = 'conversations'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'agent_id'
+            AND ccu.table_name = 'agents'
         ");
 
         $userForeignKey = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'conversations'
-            AND COLUMN_NAME = 'user_id'
-            AND REFERENCED_TABLE_NAME = 'users'
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.table_name = 'conversations'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'user_id'
+            AND ccu.table_name = 'users'
         ");
 
         expect($agentForeignKey)->not()->toBeEmpty();
@@ -92,11 +113,18 @@ describe('Database Schema', function () {
 
     test('tools table has foreign key to users', function () {
         $foreignKeys = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'tools'
-            AND COLUMN_NAME = 'user_id'
-            AND REFERENCED_TABLE_NAME = 'users'
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.table_name = 'tools'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'user_id'
+            AND ccu.table_name = 'users'
         ");
 
         expect($foreignKeys)->not()->toBeEmpty();
@@ -113,19 +141,33 @@ describe('Database Schema', function () {
 
     test('agent_tools table has foreign keys', function () {
         $agentForeignKey = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'agent_tools'
-            AND COLUMN_NAME = 'agent_id'
-            AND REFERENCED_TABLE_NAME = 'agents'
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.table_name = 'agent_tools'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'agent_id'
+            AND ccu.table_name = 'agents'
         ");
 
         $toolForeignKey = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'agent_tools'
-            AND COLUMN_NAME = 'tool_id'
-            AND REFERENCED_TABLE_NAME = 'tools'
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.table_name = 'agent_tools'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'tool_id'
+            AND ccu.table_name = 'tools'
         ");
 
         expect($agentForeignKey)->not()->toBeEmpty();
@@ -149,11 +191,18 @@ describe('Database Schema', function () {
 
     test('files table has foreign key to users', function () {
         $foreignKeys = DB::select("
-            SELECT CONSTRAINT_NAME
-            FROM information_schema.KEY_COLUMN_USAGE
-            WHERE TABLE_NAME = 'files'
-            AND COLUMN_NAME = 'user_id'
-            AND REFERENCED_TABLE_NAME = 'users'
+            SELECT tc.constraint_name
+            FROM information_schema.table_constraints tc
+            JOIN information_schema.key_column_usage kcu
+                ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
+            JOIN information_schema.constraint_column_usage ccu
+                ON tc.constraint_name = ccu.constraint_name
+                AND tc.table_schema = ccu.table_schema
+            WHERE tc.table_name = 'files'
+            AND tc.constraint_type = 'FOREIGN KEY'
+            AND kcu.column_name = 'user_id'
+            AND ccu.table_name = 'users'
         ");
 
         expect($foreignKeys)->not()->toBeEmpty();
@@ -264,10 +313,11 @@ describe('Vector Storage Schema', function () {
 
     test('retrieval_logs has foreign key to conversations', function () {
         $constraints = DB::select("
-            SELECT constraint_name
+            SELECT tc.constraint_name
             FROM information_schema.table_constraints tc
             JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
             WHERE tc.table_name = 'retrieval_logs'
             AND tc.constraint_type = 'FOREIGN KEY'
             AND kcu.column_name = 'conversation_id'
@@ -278,10 +328,11 @@ describe('Vector Storage Schema', function () {
 
     test('retrieval_logs has foreign key to users', function () {
         $constraints = DB::select("
-            SELECT constraint_name
+            SELECT tc.constraint_name
             FROM information_schema.table_constraints tc
             JOIN information_schema.key_column_usage kcu
                 ON tc.constraint_name = kcu.constraint_name
+                AND tc.table_schema = kcu.table_schema
             WHERE tc.table_name = 'retrieval_logs'
             AND tc.constraint_type = 'FOREIGN KEY'
             AND kcu.column_name = 'user_id'

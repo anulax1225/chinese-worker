@@ -126,6 +126,16 @@ describe('AIBackendManager', function () {
             {
                 return 4096;
             }
+
+            public function generateEmbeddings(array $texts, ?string $model = null): array
+            {
+                return array_map(fn () => [0.1, 0.2, 0.3, 0.4], $texts);
+            }
+
+            public function getEmbeddingDimensions(?string $model = null): int
+            {
+                return 4;
+            }
         };
 
         $manager = app(AIBackendManager::class);

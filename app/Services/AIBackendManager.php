@@ -6,6 +6,7 @@ use App\Contracts\AIBackendInterface;
 use App\DTOs\NormalizedModelConfig;
 use App\Models\Agent;
 use App\Services\AI\AnthropicBackend;
+use App\Services\AI\FakeBackend;
 use App\Services\AI\HuggingFaceBackend;
 use App\Services\AI\ModelConfigNormalizer;
 use App\Services\AI\OllamaBackend;
@@ -141,6 +142,14 @@ class AIBackendManager
     protected function createVllmDriver(array $config): AIBackendInterface
     {
         return new VLLMBackend($config);
+    }
+
+    /**
+     * Create a fake driver instance for testing.
+     */
+    protected function createFakeDriver(array $config): AIBackendInterface
+    {
+        return new FakeBackend($config);
     }
 
     /**

@@ -18,6 +18,17 @@ describe('RAGPipeline', function () {
             'top_k' => 10,
             'similarity_threshold' => 0.7,
             'max_context_tokens' => 4000,
+            'embedding_model' => 'test-model',
+            'embedding_backend' => 'fake',
+            'embedding_dimensions' => 4,
+            'cache_embeddings' => false,
+        ]);
+
+        Config::set('ai.default', 'fake');
+        Config::set('ai.backends.fake', [
+            'driver' => 'fake',
+            'model' => 'test-model',
+            'embedding_dimensions' => 4,
         ]);
     });
 
@@ -78,7 +89,7 @@ describe('RAGPipeline', function () {
         $document = Document::factory()->create();
 
         // Attach document to conversation
-        $conversation->documents()->attach($document->id);
+        $conversation->documents()->attach($document->id, ['attached_at' => now()]);
 
         $chunks = DocumentChunk::factory()
             ->for($document)
@@ -156,7 +167,7 @@ describe('RAGPipeline', function () {
     });
 
     test('pipeline includes citations in result', function () {
-        $document = Document::factory()->create(['filename' => 'source.pdf']);
+        $document = Document::factory()->create(['title' => 'source.pdf']);
         $chunk = DocumentChunk::factory()
             ->for($document)
             ->withEmbedding()

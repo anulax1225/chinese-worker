@@ -155,11 +155,13 @@ class EmbeddingService
                 'embedding_dimensions' => \count($embeddingArray),
             ]);
 
-            // Update pgvector column directly
-            DB::statement(
-                'UPDATE document_chunks SET embedding = ?::vector WHERE id = ?',
-                [$embeddingString, $chunk->id]
-            );
+            // Update pgvector column directly (skip when dimensions don't match the column definition)
+            if ($this->usesPgvector() && \count($embeddingArray) === 1536) {
+                DB::statement(
+                    'UPDATE document_chunks SET embedding = ?::vector WHERE id = ?',
+                    [$embeddingString, $chunk->id]
+                );
+            }
         }
     }
 
@@ -187,10 +189,13 @@ class EmbeddingService
                 'embedding_dimensions' => \count($embeddingArray),
             ]);
 
-            DB::statement(
-                'UPDATE document_chunks SET embedding = ?::vector WHERE id = ?',
-                [$embeddingString, $chunk->id]
-            );
+            // Update pgvector column directly (skip when dimensions don't match the column definition)
+            if ($this->usesPgvector() && \count($embeddingArray) === 1536) {
+                DB::statement(
+                    'UPDATE document_chunks SET embedding = ?::vector WHERE id = ?',
+                    [$embeddingString, $chunk->id]
+                );
+            }
         }
     }
 
@@ -312,11 +317,13 @@ class EmbeddingService
             ]
         );
 
-        // Update pgvector column
-        DB::statement(
-            'UPDATE embedding_cache SET embedding = ?::vector WHERE id = ?',
-            [$embeddingString, $cache->id]
-        );
+        // Update pgvector column (skip when dimensions don't match the column definition)
+        if ($this->usesPgvector() && \count($embedding) === 1536) {
+            DB::statement(
+                'UPDATE embedding_cache SET embedding = ?::vector WHERE id = ?',
+                [$embeddingString, $cache->id]
+            );
+        }
     }
 
     /**

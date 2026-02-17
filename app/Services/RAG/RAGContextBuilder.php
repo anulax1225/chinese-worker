@@ -134,7 +134,7 @@ class RAGContextBuilder
      */
     protected function formatCitation($chunk, int $index): string
     {
-        $docName = $chunk->document?->filename ?? 'Unknown Document';
+        $docName = $chunk->document?->title ?? 'Unknown Document';
 
         return "**[{$index}] {$docName}**";
     }
@@ -147,7 +147,7 @@ class RAGContextBuilder
      */
     protected function formatSourceReference($chunk, int $index): string
     {
-        $docName = $chunk->document?->filename ?? 'Unknown Document';
+        $docName = $chunk->document?->title ?? 'Unknown Document';
         $sectionInfo = $chunk->section_title ? " → {$chunk->section_title}" : '';
         $chunkInfo = "(Chunk {$chunk->chunk_index})";
 
