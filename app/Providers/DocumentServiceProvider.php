@@ -18,6 +18,7 @@ use App\Services\Document\StructureProcessors\HeadingDetector;
 use App\Services\Document\StructureProcessors\ListNormalizer;
 use App\Services\Document\StructureProcessors\ParagraphNormalizer;
 use App\Services\Document\TextExtractorRegistry;
+use App\Services\FileService;
 use Illuminate\Support\ServiceProvider;
 
 class DocumentServiceProvider extends ServiceProvider
@@ -67,7 +68,8 @@ class DocumentServiceProvider extends ServiceProvider
 
         $this->app->singleton(DocumentIngestionService::class, function ($app) {
             return new DocumentIngestionService(
-                $app->make(TextExtractorRegistry::class)
+                $app->make(TextExtractorRegistry::class),
+                $app->make(FileService::class)
             );
         });
     }

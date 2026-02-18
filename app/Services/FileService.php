@@ -49,6 +49,23 @@ class FileService
     }
 
     /**
+     * Store a file from a local path and create a record.
+     */
+    public function storeFromPath(string $path, string $type, int $userId, string $mimeType): File
+    {
+        $storagePath = "files/{$type}/".uniqid('doc_', true);
+        Storage::put($storagePath, file_get_contents($path));
+
+        return File::query()->create([
+            'user_id' => $userId,
+            'path' => $storagePath,
+            'type' => $type,
+            'size' => filesize($path),
+            'mime_type' => $mimeType,
+        ]);
+    }
+
+    /**
      * Cleanup old files of a specific type.
      */
     public function cleanup(string $type, Carbon $before): int

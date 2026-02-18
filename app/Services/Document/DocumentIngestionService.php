@@ -8,12 +8,14 @@ use App\Jobs\ProcessDocumentJob;
 use App\Models\Document;
 use App\Models\File;
 use App\Models\User;
+use App\Services\FileService;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentIngestionService
 {
     public function __construct(
-        protected TextExtractorRegistry $extractorRegistry
+        protected TextExtractorRegistry $extractorRegistry,
+        protected FileService $fileService,
     ) {}
 
     /**
@@ -45,22 +47,23 @@ class DocumentIngestionService
      */
     public function ingestFromUrl(string $url, User $user, ?string $title = null): Document
     {
-        // Download the file first
         $tempPath = $this->downloadFromUrl($url);
         $mimeType = $this->detectMimeType($tempPath);
-        $fileSize = filesize($tempPath);
+
+        $file = $this->fileService->storeFromPath($tempPath, 'input', $user->id, $mimeType);
+        @unlink($tempPath);
 
         $document = Document::create([
             'user_id' => $user->id,
+            'file_id' => $file->id,
             'title' => $title ?? $this->generateTitleFromUrl($url),
             'source_type' => DocumentSourceType::Url,
             'source_path' => $url,
             'mime_type' => $mimeType,
-            'file_size' => $fileSize,
+            'file_size' => $file->size,
             'status' => DocumentStatus::Pending,
             'metadata' => [
                 'original_url' => $url,
-                'temp_path' => $tempPath,
             ],
         ]);
 
@@ -124,9 +127,14 @@ class DocumentIngestionService
         $document->stages()->delete();
         $document->chunks()->delete();
 
-        // Delete temp files if any
+        // Delete temp files for legacy documents without a file record
         if (isset($document->metadata['temp_path'])) {
             @unlink($document->metadata['temp_path']);
+        }
+
+        // Delete associated File record (covers uploads and url documents)
+        if ($document->file_id && $document->file) {
+            $this->fileService->delete($document->file);
         }
 
         $document->delete();
@@ -245,6 +253,13 @@ class DocumentIngestionService
         }
 
         if ($document->source_type === DocumentSourceType::Url) {
+            if ($document->file_id) {
+                $disk = config('document.storage.disk', 'local');
+
+                return Storage::disk($disk)->path($document->file->path);
+            }
+
+            // Fallback for legacy documents without a file record
             return $document->metadata['temp_path'] ?? $document->source_path;
         }
 
