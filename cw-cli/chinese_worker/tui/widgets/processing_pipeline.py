@@ -36,49 +36,29 @@ class PipelineStage(Static):
     def __init__(self, stage: dict[str, Any], **kwargs) -> None:
         super().__init__(**kwargs)
         self.stage = stage
-        status = stage.get("status", "pending")
-
-        # Add status class
-        if status == "completed":
-            self.add_class("completed")
-        elif status == "failed":
-            self.add_class("failed")
-        elif status == "processing" or status == "active":
-            self.add_class("active")
-        else:
-            self.add_class("pending")
+        # Stages only exist in the API when they are completed
+        self.add_class("completed")
 
     def render(self) -> str:
         stage = self.stage
-        status = stage.get("status", "pending")
-        name = stage.get("name", "Unknown")
-        duration = stage.get("duration")
-        details = stage.get("details", "")
-        error = stage.get("error", "")
+        # API field is "stage" (e.g. "extracted", "cleaned", "normalized", "chunked")
+        name = stage.get("stage", "unknown").replace("_", " ").title()
+        char_count = stage.get("character_count")
+        word_count = stage.get("word_count")
 
-        # Icon based on status
-        if status == "completed":
-            icon = "✓"
-        elif status == "failed":
-            icon = "✗"
-        elif status == "processing" or status == "active":
-            icon = "⏳"
-        else:
-            icon = "○"
+        icon = "✓"
 
-        # Format duration
-        duration_text = ""
-        if duration is not None:
-            duration_text = f"{duration:.1f}s" if isinstance(duration, float) else f"{duration}s"
+        # Build details from available metadata
+        details_parts = []
+        if char_count is not None:
+            details_parts.append(f"{char_count:,} chars")
+        if word_count is not None:
+            details_parts.append(f"{word_count:,} words")
+        details = "  ".join(details_parts)
 
-        # Build the stage line
         parts = [f"{icon} {name}"]
-        if duration_text:
-            parts.append(duration_text)
         if details:
             parts.append(details)
-        if error:
-            parts.append(f"[red]{error}[/red]")
 
         return "  ".join(parts)
 
@@ -106,24 +86,49 @@ class ProcessingPipeline(Vertical):
     }
     """
 
-    def __init__(self, stages: list[dict[str, Any]] | None = None, **kwargs) -> None:
+    # Map from document status to human-readable stage name
+    ACTIVE_STAGE_NAMES: dict[str, str] = {
+        "extracting": "Extracting",
+        "cleaning": "Cleaning",
+        "normalizing": "Normalizing",
+        "chunking": "Chunking",
+    }
+
+    def __init__(
+        self,
+        stages: list[dict[str, Any]] | None = None,
+        doc_status: str = "",
+        **kwargs,
+    ) -> None:
         """Initialize the pipeline widget.
 
         Args:
             stages: List of stage data from get_document_stages() API
+            doc_status: Current document status (for showing active stage)
         """
         super().__init__(**kwargs)
         self.stages = stages or []
+        self.doc_status = doc_status
 
     def compose(self) -> ComposeResult:
         yield Static("── Processing Pipeline ──", classes="pipeline-header")
 
-        if not self.stages:
+        has_content = bool(self.stages) or self.doc_status in self.ACTIVE_STAGE_NAMES
+
+        if not has_content:
             yield Static("  [#6c7086]No processing data available[/#6c7086]")
             return
 
         for stage in self.stages:
             yield PipelineStage(stage)
+
+        # Show current active stage if document is still processing
+        if self.doc_status in self.ACTIVE_STAGE_NAMES:
+            active_name = self.ACTIVE_STAGE_NAMES[self.doc_status]
+            yield Static(
+                f"  [yellow]⏳[/yellow] [yellow]{active_name}[/yellow] [#7f849c]in progress...[/#7f849c]",
+                classes="pipeline-header",
+            )
 
     def update_stages(self, stages: list[dict[str, Any]]) -> None:
         """Update stages data and refresh display.

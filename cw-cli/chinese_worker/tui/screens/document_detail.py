@@ -88,9 +88,8 @@ class DocumentDetailScreen(Screen):
                 preview_response = await loop.run_in_executor(
                     None, self.app.client.get_document_preview, self.document_id
                 )
-                preview_data = preview_response.get("data", preview_response)
-                self._preview = preview_data.get("processed", "") or preview_data.get(
-                    "original", ""
+                self._preview = preview_response.get("cleaned_preview") or preview_response.get(
+                    "original_preview", ""
                 )
             except Exception:
                 self._preview = "[Preview not available]"
@@ -182,7 +181,8 @@ class DocumentDetailScreen(Screen):
         container.remove_children()
 
         if self._stages:
-            pipeline = ProcessingPipeline(self._stages)
+            doc_status = self._document.get("status", "") if self._document else ""
+            pipeline = ProcessingPipeline(self._stages, doc_status=doc_status)
             container.mount(pipeline)
         else:
             container.mount(

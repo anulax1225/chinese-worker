@@ -882,7 +882,7 @@ class APIClient:
             timeout=self.timeout,
         )
         response.raise_for_status()
-        return response.json()["data"]
+        return response.json()
 
     def get_document_chunks(
         self,
