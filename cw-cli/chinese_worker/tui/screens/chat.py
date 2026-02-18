@@ -196,12 +196,10 @@ class ChatScreen(Screen):
     async def _handle_response(self, initial_response: Dict[str, Any]) -> None:
         status = self.query_one("#status-bar", StatusBar)
         message_list = self.query_one("#message-list", VerticalScroll)
-
-        handler = StreamHandler(self.app.client, self.conversation_id)
-        self._current_stream = handler
         message_list.anchor()
 
-        # Phase tracking — each type change spawns a new widget
+        # Phase tracking — persists across SSE reconnections so the UI
+        # accumulates widgets from the entire multi-tool conversation.
         current_phase: Optional[str] = None  # "thinking" | "content"
         thinking_widget: Optional[ThinkingBlock] = None
         thinking_text = ""
@@ -245,106 +243,134 @@ class ChatScreen(Screen):
             thinking_widget = ThinkingBlock("")
             message_list.mount(thinking_widget)
 
-        try:
-            async for event_type, data in handler.stream():
+        # ── SSE reconnection loop ─────────────────────────────
+        # The server closes the SSE connection after tool_request events.
+        # We must close the handler, process the tool, then reconnect
+        # with a fresh StreamHandler — same pattern as cli.py:634-757.
+        done = False
+        while not done:
+            handler = StreamHandler(self.app.client, self.conversation_id)
+            self._current_stream = handler
 
-                # ── Text chunks (thinking or content) ───────────
-                if event_type == "text_chunk":
-                    chunk = data.get("chunk", "")
-                    chunk_type = data.get("type", "content")
+            try:
+                async for event_type, data in handler.stream():
 
-                    if chunk_type == "thinking":
-                        if current_phase != "thinking":
-                            await _finish_content_phase()
-                            _start_thinking_phase()
-                        thinking_text += chunk
-                        if thinking_widget:
-                            thinking_widget.update_content(thinking_text)
+                    # ── Text chunks (thinking or content) ───────────
+                    if event_type == "text_chunk":
+                        chunk = data.get("chunk", "")
+                        chunk_type = data.get("type", "content")
 
-                    else:  # content
-                        if current_phase != "content":
-                            await _start_content_phase()
-                        if md_stream:
-                            await md_stream.write(chunk)
+                        if chunk_type == "thinking":
+                            if current_phase != "thinking":
+                                await _finish_content_phase()
+                                _start_thinking_phase()
+                            thinking_text += chunk
+                            if thinking_widget:
+                                thinking_widget.update_content(thinking_text)
 
-                # ── Server-side tool executing ──────────────────
-                elif event_type == "tool_executing":
-                    await _finish_content_phase()
-                    _finish_thinking_phase()
-                    current_phase = None
-                    tool = data.get("tool", {})
-                    t_name = tool.get("name", "unknown")
-                    t_call_id = tool.get("call_id", "")
-                    status.set_status(f"Tool: {t_name}")
-                    tw = ToolStatusWidget(t_name, call_id=t_call_id)
-                    if t_call_id:
-                        tool_widgets[t_call_id] = tw
-                    message_list.mount(tw)
+                        else:  # content
+                            if current_phase != "content":
+                                await _start_content_phase()
+                            if md_stream:
+                                await md_stream.write(chunk)
 
-                # ── Server-side tool completed ──────────────────
-                elif event_type == "tool_completed":
-                    call_id = data.get("call_id", "")
-                    t_name = data.get("name", "")
-                    t_success = data.get("success", True)
-                    t_content = data.get("content", "")
-                    tw = tool_widgets.get(call_id)
-                    if tw:
-                        tw.complete(t_success, t_content)
-                    else:
-                        # No matching executing widget — show standalone
-                        tw = ToolStatusWidget(t_name or "tool", call_id=call_id)
-                        tw.complete(t_success, t_content)
-                        message_list.mount(tw)
-                    status.set_status("Thinking...")
-
-                # ── Client-side tool request (needs approval) ───
-                elif event_type == "tool_request":
-                    tool_request = data.get("tool_request")
-                    if tool_request:
+                    # ── Server-side tool executing ──────────────────
+                    elif event_type == "tool_executing":
                         await _finish_content_phase()
                         _finish_thinking_phase()
                         current_phase = None
-                        status.set_status(f"Tool: {tool_request.get('name', 'unknown')}")
+                        tool = data.get("tool", {})
+                        t_name = tool.get("name", "unknown")
+                        t_call_id = tool.get("call_id", "")
+                        status.set_status(f"Tool: {t_name}")
+                        tw = ToolStatusWidget(t_name, call_id=t_call_id)
+                        if t_call_id:
+                            tool_widgets[t_call_id] = tw
+                        message_list.mount(tw)
 
-                        approved = await self._handle_tool_request(tool_request)
-
-                        if approved:
-                            status.set_status("Thinking...")
+                    # ── Server-side tool completed ──────────────────
+                    elif event_type == "tool_completed":
+                        call_id = data.get("call_id", "")
+                        t_name = data.get("name", "")
+                        t_success = data.get("success", True)
+                        t_content = data.get("content", "")
+                        tw = tool_widgets.get(call_id)
+                        if tw:
+                            tw.complete(t_success, t_content)
                         else:
-                            status.set_status("Tool rejected")
+                            # No matching executing widget — show standalone
+                            tw = ToolStatusWidget(t_name or "tool", call_id=call_id)
+                            tw.complete(t_success, t_content)
+                            message_list.mount(tw)
+                        status.set_status("Thinking...")
 
-                # ── Status changed ──────────────────────────────
-                elif event_type == "status_changed":
-                    new_status = data.get("status", "")
-                    if new_status:
-                        status.set_status(new_status.replace("_", " ").title())
+                    # ── Client-side tool request (needs approval) ───
+                    # Server closes SSE after this event — we must break,
+                    # handle the tool, then reconnect with a fresh handler.
+                    elif event_type == "tool_request":
+                        tool_request = data.get("tool_request")
+                        if tool_request:
+                            await _finish_content_phase()
+                            _finish_thinking_phase()
+                            current_phase = None
+                            status.set_status(f"Tool: {tool_request.get('name', 'unknown')}")
 
-                # ── Terminal events ─────────────────────────────
-                elif event_type == "completed":
-                    _finish_thinking_phase()
-                    break
+                            approved = await self._handle_tool_request(tool_request)
 
-                elif event_type == "failed":
-                    _finish_thinking_phase()
-                    await _finish_content_phase()
-                    error = data.get("error", "Unknown error")
-                    message_list.mount(ChatMessage(error, role="error"))
-                    break
+                            if approved:
+                                status.set_status("Thinking...")
+                            else:
+                                status.set_status("Tool rejected")
+                        # Break inner loop to close handler and reconnect
+                        break
 
-                elif event_type == "cancelled":
-                    _finish_thinking_phase()
-                    break
+                    # ── Status changed ──────────────────────────────
+                    elif event_type == "status_changed":
+                        new_status = data.get("status", "")
+                        if new_status:
+                            status.set_status(new_status.replace("_", " ").title())
 
-        except Exception as e:
-            message_list.mount(ChatMessage(f"Stream error: {e}", role="error"))
+                    # ── Terminal events ─────────────────────────────
+                    elif event_type == "completed":
+                        _finish_thinking_phase()
+                        done = True
+                        break
 
-        finally:
-            if md_stream:
-                await md_stream.stop()
-            if content_widget:
-                content_widget.set_streaming(False)
-            _finish_thinking_phase()
-            self._current_stream = None
+                    elif event_type == "failed":
+                        _finish_thinking_phase()
+                        await _finish_content_phase()
+                        error = data.get("error", "Unknown error")
+                        message_list.mount(ChatMessage(error, role="error"))
+                        done = True
+                        break
+
+                    elif event_type == "cancelled":
+                        _finish_thinking_phase()
+                        done = True
+                        break
+
+                else:
+                    # for/else: stream exhausted without break (no more events)
+                    done = True
+
+            except Exception as e:
+                message_list.mount(ChatMessage(f"Stream error: {e}", role="error"))
+                done = True
+
+            finally:
+                handler.close()
+                self._current_stream = None
+
+            # Delay before reconnecting so the server can process the tool result
+            if not done:
+                await asyncio.sleep(0.3)
+
+        # Final cleanup after all reconnection iterations
+        if md_stream:
+            await md_stream.stop()
+        if content_widget:
+            content_widget.set_streaming(False)
+        _finish_thinking_phase()
 
     # ── Tool approval ───────────────────────────────────────────────
 
