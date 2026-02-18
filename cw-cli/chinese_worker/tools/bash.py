@@ -58,7 +58,7 @@ class BashTool(BaseTool):
             if system == "windows":
                 # Use PowerShell on Windows for better compatibility
                 result = subprocess.run(
-                    ["powershell", "-NoProfile", "-Command", command],
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
                     capture_output=True,
                     text=True,
                     timeout=timeout,
