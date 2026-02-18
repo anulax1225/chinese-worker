@@ -40,6 +40,7 @@ class HomeScreen(Screen):
     BINDINGS = [
         Binding("escape", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
+        Binding("c", "conversations", "Conversations"),
     ]
 
     def __init__(self) -> None:
@@ -53,7 +54,8 @@ class HomeScreen(Screen):
             Static("[dim]Loading agents...[/dim]", id="loading"),
             VerticalScroll(id="agent-list"),
             Static(
-                "[dim][bold]Enter[/bold] select  [bold]j/k[/bold] navigate  [bold]r[/bold] refresh[/dim]",
+                "[dim][bold]Enter[/bold] select  [bold]j/k[/bold] navigate  "
+                "[bold]c[/bold] conversations  [bold]r[/bold] refresh[/dim]",
                 id="home-help",
             ),
             id="home-container",
@@ -138,3 +140,9 @@ class HomeScreen(Screen):
 
     def action_quit(self) -> None:
         self.app.exit()
+
+    async def action_conversations(self) -> None:
+        """Open conversation list screen."""
+        from .conversations import ConversationListScreen
+
+        self.app.push_screen(ConversationListScreen())
