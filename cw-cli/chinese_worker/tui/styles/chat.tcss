@@ -40,7 +40,7 @@ ChatScreen {
 
 .message-user {
     padding: 0 1;
-    margin: 1 0 0 8;
+    margin: 2 2 0 0;
 }
 
 .message-assistant {
@@ -84,7 +84,6 @@ ChatScreen {
 /* ── Thinking block ──────────────────────────────────────── */
 
 .thinking-block {
-    margin: 0 0 0 2;
     border-left: solid $ctp-overlay0;
 }
 
@@ -95,14 +94,13 @@ ChatScreen {
 
 .thinking-text {
     color: $ctp-overlay1;
-    padding: 0 1;
+    padding: 1 1;
 }
 
 /* ── Tool approval panel ─────────────────────────────────── */
 
 .tool-panel {
     padding: 1 2;
-    margin: 1 0;
     background: $surface;
     border: solid $ctp-peach;
 }
