@@ -434,10 +434,10 @@ The old TUI scaffolding under `tui/` — but don't delete until Phase 1 is compl
 - [X] Agent list loads and is navigable
 - [X] Chat: send a message, see streaming markdown response
 - [X] Chat: thinking blocks are shown (collapsed by default)
-- [ ] Chat: tool approval works (approve, reject, approve-all)
+- [X] Chat: tool approval works (approve, reject, approve-all) — fixed focus with call_after_refresh
 - [X] Chat: server-side tools show status indicators
 - [X] Chat: Ctrl+C stops the current generation
 - [X] Chat: slash commands work (/help, /stop, /clear, /exit)
 - [X] Chat: errors are displayed inline, never crash the app
-- [ ] Escape from chat → back to agent list
+- [X] Escape from chat → back to agent list
 - [X] Visual design is cohesive and pleasant (dark theme, readable, no visual glitches)
