@@ -780,7 +780,7 @@ class APIClient:
 
         with open(file_path, "rb") as f:
             files = {"file": (os.path.basename(file_path), f)}
-            data = {}
+            data = {"source_type": "upload"}
             if title:
                 data["title"] = title
 
@@ -850,7 +850,7 @@ class APIClient:
         Raises:
             httpx.HTTPStatusError: If request fails
         """
-        data: Dict[str, Any] = {"content": text, "source_type": "paste"}
+        data: Dict[str, Any] = {"text": text, "source_type": "paste"}
         if title:
             data["title"] = title
 
