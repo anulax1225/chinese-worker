@@ -8,6 +8,8 @@ from .thinking import ThinkingBlock
 from .status_badge import StatusBadge
 from .conversation_item import ConversationItem
 from .conversation_sidebar import ConversationSidebar
+from .document_item import DocumentItem
+from .processing_pipeline import ProcessingPipeline
 
 __all__ = [
     "ChatMessage",
@@ -18,4 +20,6 @@ __all__ = [
     "StatusBadge",
     "ConversationItem",
     "ConversationSidebar",
+    "DocumentItem",
+    "ProcessingPipeline",
 ]

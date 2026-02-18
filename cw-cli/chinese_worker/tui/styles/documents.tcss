@@ -1,0 +1,148 @@
+/* DocumentListScreen styles — Catppuccin Mocha */
+
+#doc-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#doc-header {
+    dock: top;
+    height: 3;
+    padding: 0 1;
+    background: $surface;
+}
+
+#doc-title {
+    width: 1fr;
+    content-align: left middle;
+    color: $primary;
+}
+
+#doc-header #status-filter {
+    width: 20;
+    margin: 0 1;
+}
+
+#btn-upload {
+    width: auto;
+    margin: 0 1;
+}
+
+#btn-close {
+    width: 4;
+}
+
+#doc-container #search-input {
+    margin: 1 0;
+    background: $panel;
+    border: tall $surface;
+}
+
+#doc-container #search-input:focus {
+    border: tall $primary;
+}
+
+#doc-container #loading {
+    text-align: center;
+    padding: 2;
+    color: $text-muted;
+}
+
+#doc-list {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#doc-help {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    text-align: center;
+    background: $surface;
+    color: $text-muted;
+}
+
+/* DocumentDetailScreen styles */
+
+#detail-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#detail-header {
+    dock: top;
+    height: 3;
+    padding: 0 1;
+    background: $surface;
+}
+
+#detail-header #btn-back {
+    width: auto;
+}
+
+#doc-detail-title {
+    width: 1fr;
+    content-align: center middle;
+    color: $primary;
+}
+
+#detail-container #loading {
+    text-align: center;
+    padding: 2;
+    color: $text-muted;
+}
+
+#detail-content {
+    height: 1fr;
+    padding: 1;
+}
+
+#metadata-section {
+    padding: 1 2;
+    background: $surface;
+    margin-bottom: 1;
+}
+
+#pipeline-container {
+    margin-bottom: 1;
+}
+
+.section-header {
+    text-style: bold;
+    color: #cdd6f4;
+    padding: 0 2;
+    margin: 1 0;
+}
+
+#preview-scroll {
+    height: 1fr;
+    border: round $surface;
+    padding: 1;
+}
+
+#preview-content {
+    padding: 0 1;
+}
+
+#detail-help {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    text-align: center;
+    background: $surface;
+    color: $text-muted;
+}
+
+/* DocumentItem widget overrides */
+
+.document-item {
+    margin-bottom: 1;
+}
+
+/* Hidden utility class */
+
+.hidden {
+    display: none;
+}
