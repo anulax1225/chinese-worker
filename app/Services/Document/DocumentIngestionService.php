@@ -197,12 +197,10 @@ class DocumentIngestionService
     }
 
     /**
-     * Download a file from URL to a temporary location.
+     * Download a file from URL to a temporary location, preserving the file extension.
      */
     protected function downloadFromUrl(string $url): string
     {
-        $tempPath = sys_get_temp_dir().'/'.uniqid('doc_', true);
-
         $context = stream_context_create([
             'http' => [
                 'timeout' => config('document.extraction.timeout', 60),
@@ -216,9 +214,64 @@ class DocumentIngestionService
             throw new \RuntimeException("Failed to download file from URL: {$url}");
         }
 
+        // Try extension from URL path first
+        $urlPath = parse_url($url, PHP_URL_PATH) ?? '';
+        $extension = pathinfo($urlPath, PATHINFO_EXTENSION);
+
+        // Fall back to Content-Type header when the URL has no extension
+        if (empty($extension) && isset($http_response_header)) {
+            $contentType = $this->extractContentTypeFromHeaders($http_response_header);
+            if ($contentType) {
+                $extension = $this->getExtensionFromMimeType($contentType);
+            }
+        }
+
+        $suffix = $extension ? ".{$extension}" : '';
+        $dir = storage_path('app/private/tmp');
+
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+
+        $tempPath = $dir.'/'.uniqid('doc_', true).$suffix;
         file_put_contents($tempPath, $content);
 
         return $tempPath;
+    }
+
+    /**
+     * Parse the Content-Type value from a set of HTTP response headers.
+     *
+     * @param  array<string>  $headers
+     */
+    protected function extractContentTypeFromHeaders(array $headers): ?string
+    {
+        foreach ($headers as $header) {
+            if (stripos($header, 'Content-Type:') === 0) {
+                $value = trim(substr($header, \strlen('Content-Type:')));
+
+                return strtolower(explode(';', $value)[0]);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Map a MIME type to a file extension.
+     */
+    protected function getExtensionFromMimeType(string $mimeType): string
+    {
+        return match ($mimeType) {
+            'application/pdf' => 'pdf',
+            'application/msword' => 'doc',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx',
+            'text/plain' => 'txt',
+            'text/html', 'text/xhtml', 'application/xhtml+xml' => 'html',
+            'text/markdown' => 'md',
+            'application/rtf', 'text/rtf' => 'rtf',
+            default => '',
+        };
     }
 
     /**
