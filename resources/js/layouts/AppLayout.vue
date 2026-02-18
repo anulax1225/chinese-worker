@@ -10,7 +10,6 @@ import { Sonner } from '@/components/ui/sonner';
 import {
     Home,
     Bot,
-    Wrench,
     MessageSquare,
     FileText,
     Search,
@@ -45,7 +44,6 @@ const adminNavigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Agents', href: '/agents', icon: Bot },
     { name: 'System Prompts', href: '/system-prompts', icon: FileCog },
-    { name: 'Tools', href: '/tools', icon: Wrench },
     { name: 'AI Backends', href: '/ai-backends', icon: Cpu },
     { name: 'Documents', href: '/documents', icon: Library },
     { name: 'Files', href: '/files', icon: FileText },

@@ -14,15 +14,13 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, ChevronUp, ChevronDown, X } from 'lucide-vue-next';
 import { update } from '@/actions/App/Http/Controllers/Api/V1/AgentController';
 import { models as fetchBackendModels } from '@/actions/App/Http/Controllers/Api/V1/AIBackendController';
-import type { Agent, Tool, SystemPrompt, ModelConfig } from '@/types';
+import type { Agent, SystemPrompt, ModelConfig } from '@/types';
 
 const props = defineProps<{
-    agent: Agent & { tools: Tool[]; system_prompts?: SystemPrompt[] };
-    tools: Tool[];
+    agent: Agent & { system_prompts?: SystemPrompt[] };
     systemPrompts: SystemPrompt[];
     backends: string[];
 }>();
@@ -43,7 +41,6 @@ const form = ref({
     } as ModelConfig,
     status: props.agent.status as 'active' | 'inactive' | 'error',
     ai_backend: props.agent.ai_backend,
-    tool_ids: props.agent.tools?.map(t => t.id as number) || [],
     system_prompt_ids: props.agent.system_prompts
         ?.sort((a, b) => (a.pivot?.order ?? 0) - (b.pivot?.order ?? 0))
         .map(p => p.id) || [],
@@ -106,15 +103,6 @@ const submit = async () => {
         }
     } finally {
         processing.value = false;
-    }
-};
-
-const toggleTool = (toolId: number) => {
-    const index = form.value.tool_ids.indexOf(toolId);
-    if (index === -1) {
-        form.value.tool_ids.push(toolId);
-    } else {
-        form.value.tool_ids.splice(index, 1);
     }
 };
 
@@ -396,31 +384,6 @@ const moveDown = (index: number) => {
                             <p v-if="errors.code" class="text-sm text-destructive">
                                 {{ errors.code }}
                             </p>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card v-if="tools.length > 0">
-                    <CardHeader>
-                        <CardTitle>Tools</CardTitle>
-                        <CardDescription>Select tools this agent can use</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="grid gap-3">
-                            <div
-                                v-for="tool in tools"
-                                :key="tool.id"
-                                class="flex items-center justify-between rounded-lg border p-4"
-                            >
-                                <div>
-                                    <p class="font-medium">{{ tool.name }}</p>
-                                    <p class="text-sm text-muted-foreground">{{ tool.type }}</p>
-                                </div>
-                                <Switch
-                                    :checked="form.tool_ids.includes(tool.id as number)"
-                                    @update:checked="toggleTool(tool.id as number)"
-                                />
-                            </div>
                         </div>
                     </CardContent>
                 </Card>

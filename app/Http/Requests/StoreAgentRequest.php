@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreAgentRequest extends FormRequest
 {
@@ -36,11 +35,6 @@ class StoreAgentRequest extends FormRequest
             'model_config.top_k' => ['nullable', 'integer', 'min:1'],
             'model_config.context_length' => ['nullable', 'integer', 'min:1024', 'max:1000000'],
             'model_config.timeout' => ['nullable', 'integer', 'min:10', 'max:3600'],
-            'tool_ids' => ['nullable', 'array'],
-            'tool_ids.*' => [
-                'integer',
-                Rule::exists('tools', 'id')->where('user_id', $this->user()?->id),
-            ],
             'system_prompt_ids' => ['nullable', 'array'],
             'system_prompt_ids.*' => ['integer', 'exists:system_prompts,id'],
         ];
@@ -58,7 +52,6 @@ class StoreAgentRequest extends FormRequest
             'name.max' => 'The agent name must not exceed 255 characters.',
             'status.in' => 'The status must be one of: active, inactive, or error.',
             'ai_backend.in' => 'The AI backend must be one of: ollama, anthropic, openai, huggingface, or vllm.',
-            'tool_ids.*.exists' => 'One or more selected tools do not exist or do not belong to you.',
             'system_prompt_ids.*.exists' => 'One or more selected system prompts do not exist.',
         ];
     }

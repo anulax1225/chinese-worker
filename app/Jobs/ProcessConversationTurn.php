@@ -18,7 +18,6 @@ use App\Services\Tools\TodoToolHandler;
 use App\Services\Tools\ToolArgumentValidator;
 use App\Services\Tools\WebToolHandler;
 use App\Services\ToolSchemaRegistry;
-use App\Services\ToolService;
 use Exception;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -82,7 +81,7 @@ class ProcessConversationTurn implements ShouldQueue
         ];
     }
 
-    public function handle(AIBackendManager $aiBackendManager, ToolService $toolService, ConversationService $conversationService): void
+    public function handle(AIBackendManager $aiBackendManager, ConversationService $conversationService): void
     {
         // Check if cancelled before starting
         $this->conversation->refresh();
@@ -95,7 +94,7 @@ class ProcessConversationTurn implements ShouldQueue
         }
 
         // Eager load relationships to prevent N+1 queries
-        $this->conversation->load(['agent.tools']);
+        $this->conversation->load(['agent']);
 
         // Get AI backend configured for this agent with normalized config
         $result = $aiBackendManager->forAgent($this->conversation->agent);
@@ -206,7 +205,7 @@ class ProcessConversationTurn implements ShouldQueue
             }
 
             // Process tool calls
-            $this->processToolCalls($validToolCalls, $toolService);
+            $this->processToolCalls($validToolCalls);
         } catch (Exception $e) {
             Log::error('Conversation turn failed', [
                 'conversation_id' => $this->conversation->id,
@@ -247,7 +246,7 @@ class ProcessConversationTurn implements ShouldQueue
      *
      * @param  array<ToolCall>  $toolCalls
      */
-    protected function processToolCalls(array $toolCalls, ToolService $toolService): void
+    protected function processToolCalls(array $toolCalls): void
     {
         $broadcaster = app(ConversationEventBroadcaster::class);
 
@@ -280,29 +279,16 @@ class ProcessConversationTurn implements ShouldQueue
             // Broadcast that tool is executing
             $broadcaster->toolExecuting($this->conversation, $toolCall->toArray());
 
-            if ($this->isSystemTool($toolCall->name)) {
-                // Execute system tool on server
-                $result = $this->executeSystemTool($toolCall);
-                $resultContent = $result->output ?? $result->error ?? '';
+            // Execute system tool on server
+            $result = $this->executeSystemTool($toolCall);
+            $resultContent = $result->output ?? $result->error ?? '';
 
-                // Add tool result to conversation
-                $toolMessage = ChatMessage::tool($resultContent, $toolCall->id, $toolCall->name);
-                $this->conversation->addMessage($toolMessage);
+            // Add tool result to conversation
+            $toolMessage = ChatMessage::tool($resultContent, $toolCall->id, $toolCall->name);
+            $this->conversation->addMessage($toolMessage);
 
-                // Broadcast tool completed with result content
-                $broadcaster->toolCompleted($this->conversation, $toolCall->id, $toolCall->name, $result->success, $resultContent);
-            } else {
-                // Execute user tool on server
-                $result = $this->executeUserTool($toolCall, $toolService);
-                $resultContent = $result->output ?? $result->error ?? '';
-
-                // Add tool result to conversation
-                $toolMessage = ChatMessage::tool($resultContent, $toolCall->id, $toolCall->name);
-                $this->conversation->addMessage($toolMessage);
-
-                // Broadcast tool completed with result content
-                $broadcaster->toolCompleted($this->conversation, $toolCall->id, $toolCall->name, $result->success, $resultContent);
-            }
+            // Broadcast tool completed with result content
+            $broadcaster->toolCompleted($this->conversation, $toolCall->id, $toolCall->name, $result->success, $resultContent);
         }
 
         // Check for cancellation before dispatching next turn
@@ -315,7 +301,7 @@ class ProcessConversationTurn implements ShouldQueue
             return;
         }
 
-        // All tools executed (system/user), dispatch next turn
+        // All system tools executed, dispatch next turn
         self::dispatch($this->conversation);
     }
 
@@ -330,16 +316,7 @@ class ProcessConversationTurn implements ShouldQueue
     }
 
     /**
-     * Check if a tool name is a known user tool for this agent.
-     * Uses the eager-loaded tools collection to avoid N+1 queries.
-     */
-    protected function isUserTool(string $toolName): bool
-    {
-        return $this->conversation->agent->tools->contains('name', $toolName);
-    }
-
-    /**
-     * Check if a tool name is known (builtin, system, or user).
+     * Check if a tool name is known (builtin or system).
      */
     protected function isKnownTool(string $toolName): bool
     {
@@ -348,8 +325,7 @@ class ProcessConversationTurn implements ShouldQueue
         }
 
         return $this->isBuiltinTool($toolName)
-            || $this->isSystemTool($toolName)
-            || $this->isUserTool($toolName);
+            || $this->isSystemTool($toolName);
     }
 
     /**
@@ -445,32 +421,8 @@ class ProcessConversationTurn implements ShouldQueue
         }
     }
 
-    protected function executeUserTool(ToolCall $toolCall, ToolService $toolService): ToolResult
-    {
-        try {
-            // Use eager-loaded collection to avoid N+1 query
-            $tool = $this->conversation->agent->tools->firstWhere('name', $toolCall->name);
-
-            if (! $tool) {
-                return new ToolResult(
-                    success: false,
-                    output: '',
-                    error: "Tool not found: {$toolCall->name}"
-                );
-            }
-
-            return $toolService->execute($tool, $toolCall->arguments);
-        } catch (Exception $e) {
-            return new ToolResult(
-                success: false,
-                output: '',
-                error: "User tool execution failed: {$e->getMessage()}"
-            );
-        }
-    }
-
     /**
-     * Get all tool schemas (client + system + user).
+     * Get all tool schemas (client + system).
      *
      * @return array<int, array<string, mixed>>
      */

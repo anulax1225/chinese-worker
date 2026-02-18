@@ -11,7 +11,6 @@ use App\Http\Controllers\Api\V1\ConversationSummaryController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\FileController;
 use App\Http\Controllers\Api\V1\SystemPromptController;
-use App\Http\Controllers\Api\V1\ToolController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -27,11 +26,6 @@ Route::prefix('v1')->group(function (): void {
 
         // Agents
         Route::apiResource('agents', AgentController::class);
-        Route::post('agents/{agent}/tools', [AgentController::class, 'attachTools']);
-        Route::delete('agents/{agent}/tools/{toolId}', [AgentController::class, 'detachTool']);
-
-        // Tools
-        Route::apiResource('tools', ToolController::class);
 
         // System Prompts
         Route::apiResource('system-prompts', SystemPromptController::class);

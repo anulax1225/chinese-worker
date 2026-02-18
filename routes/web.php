@@ -9,7 +9,6 @@ use App\Http\Controllers\Web\FileController;
 use App\Http\Controllers\Web\SearchController;
 use App\Http\Controllers\Web\SettingsController;
 use App\Http\Controllers\Web\SystemPromptController;
-use App\Http\Controllers\Web\ToolController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -25,7 +24,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Resource routes (read-only, CRUD operations via API)
     Route::resource('agents', AgentController::class)->only(['index', 'create', 'show', 'edit']);
-    Route::resource('tools', ToolController::class)->only(['index', 'create', 'show', 'edit']);
     Route::resource('system-prompts', SystemPromptController::class)->only(['index', 'create', 'show', 'edit']);
     Route::resource('files', FileController::class)->only(['index', 'show']);
     Route::resource('documents', DocumentController::class)->only(['index', 'create', 'show']);

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
 use App\Models\SystemPrompt;
-use App\Models\Tool;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -17,8 +16,7 @@ class AgentController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = Agent::where('user_id', $request->user()->id)
-            ->withCount(['tools']);
+        $query = Agent::where('user_id', $request->user()->id);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -52,13 +50,11 @@ class AgentController extends Controller
      */
     public function create(Request $request): Response
     {
-        $tools = Tool::where('user_id', $request->user()->id)->get();
         $systemPrompts = SystemPrompt::where('is_active', true)->orderBy('name')->get();
         $backends = config('ai.backends');
         $defaultBackend = config('ai.default');
 
         return Inertia::render('Agents/Create', [
-            'tools' => $tools,
             'systemPrompts' => $systemPrompts,
             'backends' => array_keys($backends),
             'defaultBackend' => $defaultBackend,
@@ -76,7 +72,7 @@ class AgentController extends Controller
     {
         $this->authorize('view', $agent);
 
-        $agent->load(['tools', 'systemPrompts']);
+        $agent->load(['systemPrompts']);
 
         return Inertia::render('Agents/Show', [
             'agent' => $agent,
@@ -94,14 +90,12 @@ class AgentController extends Controller
     {
         $this->authorize('update', $agent);
 
-        $agent->load(['tools', 'systemPrompts']);
-        $tools = Tool::where('user_id', $request->user()->id)->get();
+        $agent->load(['systemPrompts']);
         $systemPrompts = SystemPrompt::where('is_active', true)->orderBy('name')->get();
         $backends = config('ai.backends');
 
         return Inertia::render('Agents/Edit', [
             'agent' => $agent,
-            'tools' => $tools,
             'systemPrompts' => $systemPrompts,
             'backends' => array_keys($backends),
             'breadcrumbs' => [

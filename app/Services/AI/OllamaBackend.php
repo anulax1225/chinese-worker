@@ -10,7 +10,6 @@ use App\DTOs\ModelPullProgress;
 use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
-use App\Models\Tool;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
@@ -77,8 +76,8 @@ class OllamaBackend implements AIBackendInterface
     {
         try {
             $messages = $this->buildMessages($agent, $context);
-            // Use tools from context if provided (from ConversationService), otherwise build from agent
-            $tools = $context['tools'] ?? $this->buildTools($agent);
+            // Use tools from context (from ToolSchemaRegistry)
+            $tools = $context['tools'] ?? [];
             // Convert to Ollama format
             $tools = $this->convertToolsToOllamaFormat($tools);
 
@@ -114,8 +113,8 @@ class OllamaBackend implements AIBackendInterface
     {
         try {
             $messages = $this->buildMessages($agent, $context);
-            // Use tools from context if provided (from ConversationService), otherwise build from agent
-            $tools = $context['tools'] ?? $this->buildTools($agent);
+            // Use tools from context (from ToolSchemaRegistry)
+            $tools = $context['tools'] ?? [];
             // Convert to Ollama format
             $tools = $this->convertToolsToOllamaFormat($tools);
 
@@ -319,16 +318,6 @@ class OllamaBackend implements AIBackendInterface
             }
         }
 
-        // Add tool descriptions if the agent has tools
-        $tools = $agent->tools;
-        if ($tools->isNotEmpty()) {
-            $toolDescriptions = $tools->map(function (Tool $tool) {
-                return "- {$tool->name}: {$tool->type} tool";
-            })->join("\n");
-
-            $parts[] = "Available tools:\n{$toolDescriptions}";
-        }
-
         // Add turn information
         $requestTurn = $context['request_turn'] ?? null;
         $maxTurns = $context['max_turns'] ?? null;
@@ -337,24 +326,6 @@ class OllamaBackend implements AIBackendInterface
         }
 
         return implode("\n\n", $parts);
-    }
-
-    /**
-     * Build tools array in Ollama format from agent's tools.
-     *
-     * @return array<array<string, mixed>>
-     */
-    protected function buildTools(Agent $agent): array
-    {
-        $tools = $agent->tools;
-
-        if ($tools->isEmpty()) {
-            return [];
-        }
-
-        return $tools->map(function (Tool $tool) {
-            return $this->convertToolToOllamaFormat($tool);
-        })->filter()->values()->all();
     }
 
     /**
@@ -392,83 +363,6 @@ class OllamaBackend implements AIBackendInterface
                 ],
             ];
         }, $tools);
-    }
-
-    /**
-     * Convert a Tool model to Ollama tool format.
-     *
-     * @return array<string, mixed>|null
-     */
-    protected function convertToolToOllamaFormat(Tool $tool): ?array
-    {
-        $config = $tool->config;
-
-        // Build parameters schema based on tool config
-        $parameters = $this->buildToolParameters($tool);
-
-        return [
-            'type' => 'function',
-            'function' => [
-                'name' => $this->sanitizeToolName($tool->name),
-                'description' => $config['description'] ?? "Execute {$tool->name} ({$tool->type} tool)",
-                'parameters' => $parameters,
-            ],
-        ];
-    }
-
-    /**
-     * Build parameters schema for a tool.
-     *
-     * @return array<string, mixed>
-     */
-    protected function buildToolParameters(Tool $tool): array
-    {
-        $config = $tool->config;
-
-        // If parameters are explicitly defined in config, use them
-        if (isset($config['parameters'])) {
-            return $config['parameters'];
-        }
-
-        // Build default parameters based on tool type
-        return match ($tool->type) {
-            'api' => [
-                'type' => 'object',
-                'properties' => [
-                    'query' => [
-                        'type' => 'string',
-                        'description' => 'Query parameters or request body',
-                    ],
-                ],
-                'required' => [],
-            ],
-            'function' => [
-                'type' => 'object',
-                'properties' => [
-                    'input' => [
-                        'type' => 'string',
-                        'description' => 'Input for the function',
-                    ],
-                ],
-                'required' => ['input'],
-            ],
-            'command' => [
-                'type' => 'object',
-                'properties' => [
-                    'args' => [
-                        'type' => 'array',
-                        'items' => ['type' => 'string'],
-                        'description' => 'Command arguments',
-                    ],
-                ],
-                'required' => [],
-            ],
-            default => [
-                'type' => 'object',
-                'properties' => new \stdClass,
-                'required' => [],
-            ],
-        };
     }
 
     /**

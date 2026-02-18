@@ -2,7 +2,6 @@
 
 use App\DTOs\ChatMessage;
 use App\Models\Agent;
-use App\Models\Tool;
 use App\Models\User;
 use App\Services\AI\OllamaBackend;
 use GuzzleHttp\Client;
@@ -140,29 +139,6 @@ describe('OllamaBackend', function () {
         $handlerStack = HandlerStack::create($mock);
         $client = new Client(['handler' => $handlerStack]);
 
-        // Create agent with a tool
-        $tool = Tool::factory()->create([
-            'user_id' => $this->user->id,
-            'name' => 'get_weather',
-            'type' => 'api',
-            'config' => [
-                'description' => 'Get weather for a location',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'location' => [
-                            'type' => 'string',
-                            'description' => 'The city name',
-                        ],
-                    ],
-                    'required' => ['location'],
-                ],
-            ],
-        ]);
-
-        $this->agent->tools()->attach($tool);
-        $this->agent->load('tools');
-
         $config = config('ai.backends.ollama');
         $backend = new OllamaBackend($config);
 
@@ -171,8 +147,28 @@ describe('OllamaBackend', function () {
         $property->setAccessible(true);
         $property->setValue($backend, $client);
 
+        // Pass tools via context (as client tools would be passed)
         $response = $backend->execute($this->agent, [
             'input' => 'What is the weather in Paris?',
+            'tools' => [
+                [
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'get_weather',
+                        'description' => 'Get weather for a location',
+                        'parameters' => [
+                            'type' => 'object',
+                            'properties' => [
+                                'location' => [
+                                    'type' => 'string',
+                                    'description' => 'The city name',
+                                ],
+                            ],
+                            'required' => ['location'],
+                        ],
+                    ],
+                ],
+            ],
         ]);
 
         expect($response->content)->toBe('')
@@ -272,70 +268,6 @@ describe('OllamaBackend', function () {
             ->and($messages[2]->content)->toBe('Hi there!')
             ->and($messages[3]->role)->toBe('user')
             ->and($messages[3]->content)->toBe('What is PHP?');
-    });
-
-    test('builds system prompt with tool descriptions', function () {
-        $tool = Tool::factory()->create([
-            'user_id' => $this->user->id,
-            'name' => 'web_search',
-            'type' => 'api',
-        ]);
-
-        $this->agent->tools()->attach($tool);
-        $this->agent->load('tools');
-
-        $config = config('ai.backends.ollama');
-        $backend = new OllamaBackend($config);
-
-        $reflection = new ReflectionClass($backend);
-        $method = $reflection->getMethod('buildSystemPrompt');
-        $method->setAccessible(true);
-
-        $prompt = $method->invoke($backend, $this->agent);
-
-        expect($prompt)->toContain('A test agent')
-            ->and($prompt)->toContain('Available tools:')
-            ->and($prompt)->toContain('web_search: api tool');
-    });
-
-    test('builds tools in Ollama format', function () {
-        $tool = Tool::factory()->create([
-            'user_id' => $this->user->id,
-            'name' => 'search_api',
-            'type' => 'api',
-            'config' => [
-                'description' => 'Search the web',
-                'parameters' => [
-                    'type' => 'object',
-                    'properties' => [
-                        'query' => [
-                            'type' => 'string',
-                            'description' => 'Search query',
-                        ],
-                    ],
-                    'required' => ['query'],
-                ],
-            ],
-        ]);
-
-        $this->agent->tools()->attach($tool);
-        $this->agent->load('tools');
-
-        $config = config('ai.backends.ollama');
-        $backend = new OllamaBackend($config);
-
-        $reflection = new ReflectionClass($backend);
-        $method = $reflection->getMethod('buildTools');
-        $method->setAccessible(true);
-
-        $tools = $method->invoke($backend, $this->agent);
-
-        expect($tools)->toHaveCount(1)
-            ->and($tools[0]['type'])->toBe('function')
-            ->and($tools[0]['function']['name'])->toBe('search_api')
-            ->and($tools[0]['function']['description'])->toBe('Search the web')
-            ->and($tools[0]['function']['parameters']['type'])->toBe('object')
-            ->and($tools[0]['function']['parameters']['properties']['query']['type'])->toBe('string');
     });
 
     test('sanitizes tool names for Ollama', function () {

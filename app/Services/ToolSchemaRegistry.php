@@ -244,7 +244,7 @@ class ToolSchemaRegistry
     /**
      * Get all tool schemas for a conversation.
      *
-     * Combines: client tools (from conversation) + system tools + user tools (from agent).
+     * Combines: client tools (from conversation) + system tools.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -283,19 +283,6 @@ class ToolSchemaRegistry
             ));
         }
 
-        $tools = array_merge($tools, $systemTools);
-
-        // Add user tools from agent (API tools only for now)
-        foreach ($conversation->agent->tools as $tool) {
-            if ($tool->type === 'api') {
-                $tools[] = [
-                    'name' => $tool->name,
-                    'description' => $tool->config['description'] ?? '',
-                    'parameters' => $tool->config['parameters'] ?? [],
-                ];
-            }
-        }
-
-        return $tools;
+        return array_merge($tools, $systemTools);
     }
 }

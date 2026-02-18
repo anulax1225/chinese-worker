@@ -140,14 +140,6 @@ class Agent extends Model
     }
 
     /**
-     * Get the tools assigned to the agent.
-     */
-    public function tools(): BelongsToMany
-    {
-        return $this->belongsToMany(Tool::class, 'agent_tools');
-    }
-
-    /**
      * Get the conversations for the agent.
      */
     public function conversations(): HasMany

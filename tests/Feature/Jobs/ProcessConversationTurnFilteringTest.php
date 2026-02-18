@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Services\AI\FakeBackend;
 use App\Services\AIBackendManager;
 use App\Services\ConversationService;
-use App\Services\ToolService;
 use Illuminate\Support\Facades\Config;
 
 describe('ProcessConversationTurn context filtering', function () {
@@ -83,7 +82,6 @@ describe('ProcessConversationTurn context filtering', function () {
         $job = new ProcessConversationTurn($conversation);
         $job->handle(
             $makeBackendManager(),
-            app(ToolService::class),
             $mockConversationService,
         );
 
@@ -114,7 +112,6 @@ describe('ProcessConversationTurn context filtering', function () {
         $job = new ProcessConversationTurn($conversation);
         $job->handle(
             $makeBackendManager(),
-            app(ToolService::class),
             $mockConversationService,
         );
 

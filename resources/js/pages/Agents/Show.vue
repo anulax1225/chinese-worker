@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Pencil, Trash2, MessageSquare } from 'lucide-vue-next';
-import type { Agent, Tool } from '@/types';
+import type { Agent } from '@/types';
 
 const props = defineProps<{
-    agent: Agent & { tools: Tool[] };
+    agent: Agent;
 }>();
 
 const deleteAgent = () => {
@@ -111,29 +111,6 @@ const formatDate = (date: string | null) => {
                             <div>
                                 <p class="text-sm font-medium text-muted-foreground">Last Updated</p>
                                 <p class="font-medium">{{ formatDate(agent.updated_at) }}</p>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Tools ({{ agent.tools?.length || 0 }})</CardTitle>
-                            <CardDescription>Tools this agent can use</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div v-if="!agent.tools?.length" class="text-center text-muted-foreground py-4">
-                                No tools assigned
-                            </div>
-                            <div v-else class="space-y-2">
-                                <Link
-                                    v-for="tool in agent.tools"
-                                    :key="tool.id"
-                                    :href="`/tools/${tool.id}`"
-                                    class="flex items-center justify-between rounded-lg border p-3 hover:bg-muted transition-colors"
-                                >
-                                    <span class="font-medium">{{ tool.name }}</span>
-                                    <Badge variant="outline">{{ tool.type }}</Badge>
-                                </Link>
                             </div>
                         </CardContent>
                     </Card>

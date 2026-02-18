@@ -54,39 +54,6 @@ export interface SystemPrompt {
     };
 }
 
-export interface Tool {
-    id: number | string; // string for builtin tools like 'builtin_read'
-    user_id: number | null; // null for builtin tools
-    name: string;
-    type: 'api' | 'function' | 'command' | 'builtin';
-    config?: ToolConfig;
-    description?: string; // for builtin tools
-    parameters?: Record<string, unknown>; // schema for builtin tools
-    created_at: string | null;
-    updated_at: string | null;
-    agents?: Agent[];
-    agents_count?: number;
-}
-
-export type ToolConfig =
-    | ApiToolConfig
-    | FunctionToolConfig
-    | CommandToolConfig;
-
-export interface ApiToolConfig {
-    url: string;
-    method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
-    headers?: Record<string, string>;
-}
-
-export interface FunctionToolConfig {
-    code: string;
-}
-
-export interface CommandToolConfig {
-    command: string;
-}
-
 export interface File {
     id: number;
     user_id: number;

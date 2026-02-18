@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\AttachToolsRequest;
 use App\Http\Requests\StoreAgentRequest;
 use App\Http\Requests\UpdateAgentRequest;
 use App\Http\Resources\AgentResource;
@@ -34,13 +33,13 @@ class AgentController extends Controller
      *
      * @apiResourceCollection App\Http\Resources\AgentResource
      *
-     * @apiResourceModel App\Models\Agent with=tools,systemPrompts paginate=15
+     * @apiResourceModel App\Models\Agent with=systemPrompts paginate=15
      */
     public function index(Request $request): AnonymousResourceCollection
     {
         $agents = $request->user()
             ->agents()
-            ->with(['tools', 'systemPrompts'])
+            ->with(['systemPrompts'])
             ->paginate($request->input('per_page', 15));
 
         return AgentResource::collection($agents);
@@ -57,11 +56,10 @@ class AgentController extends Controller
      * @bodyParam config object The agent's configuration. Example: {"temperature": 0.7}
      * @bodyParam status string The agent's status. Must be one of: active, inactive, error. Example: active
      * @bodyParam ai_backend string The AI backend to use. Must be one of: ollama, anthropic, openai. Example: ollama
-     * @bodyParam tool_ids array List of tool IDs to attach to the agent. Example: [1, 2, 3]
      *
      * @apiResource App\Http\Resources\AgentResource
      *
-     * @apiResourceModel App\Models\Agent with=tools,systemPrompts
+     * @apiResourceModel App\Models\Agent with=systemPrompts
      *
      * @apiResourceAdditional status=201
      *
@@ -86,7 +84,7 @@ class AgentController extends Controller
      *
      * @apiResource App\Http\Resources\AgentResource
      *
-     * @apiResourceModel App\Models\Agent with=tools,systemPrompts
+     * @apiResourceModel App\Models\Agent with=systemPrompts
      *
      * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
      * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
@@ -95,7 +93,7 @@ class AgentController extends Controller
     {
         $this->authorize('view', $agent);
 
-        $agent->load(['tools', 'systemPrompts']);
+        $agent->load(['systemPrompts']);
 
         return (new AgentResource($agent))->response();
     }
@@ -113,11 +111,10 @@ class AgentController extends Controller
      * @bodyParam config object The agent's configuration. Example: {"temperature": 0.8}
      * @bodyParam status string The agent's status. Must be one of: active, inactive, error. Example: inactive
      * @bodyParam ai_backend string The AI backend to use. Must be one of: ollama, anthropic, openai. Example: anthropic
-     * @bodyParam tool_ids array List of tool IDs to sync with the agent. Example: [1, 3]
      *
      * @apiResource App\Http\Resources\AgentResource
      *
-     * @apiResourceModel App\Models\Agent with=tools,systemPrompts
+     * @apiResourceModel App\Models\Agent with=systemPrompts
      *
      * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
      * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
@@ -150,49 +147,5 @@ class AgentController extends Controller
         $this->agentService->delete($agent);
 
         return response()->json(null, 204);
-    }
-
-    /**
-     * Attach Tools
-     *
-     * Attach tools to an agent.
-     *
-     * @urlParam agent integer required The agent ID. Example: 1
-     *
-     * @bodyParam tool_ids array required List of tool IDs to attach. Example: [4, 5]
-     *
-     * @response 200 {"message": "Tools attached successfully", "agent": {"id": 1, "name": "Code Assistant", "tools": []}}
-     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
-     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"tool_ids": ["The tool_ids field is required."]}}
-     */
-    public function attachTools(AttachToolsRequest $request, Agent $agent): JsonResponse
-    {
-        $this->agentService->attachTools($agent, $request->input('tool_ids'));
-
-        return response()->json([
-            'message' => 'Tools attached successfully',
-            'agent' => $agent->fresh(['tools']),
-        ]);
-    }
-
-    /**
-     * Detach Tool
-     *
-     * Detach a specific tool from an agent.
-     *
-     * @urlParam agent integer required The agent ID. Example: 1
-     * @urlParam tool integer required The tool ID. Example: 2
-     *
-     * @response 200 {"message": "Tool detached successfully"}
-     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
-     * @response 404 scenario="Not Found" {"message": "No query results for model [App\\Models\\Agent] 1"}
-     */
-    public function detachTool(Agent $agent, int $toolId): JsonResponse
-    {
-        $this->authorize('update', $agent);
-
-        $this->agentService->detachTools($agent, [$toolId]);
-
-        return response()->json(['message' => 'Tool detached successfully']);
     }
 }

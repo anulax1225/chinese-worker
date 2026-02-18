@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Agent;
-use App\Models\Tool;
 use App\Models\User;
 
 describe('Agent Management', function () {
@@ -89,19 +88,6 @@ describe('Agent Management', function () {
                 ->assertJsonValidationErrors(['ai_backend']);
         });
 
-        test('user can create agent with tools', function () {
-            $tools = Tool::factory()->count(2)->create(['user_id' => $this->user->id]);
-
-            $response = $this->postJson('/api/v1/agents', [
-                'name' => 'Test Agent',
-                'tool_ids' => $tools->pluck('id')->toArray(),
-            ]);
-
-            $response->assertStatus(201);
-
-            $agent = Agent::find($response->json('id'));
-            expect($agent->tools)->toHaveCount(2);
-        });
     });
 
     describe('Show Agent', function () {
@@ -198,68 +184,6 @@ describe('Agent Management', function () {
         });
     });
 
-    describe('Attach Tools', function () {
-        test('user can attach tools to their agent', function () {
-            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
-            $tools = Tool::factory()->count(2)->create(['user_id' => $this->user->id]);
-
-            $response = $this->postJson("/api/v1/agents/{$agent->id}/tools", [
-                'tool_ids' => $tools->pluck('id')->toArray(),
-            ]);
-
-            $response->assertStatus(200)
-                ->assertJsonFragment(['message' => 'Tools attached successfully']);
-
-            expect($agent->fresh()->tools)->toHaveCount(2);
-        });
-
-        test('attaching tools fails with invalid tool ids', function () {
-            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
-
-            $response = $this->postJson("/api/v1/agents/{$agent->id}/tools", [
-                'tool_ids' => [99999],
-            ]);
-
-            $response->assertStatus(422)
-                ->assertJsonValidationErrors(['tool_ids.0']);
-        });
-
-        test('user cannot attach tools to another user\'s agent', function () {
-            $otherAgent = Agent::factory()->create();
-            $tools = Tool::factory()->count(2)->create(['user_id' => $this->user->id]);
-
-            $response = $this->postJson("/api/v1/agents/{$otherAgent->id}/tools", [
-                'tool_ids' => $tools->pluck('id')->toArray(),
-            ]);
-
-            $response->assertStatus(403);
-        });
-    });
-
-    describe('Detach Tool', function () {
-        test('user can detach a tool from their agent', function () {
-            $agent = Agent::factory()->create(['user_id' => $this->user->id]);
-            $tool = Tool::factory()->create(['user_id' => $this->user->id]);
-            $agent->tools()->attach($tool->id);
-
-            $response = $this->deleteJson("/api/v1/agents/{$agent->id}/tools/{$tool->id}");
-
-            $response->assertStatus(200)
-                ->assertJsonFragment(['message' => 'Tool detached successfully']);
-
-            expect($agent->fresh()->tools)->toHaveCount(0);
-        });
-
-        test('user cannot detach tool from another user\'s agent', function () {
-            $otherAgent = Agent::factory()->create();
-            $tool = Tool::factory()->create(['user_id' => $this->user->id]);
-            $otherAgent->tools()->attach($tool->id);
-
-            $response = $this->deleteJson("/api/v1/agents/{$otherAgent->id}/tools/{$tool->id}");
-
-            $response->assertStatus(403);
-        });
-    });
 });
 
 describe('Agent Management - Unauthenticated', function () {

@@ -57,14 +57,6 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the tools for the user.
-     */
-    public function tools(): HasMany
-    {
-        return $this->hasMany(Tool::class);
-    }
-
-    /**
      * Get the files for the user.
      */
     public function files(): HasMany
