@@ -1,4 +1,24 @@
 <laravel-boost-guidelines>
+=== .ai/workflow rules ===
+
+## Workflow Requirements
+
+### Commits
+
+- You MUST make a commit for every meaningful change to the codebase (feat, fix, docs, refactor, test, chore, etc.).
+- Use conventional commit format: `type(scope): description` (e.g., `feat(api): add summary endpoints`, `fix(auth): resolve token expiration`).
+- Do not batch unrelated changes into a single commit.
+- If the code changes are big, use the commit-writter agent.
+
+### Laravel Sail
+
+- This project uses Laravel Sail for local development. You MUST use `./vendor/bin/sail` for all relevant commands:
+  - `./vendor/bin/sail artisan` instead of `php artisan`
+  - `./vendor/bin/sail test` instead of `php artisan test`
+  - `./vendor/bin/sail composer` instead of `composer`
+  - `./vendor/bin/sail npm` instead of `npm`
+  - `./vendor/bin/sail pint` for running Pint
+
 === foundation rules ===
 
 # Laravel Boost Guidelines
@@ -41,67 +61,24 @@ This project has domain-specific skills available. You MUST activate the relevan
 - `pest-testing` — Tests applications using the Pest 4 PHP framework. Activates when writing tests, creating unit or feature tests, adding assertions, testing Livewire components, browser testing, debugging test failures, working with datasets or mocking; or when the user mentions test, spec, TDD, expects, assertion, coverage, or needs to verify functionality works.
 - `inertia-vue-development` — Develops Inertia.js v2 Vue client-side applications. Activates when creating Vue pages, forms, or navigation; using &lt;Link&gt;, &lt;Form&gt;, useForm, or router; working with deferred props, prefetching, or polling; or when user mentions Vue with Inertia, Vue pages, Vue forms, or Vue navigation.
 - `tailwindcss-development` — Styles applications using Tailwind CSS v4 utilities. Activates when adding styles, restyling components, working with gradients, spacing, layout, flex, grid, responsive design, dark mode, colors, typography, or borders; or when the user mentions CSS, styling, classes, Tailwind, restyle, hero section, cards, buttons, or any visual/UI changes.
+- `agent-tui-expert` — Construct rich terminal interfaces using Textual for multi-pane dashboards with CSS styling and Python Prompt Toolkit for interactive line editing with completions. Covers widget composition, key bindings, TUI testing strategies, and WSL2 layout quirks. Engage when building IDE-style interfaces, REPL shells, or dashboard applications.
 - `laravel:api-resources-and-pagination` — Use API Resources with pagination and conditional fields; keep response shapes stable and cache-friendly
 - `laravel:api-surface-evolution` — Evolve APIs safely using versioned DTOs/transformers, deprecations, and compatibility tests
 - `laravel:blade-components-and-layouts` — Compose UIs with Blade components, slots, and layouts; keep templates pure and testable
 - `laravel:bootstrap-check` — Detect Sail/non‑Sail and print the right command pairs for your environment; verify dependencies and key services are reachable
-- `laravel:brainstorming` — Interactive design refinement tailored to Laravel projects; clarify domain, data, interfaces, testing, and quality gates while accounting for Sail/non‑Sail environments
-- `laravel:code-review-requests` — Request effective code reviews—specify focus areas, provide context, ask for architectural feedback, reference Laravel conventions
-- `laravel:complexity-guardrails` — Keep cyclomatic complexity low; flatten control flow, extract helpers, and prefer table-driven/strategy patterns over large switches
-- `laravel:config-env-storage` — Portable storage configuration across S3/R2/MinIO with optional CDN—env toggles, path-style endpoints, and URL generation
-- `laravel:constants-and-configuration` — Replace hardcoded values with constants, enums, and configuration for maintainability; use PHP 8.1+ enums and config files
-- `laravel:controller-cleanup` — Reduce controller bloat using Form Requests for auth/validation, small Actions/Services with DTOs, and resource/single-action controllers
-- `laravel:controller-tests` — Write focused controller tests using HTTP assertions; keep heavy logic in Actions/Services and unit test them
 - `create-adaptable-composable` — Create a library-grade Vue composable that accepts maybe-reactive inputs (MaybeRef / MaybeRefOrGetter) so callers can pass a plain value, ref, or getter. Normalize inputs with toValue()/toRef() inside reactive effects (watch/watchEffect) to keep behavior predictable and reactive. Use this skill when user asks for creating adaptable or reusable composables.
-- `laravel:custom-helpers` — Create and register small, pure helper functions when they improve clarity; keep them organized and tested
-- `laravel:daily-workflow` — Practical daily checklist for Laravel projects; bring services up, run migrations, queues, quality gates, and tests
 - `laravel:data-chunking-large-datasets` — Process large datasets efficiently using chunk(), chunkById(), lazy(), and cursor() to reduce memory consumption and improve performance
-- `laravel:debugging-prompts` — Create effective debugging prompts—include error messages, stack traces, expected vs actual behavior, logs, and attempted solutions
-- `laravel:dependencies-trim-packages` — Remove unneeded Composer packages and assets to improve boot time, memory, and security surface
-- `laravel:documentation-best-practices` — Write meaningful documentation that explains why not what; focus on complex business logic and self-documenting code
 - `laravel:e2e-playwright` — Generic E2E patterns with Playwright—state setup, seeds, test IDs, auth, environment, and Sail integration
-- `laravel:effective-context` — Provide comprehensive context in prompts—files, errors, Laravel version, dependencies, and monorepo details—for accurate AI responses
-- `laravel:eloquent-relationships` — Define clear relationships and load data efficiently; prevent N+1, use constraints, counts/sums, and pivot syncing safely
-- `laravel:exception-handling-and-logging` — Use reportable/renderable exceptions, structured logs, and channel strategy for observability and graceful failures
-- `laravel:executing-plans` — Execute Laravel plans in small batches with checkpoints—TDD first, migrations safe, queues verified, and quality gates enforced
 - `laravel:filesystem-uploads` — Store and serve files via Storage; set visibility, generate URLs, and handle streaming safely
-- `laravel:form-requests` — Move validation and authorization into Form Requests; use rule objects, custom messages, and nested data handling to keep controllers slim
-- `laravel:horizon:metrics-and-dashboards` — Operate Horizon with confidence—naming, tags, concurrency, failure handling, actionable metrics, and dashboards
-- `laravel:http-client-resilience` — Use the HTTP client with sensible timeouts, retries, and backoff; capture context and handle failures explicitly
-- `laravel:interfaces-and-di` — Use interfaces and dependency injection to decouple code; bind implementations in the container
-- `laravel:internationalization-and-translation` — Build with i18n in mind from day one using Laravel translation helpers, JSON files, Blade integration, and locale management
-- `laravel:iterating-on-code` — Refine AI-generated code through specific feedback—point out errors, identify gaps, show desired changes, reference style guides
-- `laravel:laravel-prompting-patterns` — Use Laravel-specific vocabulary—Eloquent patterns, Form Requests, API resources, jobs/queues—to get idiomatic framework code
-- `laravel:migrations-and-factories` — Safe database change patterns; when to modify vs add migrations; always pair models with migrations and factories; seeding guidance
-- `laravel:nova:resource-patterns` — Consistent Nova resources—fields, actions, metrics, lenses, filters, authorization—and how to evolve resources alongside schema changes
 - `laravel:performance-caching` — Use framework caches and value/query caching to reduce work; add tags, locks, and explicit invalidation strategies for correctness
 - `laravel:performance-eager-loading` — Prevent N+1 queries by eager loading; enable lazy-loading protection in non-production; choose selective fields
 - `laravel:performance-select-columns` — Select only required columns to reduce memory and transfer costs; apply to base queries and relations
-- `laravel:policies-and-authorization` — Enforce access via Policies and Gates; use authorize() and authorizeResource() to standardize controller protections
-- `laravel:ports-and-adapters` — Use hexagonal architecture for external systems; define ports (interfaces) and per-provider adapters; select adapter at composition edge
-- `laravel:prompt-structure` — Structure prompts for clarity—separate concerns, prioritize requests, specify acceptance criteria, and break work into testable increments
+- `terminal-css` — Provides Textual TCSS patterns for terminal widgets and ACP content styling. Use when building terminal UIs with color-first design, styling Agent Client Protocol output, or integrating Dracula-themed terminal rendering.
+- `textual-builder` — Build Text User Interface (TUI) applications using the Textual Python framework (v0.86.0+). Use when creating terminal-based applications, prototyping card games or interactive CLIs, or when the user mentions Textual, TUI, or terminal UI. Includes comprehensive reference documentation, card game starter template, and styling guides.
 - `vue-best-practices` — MUST be used for Vue.js tasks. Strongly recommends Composition API with `&lt;script setup&gt;` and TypeScript as the standard approach. Covers Vue 3, SSR, Volar, vue-tsc. Load for any Vue, .vue files, Vue Router, Pinia, or Vite with Vue work. ALWAYS use Composition API unless the project explicitly requires Options API.
 - `vue-debug-guides` — Vue 3 debugging and error handling for runtime errors, warnings, async failures, and SSR/hydration issues. Use when diagnosing or fixing Vue issues.
 - `vue-development-guides` — A collection of best practices and tips for developing applications using Vue.js. This skill MUST be apply when developing, refactoring or reviewing Vue.js or Nuxt projects.
 - `vue-testing-best-practices` — Use for Vue.js testing. Covers Vitest, Vue Test Utils, component testing, mocking, testing patterns, and Playwright for E2E testing.
-
-## Workflow Requirements
-
-### Commits
-
-- You MUST make a commit for every meaningful change to the codebase (feat, fix, docs, refactor, test, chore, etc.).
-- Use conventional commit format: `type(scope): description` (e.g., `feat(api): add summary endpoints`, `fix(auth): resolve token expiration`).
-- Do not batch unrelated changes into a single commit.
-- If the code changes are big, use the commit-writter agent.
-
-### Laravel Sail
-
-- This project uses Laravel Sail for local development. You MUST use `./vendor/bin/sail` for all relevant commands:
-  - `./vendor/bin/sail artisan` instead of `php artisan`
-  - `./vendor/bin/sail test` instead of `php artisan test`
-  - `./vendor/bin/sail composer` instead of `composer`
-  - `./vendor/bin/sail npm` instead of `npm`
-  - `./vendor/bin/sail pint` for running Pint
 
 ## Conventions
 
