@@ -4,6 +4,9 @@ use App\Enums\DocumentStageType;
 use App\Enums\DocumentStatus;
 use App\Models\Document;
 use App\Models\User;
+use App\Services\Document\DocumentIngestionService;
+use App\Services\Document\TextExtractorRegistry;
+use App\Services\FileService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
@@ -135,6 +138,47 @@ describe('Document Ingestion API', function () {
 
             $response->assertStatus(422)
                 ->assertJsonValidationErrors(['text']);
+        });
+
+        test('url ingestion creates a persistent file record', function () {
+            Queue::fake();
+
+            $tempPath = tempnam(sys_get_temp_dir(), 'test_doc_');
+            file_put_contents($tempPath, 'test document content');
+
+            $service = new class(app(TextExtractorRegistry::class), app(FileService::class)) extends DocumentIngestionService
+            {
+                public string $fakeTempPath;
+
+                protected function downloadFromUrl(string $url): string
+                {
+                    return $this->fakeTempPath;
+                }
+            };
+            $service->fakeTempPath = $tempPath;
+            $this->app->instance(DocumentIngestionService::class, $service);
+
+            $response = $this->postJson('/api/v1/documents', [
+                'source_type' => 'url',
+                'title' => 'URL Test Document',
+                'url' => 'https://example.com/doc.txt',
+            ]);
+
+            $response->assertStatus(201)
+                ->assertJsonFragment([
+                    'title' => 'URL Test Document',
+                    'source_type' => 'url',
+                ]);
+
+            $this->assertDatabaseHas('files', [
+                'user_id' => $this->user->id,
+                'type' => 'input',
+            ]);
+
+            $document = Document::where('title', 'URL Test Document')->first();
+            expect($document->file_id)->not->toBeNull()
+                ->and($document->source_path)->toBe('https://example.com/doc.txt')
+                ->and($document->metadata['original_url'])->toBe('https://example.com/doc.txt');
         });
     });
 
