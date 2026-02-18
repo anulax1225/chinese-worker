@@ -122,6 +122,13 @@ ChatScreen {
     margin-top: 1;
 }
 
+/* Tool execution status */
+.tool-status {
+    padding: 0 2;
+    margin: 0 0 0 2;
+    border-left: thick $warning;
+}
+
 /* Assistant prefix */
 #message-prefix {
     margin-bottom: 1;

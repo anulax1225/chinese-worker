@@ -13,6 +13,7 @@ from ..widgets.message import ChatMessage
 from ..widgets.status_bar import StatusBar
 from ..widgets.thinking import ThinkingBlock
 from ..widgets.tool_panel import ToolApprovalPanel
+from ..widgets.tool_status import ToolStatusWidget
 from ..handlers.stream import StreamHandler
 from ..handlers.commands import CommandRegistry
 from ..handlers.tools import ToolExecutor
@@ -186,89 +187,163 @@ class ChatScreen(Screen):
             chat_input.focus()
             status.set_status("Connected")
 
-    # ── SSE streaming ───────────────────────────────────────────────
+    # ── SSE streaming (phase-based) ────────────────────────────────
+    #
+    # The AI chains actions: think → respond → tool → think → respond.
+    # Each type change creates a new widget so the conversation shows
+    # the full sequence, just like the web app's StreamingPhases.
 
     async def _handle_response(self, initial_response: Dict[str, Any]) -> None:
         status = self.query_one("#status-bar", StatusBar)
         message_list = self.query_one("#message-list", VerticalScroll)
 
-        # Create SSE handler
         handler = StreamHandler(self.app.client, self.conversation_id)
         self._current_stream = handler
-
-        # Create placeholder for streaming response
-        response_widget = ChatMessage("", role="assistant", streaming=True)
-        message_list.mount(response_widget)
         message_list.anchor()
 
-        accumulated_thinking = ""
-        thinking_widget = None
+        # Phase tracking — each type change spawns a new widget
+        current_phase: Optional[str] = None  # "thinking" | "content"
+        thinking_widget: Optional[ThinkingBlock] = None
+        thinking_text = ""
+        content_widget: Optional[ChatMessage] = None
         md_stream = None
-        content_started = False
+        # Map call_id → ToolStatusWidget for in-place updates
+        tool_widgets: Dict[str, ToolStatusWidget] = {}
 
-        try:
-            md_widget = response_widget.get_markdown_widget()
+        async def _finish_content_phase() -> None:
+            nonlocal md_stream, content_widget
+            if md_stream:
+                await md_stream.stop()
+                md_stream = None
+            if content_widget:
+                content_widget.set_streaming(False)
+                content_widget = None
+
+        def _finish_thinking_phase() -> None:
+            nonlocal thinking_widget, thinking_text
+            if thinking_widget:
+                thinking_widget.finalize()
+                thinking_widget = None
+            thinking_text = ""
+
+        async def _start_content_phase() -> None:
+            nonlocal current_phase, content_widget, md_stream
+            _finish_thinking_phase()
+            await _finish_content_phase()
+            current_phase = "content"
+            content_widget = ChatMessage("", role="assistant", streaming=True)
+            message_list.mount(content_widget)
+            md_widget = content_widget.get_markdown_widget()
             md_stream = Markdown.get_stream(md_widget)
 
+        def _start_thinking_phase() -> None:
+            nonlocal current_phase, thinking_widget, thinking_text
+            # Don't close content phase here — thinking can precede content
+            _finish_thinking_phase()
+            current_phase = "thinking"
+            thinking_text = ""
+            thinking_widget = ThinkingBlock("")
+            message_list.mount(thinking_widget)
+
+        try:
             async for event_type, data in handler.stream():
+
+                # ── Text chunks (thinking or content) ───────────
                 if event_type == "text_chunk":
                     chunk = data.get("chunk", "")
                     chunk_type = data.get("type", "content")
 
                     if chunk_type == "thinking":
-                        accumulated_thinking += chunk
-                        if not thinking_widget:
-                            thinking_widget = ThinkingBlock(accumulated_thinking)
-                            message_list.mount(thinking_widget, before=response_widget)
-                        else:
-                            thinking_widget.update_content(accumulated_thinking)
-                    else:
-                        if thinking_widget and not content_started:
-                            thinking_widget.finalize()
-                        content_started = True
-                        await md_stream.write(chunk)
+                        if current_phase != "thinking":
+                            await _finish_content_phase()
+                            _start_thinking_phase()
+                        thinking_text += chunk
+                        if thinking_widget:
+                            thinking_widget.update_content(thinking_text)
 
+                    else:  # content
+                        if current_phase != "content":
+                            await _start_content_phase()
+                        if md_stream:
+                            await md_stream.write(chunk)
+
+                # ── Server-side tool executing ──────────────────
+                elif event_type == "tool_executing":
+                    await _finish_content_phase()
+                    _finish_thinking_phase()
+                    current_phase = None
+                    tool = data.get("tool", {})
+                    t_name = tool.get("name", "unknown")
+                    t_call_id = tool.get("call_id", "")
+                    status.set_status(f"Tool: {t_name}")
+                    tw = ToolStatusWidget(t_name, call_id=t_call_id)
+                    if t_call_id:
+                        tool_widgets[t_call_id] = tw
+                    message_list.mount(tw)
+
+                # ── Server-side tool completed ──────────────────
+                elif event_type == "tool_completed":
+                    call_id = data.get("call_id", "")
+                    t_name = data.get("name", "")
+                    t_success = data.get("success", True)
+                    t_content = data.get("content", "")
+                    tw = tool_widgets.get(call_id)
+                    if tw:
+                        tw.complete(t_success, t_content)
+                    else:
+                        # No matching executing widget — show standalone
+                        tw = ToolStatusWidget(t_name or "tool", call_id=call_id)
+                        tw.complete(t_success, t_content)
+                        message_list.mount(tw)
+                    status.set_status("Thinking...")
+
+                # ── Client-side tool request (needs approval) ───
                 elif event_type == "tool_request":
                     tool_request = data.get("tool_request")
                     if tool_request:
+                        await _finish_content_phase()
+                        _finish_thinking_phase()
+                        current_phase = None
                         status.set_status(f"Tool: {tool_request.get('name', 'unknown')}")
-
-                        if md_stream:
-                            await md_stream.stop()
-                            md_stream = None
 
                         approved = await self._handle_tool_request(tool_request)
 
                         if approved:
                             status.set_status("Thinking...")
-                            md_stream = Markdown.get_stream(md_widget)
                         else:
                             status.set_status("Tool rejected")
 
+                # ── Status changed ──────────────────────────────
+                elif event_type == "status_changed":
+                    new_status = data.get("status", "")
+                    if new_status:
+                        status.set_status(new_status.replace("_", " ").title())
+
+                # ── Terminal events ─────────────────────────────
                 elif event_type == "completed":
-                    if thinking_widget:
-                        thinking_widget.finalize()
+                    _finish_thinking_phase()
                     break
 
                 elif event_type == "failed":
-                    if thinking_widget:
-                        thinking_widget.finalize()
+                    _finish_thinking_phase()
+                    await _finish_content_phase()
                     error = data.get("error", "Unknown error")
-                    response_widget.update_content(f"[red]Error: {error}[/red]")
+                    message_list.mount(ChatMessage(error, role="error"))
                     break
 
                 elif event_type == "cancelled":
-                    if thinking_widget:
-                        thinking_widget.finalize()
+                    _finish_thinking_phase()
                     break
 
         except Exception as e:
-            response_widget.update_content(f"[red]Stream error: {e}[/red]")
+            message_list.mount(ChatMessage(f"Stream error: {e}", role="error"))
 
         finally:
             if md_stream:
                 await md_stream.stop()
-            response_widget.set_streaming(False)
+            if content_widget:
+                content_widget.set_streaming(False)
+            _finish_thinking_phase()
             self._current_stream = None
 
     # ── Tool approval ───────────────────────────────────────────────
