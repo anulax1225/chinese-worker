@@ -5,6 +5,9 @@ from .status_bar import StatusBar
 from .tool_panel import ToolApprovalPanel
 from .tool_status import ToolStatusWidget
 from .thinking import ThinkingBlock
+from .status_badge import StatusBadge
+from .conversation_item import ConversationItem
+from .conversation_sidebar import ConversationSidebar
 
 __all__ = [
     "ChatMessage",
@@ -12,4 +15,7 @@ __all__ = [
     "ToolApprovalPanel",
     "ToolStatusWidget",
     "ThinkingBlock",
+    "StatusBadge",
+    "ConversationItem",
+    "ConversationSidebar",
 ]
