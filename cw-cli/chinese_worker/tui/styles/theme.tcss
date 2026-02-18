@@ -1,0 +1,6 @@
+/* Chinese Worker TUI — shared design tokens (Catppuccin Mocha-inspired) */
+
+Screen {
+    background: $surface;
+    color: $text;
+}

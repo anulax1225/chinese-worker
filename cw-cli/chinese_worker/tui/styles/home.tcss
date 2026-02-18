@@ -1,0 +1,49 @@
+/* HomeScreen styles */
+
+#home-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#home-header {
+    dock: top;
+    height: 3;
+    padding: 0 2;
+    background: $primary-darken-2;
+    content-align: center middle;
+}
+
+#loading {
+    text-align: center;
+    padding: 2;
+}
+
+#agent-list {
+    height: 1fr;
+    padding: 1;
+}
+
+.agent-card {
+    padding: 1;
+    margin: 0 0 1 0;
+    border: solid $primary-darken-2;
+    background: $panel;
+}
+
+.agent-card.selected {
+    border: solid $primary;
+    background: $primary-darken-3;
+}
+
+.agent-card:hover {
+    background: $primary-darken-2;
+}
+
+#home-help {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    text-align: center;
+    background: $surface-darken-1;
+}

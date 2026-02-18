@@ -1,7 +1,7 @@
 """TUI event handlers."""
 
-from .sse_handler import SSEHandler
-from .command_handler import CommandHandler
-from .tool_handler import ToolHandler
+from .stream import StreamHandler
+from .commands import CommandRegistry
+from .tools import ToolExecutor
 
-__all__ = ["SSEHandler", "CommandHandler", "ToolHandler"]
+__all__ = ["StreamHandler", "CommandRegistry", "ToolExecutor"]

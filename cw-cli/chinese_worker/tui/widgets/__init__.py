@@ -1,18 +1,13 @@
 """TUI widgets."""
 
-from .message_list import MessageList
-from .input_area import ChatInput
+from .message import ChatMessage
 from .status_bar import StatusBar
-from .tool_approval import ToolApprovalModal, ToolApprovalPanel
-from .message import MessageWidget
+from .tool_panel import ToolApprovalPanel
 from .thinking import ThinkingBlock
 
 __all__ = [
-    "MessageList",
-    "ChatInput",
+    "ChatMessage",
     "StatusBar",
-    "ToolApprovalModal",
     "ToolApprovalPanel",
-    "MessageWidget",
     "ThinkingBlock",
 ]

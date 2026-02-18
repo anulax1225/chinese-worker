@@ -1,16 +1,19 @@
-"""Async SSE handler for TUI."""
+"""Async SSE handler bridging sync SSE to Textual's async loop."""
 
 import asyncio
 import threading
-from concurrent.futures import ThreadPoolExecutor
 from typing import AsyncIterator, Tuple, Dict, Any, Optional
 from queue import Queue, Empty
 
 from ...api import APIClient, SSEClient
 
 
-class SSEHandler:
-    """Async wrapper for SSE client to work with Textual's async model."""
+class StreamHandler:
+    """Bridge between the sync SSE client and Textual's async event loop.
+
+    Runs the SSE client in a background thread and exposes events
+    via an async generator that is safe to iterate in Textual workers.
+    """
 
     def __init__(self, client: APIClient, conversation_id: int) -> None:
         self.client = client
@@ -34,55 +37,43 @@ class SSEHandler:
                 if self._closed:
                     break
                 self._queue.put((event_type, data))
-
-                # Check for terminal events
                 if event_type in ("completed", "failed", "cancelled"):
                     break
 
         except Exception as e:
             self._queue.put(("error", {"error": str(e)}))
         finally:
-            # Signal end of stream
             self._queue.put(None)
 
     async def stream(self) -> AsyncIterator[Tuple[str, Dict[str, Any]]]:
-        """
-        Stream SSE events asynchronously.
+        """Async generator yielding (event_type, data) tuples.
 
-        Yields:
-            Tuple of (event_type, data)
+        Uses non-blocking queue polling so we never occupy a thread
+        from the default executor — Textual needs those threads for
+        its own work (rendering, CSS, etc.).
         """
-        # Start SSE in background thread
         self._thread = threading.Thread(target=self._run_sse_sync, daemon=True)
         self._thread.start()
 
         try:
             while not self._closed:
-                # Check queue with timeout to allow event loop to process
+                # Drain all available events before yielding back
                 try:
-                    # Use asyncio to check the queue without blocking
-                    loop = asyncio.get_event_loop()
-                    item = await loop.run_in_executor(
-                        None,
-                        lambda: self._queue.get(timeout=0.1)
-                    )
-
-                    if item is None:
-                        # End of stream
-                        break
-
-                    event_type, data = item
-                    yield event_type, data
-
-                    # Check for terminal events
-                    if event_type in ("completed", "failed", "cancelled", "error"):
-                        break
-
+                    item = self._queue.get_nowait()
                 except Empty:
-                    # Queue empty, continue waiting
-                    await asyncio.sleep(0.05)
+                    # Nothing ready — yield to event loop so Textual
+                    # can process repaints and input events.
+                    await asyncio.sleep(0.02)
                     continue
 
+                if item is None:
+                    break
+
+                event_type, data = item
+                yield event_type, data
+
+                if event_type in ("completed", "failed", "cancelled", "error"):
+                    break
         finally:
             self.close()
 

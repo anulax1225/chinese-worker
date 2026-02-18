@@ -1,4 +1,4 @@
-"""Welcome/Login screen."""
+"""Login screen."""
 
 import asyncio
 
@@ -8,48 +8,43 @@ from textual.screen import Screen
 from textual.widgets import Button, Input, Label, Static
 
 
-class WelcomeScreen(Screen):
-    """Welcome screen with login form."""
+class LoginScreen(Screen):
+    """Login screen with email/password form."""
 
     BINDINGS = [
         ("escape", "quit", "Quit"),
     ]
 
     def compose(self) -> ComposeResult:
-        """Create child widgets."""
         yield Container(
-            Static("Chinese Worker", id="title"),
-            Static("AI Agent Execution Platform", id="subtitle"),
+            Static("Chinese Worker", id="login-title"),
+            Static("AI Agent Execution Platform", id="login-subtitle"),
             Vertical(
                 Label("Email:"),
                 Input(placeholder="your@email.com", id="email"),
                 Label("Password:"),
                 Input(placeholder="Password", password=True, id="password"),
                 Button("Login", variant="primary", id="login-btn"),
-                Static("", id="error-msg"),
+                Static("", id="login-error"),
                 id="login-form",
             ),
-            id="welcome-container",
+            id="login-container",
         )
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Handle button press."""
         if event.button.id == "login-btn":
-            await self.do_login()
+            await self._do_login()
 
     async def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Handle enter key in input fields."""
         if event.input.id == "password":
-            await self.do_login()
+            await self._do_login()
         elif event.input.id == "email":
-            # Focus password field
             self.query_one("#password", Input).focus()
 
-    async def do_login(self) -> None:
-        """Perform login."""
+    async def _do_login(self) -> None:
         email_input = self.query_one("#email", Input)
         password_input = self.query_one("#password", Input)
-        error_msg = self.query_one("#error-msg", Static)
+        error_msg = self.query_one("#login-error", Static)
 
         email = email_input.value.strip()
         password = password_input.value
@@ -58,13 +53,11 @@ class WelcomeScreen(Screen):
             error_msg.update("[red]Please enter email and password[/red]")
             return
 
-        # Clear error and disable inputs
         error_msg.update("[dim]Logging in...[/dim]")
         email_input.disabled = True
         password_input.disabled = True
 
         try:
-            # Run blocking API call in executor
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 None,
@@ -72,12 +65,13 @@ class WelcomeScreen(Screen):
                 email,
                 password,
             )
-            await self.app.on_login_success()
+            # Replace login screen with home (no going back to login)
+            from .home import HomeScreen
+            self.app.switch_screen(HomeScreen())
         except Exception as e:
-            error_msg.update(f"[red]Login failed: {str(e)}[/red]")
+            error_msg.update(f"[red]Login failed: {e}[/red]")
             email_input.disabled = False
             password_input.disabled = False
 
     def action_quit(self) -> None:
-        """Quit the app."""
         self.app.exit()
