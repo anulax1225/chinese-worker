@@ -9,7 +9,6 @@ use App\DTOs\ChatMessage;
 use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
-use App\Models\Tool;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
@@ -246,7 +245,7 @@ class HuggingFaceBackend implements AIBackendInterface
     protected function buildPayload(Agent $agent, array $context, bool $stream): array
     {
         $messages = $this->buildMessages($agent, $context);
-        $tools = $context['tools'] ?? $this->buildTools($agent);
+        $tools = $context['tools'] ?? [];
         $tools = $this->convertToolsToOpenAIFormat($tools);
 
         $payload = [
@@ -322,14 +321,6 @@ class HuggingFaceBackend implements AIBackendInterface
             }
         }
 
-        $tools = $agent->tools;
-        if ($tools->isNotEmpty()) {
-            $toolDescriptions = $tools->map(function (Tool $tool) {
-                return "- {$tool->name}: {$tool->type} tool";
-            })->join("\n");
-            $parts[] = "Available tools:\n{$toolDescriptions}";
-        }
-
         $requestTurn = $context['request_turn'] ?? null;
         $maxTurns = $context['max_turns'] ?? null;
         if ($requestTurn !== null && $maxTurns !== null) {
@@ -337,28 +328,6 @@ class HuggingFaceBackend implements AIBackendInterface
         }
 
         return implode("\n\n", $parts);
-    }
-
-    /**
-     * Build tools array from agent's tools.
-     *
-     * @return array<array<string, mixed>>
-     */
-    protected function buildTools(Agent $agent): array
-    {
-        $tools = $agent->tools;
-
-        if ($tools->isEmpty()) {
-            return [];
-        }
-
-        return $tools->map(function (Tool $tool) {
-            return [
-                'name' => $this->sanitizeToolName($tool->name),
-                'description' => $tool->config['description'] ?? "Execute {$tool->name} ({$tool->type} tool)",
-                'parameters' => $this->buildToolParameters($tool),
-            ];
-        })->filter()->values()->all();
     }
 
     /**
@@ -393,59 +362,6 @@ class HuggingFaceBackend implements AIBackendInterface
                 ],
             ];
         }, $tools);
-    }
-
-    /**
-     * Build parameters schema for a tool.
-     *
-     * @return array<string, mixed>
-     */
-    protected function buildToolParameters(Tool $tool): array
-    {
-        $config = $tool->config;
-
-        if (isset($config['parameters'])) {
-            return $config['parameters'];
-        }
-
-        return match ($tool->type) {
-            'api' => [
-                'type' => 'object',
-                'properties' => [
-                    'query' => [
-                        'type' => 'string',
-                        'description' => 'Query parameters or request body',
-                    ],
-                ],
-                'required' => [],
-            ],
-            'function' => [
-                'type' => 'object',
-                'properties' => [
-                    'input' => [
-                        'type' => 'string',
-                        'description' => 'Input for the function',
-                    ],
-                ],
-                'required' => ['input'],
-            ],
-            'command' => [
-                'type' => 'object',
-                'properties' => [
-                    'args' => [
-                        'type' => 'array',
-                        'items' => ['type' => 'string'],
-                        'description' => 'Command arguments',
-                    ],
-                ],
-                'required' => [],
-            ],
-            default => [
-                'type' => 'object',
-                'properties' => new \stdClass,
-                'required' => [],
-            ],
-        };
     }
 
     /**
