@@ -1,0 +1,69 @@
+/* ConversationListScreen styles — Catppuccin Mocha */
+
+#conv-container {
+    width: 100%;
+    height: 100%;
+    padding: 1;
+}
+
+#conv-header {
+    dock: top;
+    height: 3;
+    padding: 0 1;
+    background: $surface;
+}
+
+#conv-title {
+    width: 1fr;
+    content-align: left middle;
+    color: $primary;
+}
+
+#status-filter {
+    width: 20;
+    margin: 0 1;
+}
+
+#btn-close {
+    width: 4;
+}
+
+#search-input {
+    margin: 1 0;
+    background: $panel;
+    border: tall $surface;
+}
+
+#search-input:focus {
+    border: tall $primary;
+}
+
+#loading {
+    text-align: center;
+    padding: 2;
+    color: $text-muted;
+}
+
+#conv-list {
+    height: 1fr;
+    padding: 0 1;
+}
+
+#conv-help {
+    dock: bottom;
+    height: 1;
+    padding: 0 1;
+    text-align: center;
+    background: $surface;
+    color: $text-muted;
+}
+
+/* Chat layout with sidebar */
+
+#chat-layout {
+    height: 1fr;
+}
+
+#chat-layout #message-list {
+    width: 1fr;
+}

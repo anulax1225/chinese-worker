@@ -25,6 +25,7 @@ class CWApp(App):
         "styles/login.tcss",
         "styles/home.tcss",
         "styles/chat.tcss",
+        "styles/conversations.tcss",
     ]
 
     BINDINGS = [
