@@ -37,7 +37,12 @@ class StreamHandler:
                 if self._closed:
                     break
                 self._queue.put((event_type, data))
-                if event_type in ("completed", "failed", "cancelled"):
+                # tool_request stops the stream because the server closes
+                # the SSE connection after emitting it (client must handle
+                # the tool, submit results, then reconnect).
+                # tool_executing / tool_completed are server-side events
+                # where the stream stays open — do NOT break on those.
+                if event_type in ("completed", "failed", "cancelled", "tool_request"):
                     break
 
         except Exception as e:
@@ -72,7 +77,7 @@ class StreamHandler:
                 event_type, data = item
                 yield event_type, data
 
-                if event_type in ("completed", "failed", "cancelled", "error"):
+                if event_type in ("completed", "failed", "cancelled", "error", "tool_request"):
                     break
         finally:
             self.close()
