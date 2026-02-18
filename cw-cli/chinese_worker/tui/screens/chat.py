@@ -4,17 +4,20 @@ import asyncio
 from typing import Optional, Dict, Any, List
 
 from textual.app import ComposeResult
-from textual.containers import Container, VerticalScroll
+from textual.containers import VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Input, Static
+from textual.widgets import Input, Static, Markdown
 from textual.binding import Binding
 
-from ..widgets import StatusBar, MessageWidget, ToolApprovalModal, ThinkingBlock
+from ..widgets import StatusBar, MessageWidget, ToolApprovalModal, ToolApprovalPanel, ThinkingBlock
 from ..handlers import SSEHandler, CommandHandler, ToolHandler
 
 
 class ChatScreen(Screen):
     """Main chat interface screen."""
+
+    # Auto-focus the chat input when screen is activated
+    AUTO_FOCUS = "#chat-input"
 
     BINDINGS = [
         Binding("ctrl+c", "stop", "Stop"),
@@ -32,18 +35,18 @@ class ChatScreen(Screen):
         self.command_handler = CommandHandler(self)
         self.tool_handler: Optional[ToolHandler] = None
         self.messages: List[Dict[str, Any]] = []
+        # Tool approval state
+        self._pending_tool_approval: Optional[asyncio.Event] = None
+        self._tool_approval_result: Optional[str] = None
+        self._current_tool_panel: Optional[ToolApprovalPanel] = None
 
     def compose(self) -> ComposeResult:
         """Create child widgets."""
-        yield Container(
-            StatusBar(self.agent, id="status-bar"),
-            VerticalScroll(id="message-list"),
-            Container(
-                Input(placeholder="Type your message... (/ for commands)", id="chat-input"),
-                id="input-container",
-            ),
-            id="chat-container",
-        )
+        message_list = VerticalScroll(id="message-list")
+        message_list.can_focus = False  # Prevent message list from intercepting keys
+        yield StatusBar(self.agent, id="status-bar")
+        yield message_list
+        yield Input(placeholder="Type your message... (/ for commands)", id="chat-input")
 
     async def on_mount(self) -> None:
         """Initialize chat when mounted."""
@@ -51,10 +54,6 @@ class ChatScreen(Screen):
         from ...cli import get_platform_tools, get_tool_schemas, get_client_type
         tools = get_platform_tools()
         self.tool_handler = ToolHandler(tools, self.app.client, self)
-
-        # Focus input immediately so user can type while we set up
-        chat_input = self.query_one("#chat-input", Input)
-        chat_input.focus()
 
         # Load or create conversation in background
         if self.conversation:
@@ -201,11 +200,19 @@ class ChatScreen(Screen):
         response_widget = MessageWidget("", role="assistant", streaming=True)
         message_list.mount(response_widget)
 
-        accumulated_content = ""
+        # Enable auto-scroll to bottom
+        message_list.anchor()
+
         accumulated_thinking = ""
         thinking_widget = None
+        md_stream = None
+        content_started = False
 
         try:
+            # Get the Markdown widget and create a stream for flicker-free rendering
+            md_widget = response_widget.get_markdown_widget()
+            md_stream = Markdown.get_stream(md_widget)
+
             async for event_type, data in self.current_sse_handler.stream():
                 if event_type == "text_chunk":
                     chunk = data.get("chunk", "")
@@ -220,19 +227,23 @@ class ChatScreen(Screen):
                             message_list.mount(thinking_widget, before=response_widget)
                         else:
                             thinking_widget.update_content(accumulated_thinking)
-                        message_list.scroll_end()
                     else:
                         # Finalize thinking block when content starts
-                        if thinking_widget and accumulated_content == "":
+                        if thinking_widget and not content_started:
                             thinking_widget.finalize()
-                        accumulated_content += chunk
-                        response_widget.update_content(accumulated_content)
-                        message_list.scroll_end()
+                        content_started = True
+                        # Stream chunk directly to Markdown widget
+                        await md_stream.write(chunk)
 
                 elif event_type == "tool_request":
                     tool_request = data.get("tool_request")
                     if tool_request:
                         status.set_status(f"Tool: {tool_request.get('name', 'unknown')}")
+
+                        # Stop current stream before handling tool
+                        if md_stream:
+                            await md_stream.stop()
+                            md_stream = None
 
                         # Handle tool execution
                         approved = await self.handle_tool_request(tool_request)
@@ -240,18 +251,26 @@ class ChatScreen(Screen):
                         if approved:
                             # Continue streaming after tool execution
                             status.set_status("Thinking...")
+                            # Create new stream to continue
+                            md_stream = Markdown.get_stream(md_widget)
                         else:
                             status.set_status("Tool rejected")
 
                 elif event_type == "completed":
                     if thinking_widget:
                         thinking_widget.finalize()
+                    if md_stream:
+                        await md_stream.stop()
+                        md_stream = None
                     response_widget.set_streaming(False)
                     break
 
                 elif event_type == "failed":
                     if thinking_widget:
                         thinking_widget.finalize()
+                    if md_stream:
+                        await md_stream.stop()
+                        md_stream = None
                     error = data.get("error", "Unknown error")
                     response_widget.update_content(f"[red]Error: {error}[/red]")
                     response_widget.set_streaming(False)
@@ -260,10 +279,15 @@ class ChatScreen(Screen):
                 elif event_type == "cancelled":
                     if thinking_widget:
                         thinking_widget.finalize()
+                    if md_stream:
+                        await md_stream.stop()
+                        md_stream = None
                     response_widget.set_streaming(False)
                     break
 
         except Exception as e:
+            if md_stream:
+                await md_stream.stop()
             response_widget.update_content(f"[red]Stream error: {str(e)}[/red]")
             response_widget.set_streaming(False)
 
@@ -277,9 +301,29 @@ class ChatScreen(Screen):
             result = await self.tool_handler.execute(tool_request)
             return result
 
-        # Show approval modal
-        modal = ToolApprovalModal(tool_request)
-        result = await self.app.push_screen_wait(modal)
+        # Show inline approval panel
+        message_list = self.query_one("#message-list", VerticalScroll)
+
+        # Create the approval panel
+        self._pending_tool_approval = asyncio.Event()
+        self._tool_approval_result = None
+        panel = ToolApprovalPanel(tool_request)
+        self._current_tool_panel = panel
+        message_list.mount(panel)
+        message_list.scroll_end()
+
+        # Focus the panel so it can receive key events
+        panel.focus()
+
+        # Wait for user decision
+        await self._pending_tool_approval.wait()
+        result = self._tool_approval_result
+
+        # Remove the panel
+        if self._current_tool_panel:
+            self._current_tool_panel.remove()
+            self._current_tool_panel = None
+        self._pending_tool_approval = None
 
         if result == "yes":
             await self.tool_handler.execute(tool_request)
@@ -292,6 +336,24 @@ class ChatScreen(Screen):
             # Rejected - submit rejection
             await self.tool_handler.reject(tool_request)
             return False
+
+    async def on_tool_approval_panel_approved(self, event: ToolApprovalPanel.Approved) -> None:
+        """Handle tool approval."""
+        self._tool_approval_result = "yes"
+        if self._pending_tool_approval:
+            self._pending_tool_approval.set()
+
+    async def on_tool_approval_panel_rejected(self, event: ToolApprovalPanel.Rejected) -> None:
+        """Handle tool rejection."""
+        self._tool_approval_result = "no"
+        if self._pending_tool_approval:
+            self._pending_tool_approval.set()
+
+    async def on_tool_approval_panel_approve_all(self, event: ToolApprovalPanel.ApproveAll) -> None:
+        """Handle approve all."""
+        self._tool_approval_result = "all"
+        if self._pending_tool_approval:
+            self._pending_tool_approval.set()
 
     async def stop_operation(self) -> None:
         """Stop current operation."""

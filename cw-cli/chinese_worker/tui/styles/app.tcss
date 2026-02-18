@@ -100,9 +100,10 @@ Screen {
 }
 
 /* Chat Screen */
-#chat-container {
+ChatScreen {
     width: 100%;
     height: 100%;
+    layout: vertical;
 }
 
 #status-bar {
@@ -118,15 +119,11 @@ Screen {
     scrollbar-gutter: stable;
 }
 
-#input-container {
-    dock: bottom;
-    height: auto;
-    padding: 1;
-    background: $surface-darken-1;
-}
-
 #chat-input {
+    dock: bottom;
     width: 100%;
+    margin: 1;
+    background: $surface-darken-1;
 }
 
 /* Message Widgets */
@@ -212,6 +209,36 @@ Screen {
     text-align: center;
     padding-top: 1;
     border-top: solid $primary-darken-2;
+}
+
+/* Inline Tool Approval Panel */
+.tool-approval-panel {
+    padding: 1;
+    margin: 1 0;
+    background: $warning-darken-3;
+    border: solid $warning;
+}
+
+.tool-approval-panel:focus {
+    border: double $warning;
+}
+
+#tool-header {
+    margin-bottom: 1;
+}
+
+#tool-buttons {
+    margin-top: 1;
+    height: auto;
+}
+
+#tool-buttons Button {
+    width: 1fr;
+    margin: 0 1;
+}
+
+#tool-help {
+    margin-top: 1;
 }
 
 /* Thinking Block */

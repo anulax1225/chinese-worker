@@ -67,3 +67,13 @@ class MessageWidget(Static):
             self.add_class("streaming")
         else:
             self.remove_class("streaming")
+
+    def get_markdown_widget(self) -> Markdown:
+        """Return the Markdown widget for streaming.
+
+        Only valid for assistant messages. Use with Markdown.get_stream() for
+        flicker-free streaming.
+        """
+        if self._role != "assistant":
+            raise ValueError("get_markdown_widget() is only valid for assistant messages")
+        return self.query_one("#message-content", Markdown)
