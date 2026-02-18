@@ -32,8 +32,7 @@ class DashboardController extends Controller
                 sum(case when status = 'active' then 1 else 0 end) as active,
                 sum(case when status = 'inactive' then 1 else 0 end) as inactive,
                 sum(case when status = 'error' then 1 else 0 end) as error
-            ")
-            ->first();
+            ")->first();
 
         // Conversation stats in single query
         $conversationStats = Conversation::where('user_id', $user->id)
@@ -44,10 +43,9 @@ class DashboardController extends Controller
                 sum(case when status = 'active' then 1 else 0 end) as active,
                 sum(case when status = 'cancelled' then 1 else 0 end) as cancelled,
                 sum(case when status = 'waiting_tool' then 1 else 0 end) as waiting_tool,
-                sum(case when date(started_at) = curdate() then 1 else 0 end) as today,
-                sum(case when date(started_at) = date_sub(curdate(), interval 1 day) then 1 else 0 end) as yesterday
-            ")
-            ->first();
+                sum(case when started_at::date = CURRENT_DATE then 1 else 0 end) as today,
+                sum(case when started_at::date = CURRENT_DATE - INTERVAL '1 day' then 1 else 0 end) as yesterday
+            ")->first();
 
         $totalTools = Tool::where('user_id', $user->id)->count();
 
