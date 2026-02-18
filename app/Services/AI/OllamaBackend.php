@@ -194,7 +194,7 @@ class OllamaBackend implements AIBackendInterface
             } finally {
                 $body->close();
             }
-        } catch (GuzzleException $e) {
+        } catch (GuzzleException|RuntimeException $e) {
             throw new RuntimeException(
                 "Ollama streaming request failed: {$e->getMessage()}",
                 $e->getCode(),
@@ -548,7 +548,16 @@ class OllamaBackend implements AIBackendInterface
         $line = '';
 
         while (! $stream->eof()) {
-            $char = $stream->read(1);
+            try {
+                $char = $stream->read(1);
+            } catch (RuntimeException) {
+                // Stream closed or unreadable (connection reset, Ollama crash, etc.)
+                break;
+            }
+
+            if ($char === '') {
+                break;
+            }
 
             if ($char === "\n") {
                 break;
