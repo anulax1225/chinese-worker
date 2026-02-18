@@ -4,7 +4,7 @@ import asyncio
 from typing import Optional, Dict, Any, List
 
 from textual.app import ComposeResult
-from textual.containers import VerticalScroll
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Input, Markdown
 from textual.binding import Binding
@@ -14,6 +14,7 @@ from ..widgets.status_bar import StatusBar
 from ..widgets.thinking import ThinkingBlock
 from ..widgets.tool_panel import ToolApprovalPanel
 from ..widgets.tool_status import ToolStatusWidget
+from ..widgets.conversation_sidebar import ConversationSidebar
 from ..handlers.stream import StreamHandler
 from ..handlers.commands import CommandRegistry
 from ..handlers.tools import ToolExecutor
@@ -28,6 +29,7 @@ class ChatScreen(Screen):
         Binding("ctrl+c", "stop", "Stop"),
         Binding("escape", "back", "Back"),
         Binding("ctrl+l", "clear", "Clear"),
+        Binding("ctrl+b", "toggle_sidebar", "Sidebar"),
     ]
 
     def __init__(
@@ -48,12 +50,16 @@ class ChatScreen(Screen):
         self._pending_tool_event: Optional[asyncio.Event] = None
         self._tool_decision: Optional[str] = None
         self._current_tool_panel: Optional[ToolApprovalPanel] = None
+        # Sidebar state
+        self._sidebar_visible = False
 
     def compose(self) -> ComposeResult:
-        message_list = VerticalScroll(id="message-list")
-        message_list.can_focus = False
         yield StatusBar(self.agent, id="status-bar")
-        yield message_list
+        with Horizontal(id="chat-layout"):
+            yield ConversationSidebar(self.agent.get("id"), id="sidebar")
+            message_list = VerticalScroll(id="message-list")
+            message_list.can_focus = False
+            yield message_list
         yield Input(placeholder="Type your message... (/ for commands)", id="chat-input")
 
     async def on_mount(self) -> None:
@@ -64,8 +70,15 @@ class ChatScreen(Screen):
             on_message=self.add_system_message,
         )
 
+        # Update sidebar with current conversation
+        sidebar = self.query_one("#sidebar", ConversationSidebar)
+        if self.conversation_id:
+            sidebar.set_current_conversation(self.conversation_id)
+
         if self.conversation:
-            asyncio.create_task(self._load_history())
+            await self._load_history()
+            # Check for pending tools after loading history
+            asyncio.create_task(self._check_pending_tools())
         else:
             asyncio.create_task(self._create_conversation())
 
@@ -88,6 +101,12 @@ class ChatScreen(Screen):
             self.conversation = response.get("data", response)
             self.conversation_id = self.conversation["id"]
             status.set_status("Connected")
+
+            # Update sidebar
+            sidebar = self.query_one("#sidebar", ConversationSidebar)
+            sidebar.set_current_conversation(self.conversation_id)
+            if sidebar.is_visible:
+                await sidebar.load_conversations()
 
         except Exception as e:
             status.set_status(f"Error: {e}", error=True)
@@ -115,6 +134,120 @@ class ChatScreen(Screen):
                     message_list.mount(ChatMessage(content, role="assistant"))
 
         message_list.scroll_end(animate=False)
+
+    async def _check_pending_tools(self) -> None:
+        """Check for and handle pending tool requests when resuming.
+
+        This handles two scenarios:
+        1. Server-side paused state with pending_tool_request field
+        2. Unanswered tool calls in the last assistant message
+        """
+        if not self.conversation:
+            return
+
+        status_val = self.conversation.get("status")
+        waiting_for = self.conversation.get("waiting_for")
+        pending_tool = self.conversation.get("pending_tool_request")
+
+        # Check server-side paused state
+        if status_val == "paused" and waiting_for == "tool_result" and pending_tool:
+            self.add_system_message("Found pending tool request from previous session")
+            approved = await self._handle_tool_request(pending_tool)
+            if approved:
+                # Reconnect to stream for response
+                asyncio.create_task(self._reconnect_stream())
+            return
+
+        # Check message history for unanswered tool calls
+        messages = self.conversation.get("messages", [])
+        if not messages:
+            return
+
+        last_msg = messages[-1]
+        if last_msg.get("role") != "assistant":
+            return
+
+        tool_calls = last_msg.get("tool_calls", [])
+        if not tool_calls:
+            return
+
+        # Find answered tool call IDs
+        answered_ids = {
+            m.get("tool_call_id")
+            for m in messages
+            if m.get("role") == "tool"
+        }
+
+        for tc in tool_calls:
+            call_id = tc.get("call_id") or tc.get("id")
+            if call_id and call_id not in answered_ids:
+                self.add_system_message("Found unanswered tool call from previous session")
+                tool_request = {
+                    "call_id": call_id,
+                    "name": tc.get("name"),
+                    "arguments": tc.get("arguments", {}),
+                }
+                approved = await self._handle_tool_request(tool_request)
+                if approved:
+                    asyncio.create_task(self._reconnect_stream())
+                return
+
+    async def _reconnect_stream(self) -> None:
+        """Reconnect to SSE stream after tool result submission."""
+        self.is_processing = True
+        status = self.query_one("#status-bar", StatusBar)
+        chat_input = self.query_one("#chat-input", Input)
+        chat_input.disabled = True
+        status.set_status("Thinking...")
+
+        try:
+            await self._handle_response({})
+        finally:
+            self.is_processing = False
+            chat_input.disabled = False
+            chat_input.focus()
+            status.set_status("Connected")
+
+    async def switch_conversation(self, conversation_id: int) -> None:
+        """Switch to a different conversation.
+
+        Args:
+            conversation_id: ID of the conversation to switch to
+        """
+        # Stop current stream
+        await self.stop_operation()
+
+        # Clear current messages
+        self.query_one("#message-list", VerticalScroll).remove_children()
+        self.messages = []
+
+        # Load new conversation
+        status = self.query_one("#status-bar", StatusBar)
+        status.set_status("Loading...")
+
+        try:
+            loop = asyncio.get_event_loop()
+            self.conversation = await loop.run_in_executor(
+                None,
+                self.app.client.get_conversation,
+                conversation_id,
+            )
+            self.conversation_id = conversation_id
+
+            # Load history
+            await self._load_history()
+
+            # Update sidebar
+            sidebar = self.query_one("#sidebar", ConversationSidebar)
+            sidebar.set_current_conversation(conversation_id)
+
+            status.set_status("Connected")
+
+            # Check for pending tools
+            await self._check_pending_tools()
+
+        except Exception as e:
+            status.set_status(f"Error: {e}", error=True)
 
     # ── Input handling ──────────────────────────────────────────────
 
@@ -380,6 +513,10 @@ class ChatScreen(Screen):
             return True
 
         message_list = self.query_one("#message-list", VerticalScroll)
+        chat_input = self.query_one("#chat-input", Input)
+
+        # Disable input during tool approval
+        chat_input.disabled = True
 
         # Show inline approval panel and wait for user decision
         self._pending_tool_event = asyncio.Event()
@@ -388,7 +525,9 @@ class ChatScreen(Screen):
         self._current_tool_panel = panel
         message_list.mount(panel)
         message_list.scroll_end()
-        panel.focus()
+
+        # Use call_after_refresh for reliable focus timing
+        self.call_after_refresh(panel.focus)
 
         await self._pending_tool_event.wait()
         decision = self._tool_decision
@@ -398,6 +537,9 @@ class ChatScreen(Screen):
             self._current_tool_panel.remove()
             self._current_tool_panel = None
         self._pending_tool_event = None
+
+        # Re-enable input
+        chat_input.disabled = False
 
         if decision == "yes":
             await self.tool_executor.execute(self.conversation_id, tool_request)
@@ -424,6 +566,27 @@ class ChatScreen(Screen):
         self._tool_decision = "all"
         if self._pending_tool_event:
             self._pending_tool_event.set()
+
+    # ── Sidebar message handlers ─────────────────────────────────────
+
+    async def on_conversation_sidebar_new_conversation(
+        self, event: ConversationSidebar.NewConversation
+    ) -> None:
+        """Handle new conversation request from sidebar."""
+        event.stop()
+        await self.stop_operation()
+        self.query_one("#message-list", VerticalScroll).remove_children()
+        self.messages = []
+        self.conversation = None
+        self.conversation_id = None
+        await self._create_conversation()
+
+    async def on_conversation_sidebar_switch_conversation(
+        self, event: ConversationSidebar.SwitchConversation
+    ) -> None:
+        """Handle conversation switch request from sidebar."""
+        event.stop()
+        await self.switch_conversation(event.conversation_id)
 
     # ── Actions ─────────────────────────────────────────────────────
 
@@ -455,6 +618,11 @@ class ChatScreen(Screen):
     async def action_clear(self) -> None:
         self.query_one("#message-list", VerticalScroll).remove_children()
         self.messages = []
+
+    async def action_toggle_sidebar(self) -> None:
+        """Toggle the conversation sidebar."""
+        sidebar = self.query_one("#sidebar", ConversationSidebar)
+        sidebar.toggle()
 
     def add_system_message(self, content: str) -> None:
         message_list = self.query_one("#message-list", VerticalScroll)
