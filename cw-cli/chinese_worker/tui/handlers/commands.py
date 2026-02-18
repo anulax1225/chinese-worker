@@ -1,6 +1,7 @@
 """Slash command registry for TUI."""
 
 import asyncio
+import os
 from typing import TYPE_CHECKING
 
 from ..utils.time import relative_time
@@ -26,6 +27,10 @@ class CommandRegistry:
         "/switch <id>": "Switch to conversation by ID",
         "/delete": "Delete current conversation",
         "/info": "Show current conversation info",
+        "/documents": "Open document browser",
+        "/docs": "Open document browser (alias)",
+        "/upload <path>": "Upload a document from file path",
+        "/upload-url <url>": "Upload a document from URL",
     }
 
     def __init__(self, screen: "ChatScreen") -> None:
@@ -51,6 +56,10 @@ class CommandRegistry:
             "/switch": lambda: self._cmd_switch(args),
             "/delete": self._cmd_delete,
             "/info": self._cmd_info,
+            "/documents": self._cmd_documents,
+            "/docs": self._cmd_documents,
+            "/upload": lambda: self._cmd_upload(args),
+            "/upload-url": lambda: self._cmd_upload_url(args),
         }.get(cmd_name)
 
         if handler:
@@ -181,3 +190,66 @@ class CommandRegistry:
             info.append(f"  Waiting for: {waiting_for}")
 
         self.screen.add_system_message("\n".join(info))
+
+    async def _cmd_documents(self) -> None:
+        """Open the document browser screen."""
+        from ..screens.documents import DocumentListScreen
+
+        self.screen.app.push_screen(DocumentListScreen())
+
+    async def _cmd_upload(self, args: str) -> None:
+        """Upload a document from file path."""
+        path = args.strip()
+        if not path:
+            self.screen.add_system_message("Usage: /upload <file_path>")
+            return
+
+        # Expand user path
+        path = os.path.expanduser(path)
+
+        if not os.path.exists(path):
+            self.screen.add_system_message(f"[#f38ba8]File not found: {path}[/#f38ba8]")
+            return
+
+        self.screen.add_system_message(f"Uploading {path}...")
+
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: self.screen.app.client.upload_document(path, None),
+            )
+            doc_data = result.get("data", result)
+            doc_id = doc_data.get("id")
+            title = doc_data.get("title") or doc_data.get("original_filename", "document")
+            self.screen.add_system_message(
+                f"[#a6e3a1]✓[/#a6e3a1] Uploaded: {title} (#{doc_id})\n"
+                f"  Use /documents to view processing status."
+            )
+        except Exception as e:
+            self.screen.add_system_message(f"[#f38ba8]Upload failed: {e}[/#f38ba8]")
+
+    async def _cmd_upload_url(self, args: str) -> None:
+        """Upload a document from URL."""
+        url = args.strip()
+        if not url:
+            self.screen.add_system_message("Usage: /upload-url <url>")
+            return
+
+        self.screen.add_system_message(f"Uploading from {url}...")
+
+        try:
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: self.screen.app.client.upload_document_from_url(url, None),
+            )
+            doc_data = result.get("data", result)
+            doc_id = doc_data.get("id")
+            title = doc_data.get("title") or doc_data.get("original_filename", "document")
+            self.screen.add_system_message(
+                f"[#a6e3a1]✓[/#a6e3a1] Uploaded: {title} (#{doc_id})\n"
+                f"  Use /documents to view processing status."
+            )
+        except Exception as e:
+            self.screen.add_system_message(f"[#f38ba8]Upload failed: {e}[/#f38ba8]")

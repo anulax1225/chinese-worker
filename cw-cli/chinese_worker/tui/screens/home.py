@@ -41,6 +41,7 @@ class HomeScreen(Screen):
         Binding("escape", "quit", "Quit"),
         Binding("r", "refresh", "Refresh"),
         Binding("c", "conversations", "Conversations"),
+        Binding("d", "documents", "Documents"),
     ]
 
     def __init__(self) -> None:
@@ -55,7 +56,7 @@ class HomeScreen(Screen):
             VerticalScroll(id="agent-list"),
             Static(
                 "[dim][bold]Enter[/bold] select  [bold]j/k[/bold] navigate  "
-                "[bold]c[/bold] conversations  [bold]r[/bold] refresh[/dim]",
+                "[bold]c[/bold] conversations  [bold]d[/bold] documents  [bold]r[/bold] refresh[/dim]",
                 id="home-help",
             ),
             id="home-container",
@@ -146,3 +147,9 @@ class HomeScreen(Screen):
         from .conversations import ConversationListScreen
 
         self.app.push_screen(ConversationListScreen())
+
+    async def action_documents(self) -> None:
+        """Open document browser screen."""
+        from .documents import DocumentListScreen
+
+        self.app.push_screen(DocumentListScreen())
