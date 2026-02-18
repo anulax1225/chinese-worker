@@ -24,7 +24,7 @@ class ChatMessage(Static):
 
     def compose(self) -> ComposeResult:
         if self._role == "assistant":
-            yield Static("[bold green]Assistant:[/bold green]", id="message-prefix")
+            yield Static("[bold #a6e3a1]Assistant:[/bold #a6e3a1]", id="message-prefix")
             initial = "" if self._streaming and not self._content else self._content
             yield Markdown(initial, id="message-content")
         else:
@@ -32,13 +32,13 @@ class ChatMessage(Static):
 
     def _render_content(self) -> str:
         if self._role == "user":
-            return f"[bold cyan]You:[/bold cyan] {self._content}"
+            return f"[bold #89b4fa]You:[/bold #89b4fa] {self._content}"
         elif self._role == "system":
-            return f"[dim]{self._content}[/dim]"
+            return f"[#7f849c]{self._content}[/#7f849c]"
         elif self._role == "error":
-            return f"[red]{self._content}[/red]"
+            return f"[#f38ba8]{self._content}[/#f38ba8]"
         elif self._role == "tool":
-            return f"[yellow]Tool:[/yellow] {self._content}"
+            return f"[#fab387]Tool:[/#fab387] {self._content}"
         return self._content
 
     def update_content(self, content: str) -> None:

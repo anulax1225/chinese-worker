@@ -21,12 +21,12 @@ class StatusBar(Static):
 
     def render(self) -> str:
         if self.is_error:
-            indicator = "[red]\u25cf[/red]"
+            indicator = "[#f38ba8]\u25cf[/#f38ba8]"
         elif self.status in ("Thinking...", "Streaming..."):
-            indicator = "[yellow]\u25cf[/yellow]"
+            indicator = "[#f9e2af]\u25cf[/#f9e2af]"
         else:
-            indicator = "[green]\u25cf[/green]"
-        return f" {indicator} [bold]{self.agent_name}[/bold] [dim]({self.model})[/dim]  {self.status}"
+            indicator = "[#a6e3a1]\u25cf[/#a6e3a1]"
+        return f" {indicator} [bold]{self.agent_name}[/bold] [#7f849c]({self.model})[/#7f849c]  {self.status}"
 
     def set_status(self, status: str, error: bool = False) -> None:
         self.status = status

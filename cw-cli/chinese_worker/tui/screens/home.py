@@ -25,11 +25,11 @@ class AgentCard(Static):
         description = self.agent.get("description", "")
 
         content = f"[bold]{name}[/bold]\n"
-        content += f"[dim]{backend}[/dim] / [cyan]{model}[/cyan]\n"
+        content += f"[#7f849c]{backend}[/#7f849c] / [#89dceb]{model}[/#89dceb]\n"
         if description:
             truncated = description[:60] + ("..." if len(description) > 60 else "")
-            content += f"[dim italic]{truncated}[/dim italic]\n"
-        content += f"[dim]Tools: {tools_count}[/dim]"
+            content += f"[#7f849c italic]{truncated}[/#7f849c italic]\n"
+        content += f"[#7f849c]Tools: {tools_count}[/#7f849c]"
 
         yield Static(content)
 
@@ -66,7 +66,7 @@ class HomeScreen(Screen):
         loading = self.query_one("#loading", Static)
         agent_list = self.query_one("#agent-list", VerticalScroll)
 
-        loading.update("[dim]Loading agents...[/dim]")
+        loading.update("[#7f849c]Loading agents...[/#7f849c]")
         loading.display = True
         agent_list.remove_children()
 
@@ -78,7 +78,7 @@ class HomeScreen(Screen):
             )
 
             if not self.agents:
-                loading.update("[yellow]No agents found. Create one in the web app.[/yellow]")
+                loading.update("[#f9e2af]No agents found. Create one in the web app.[/#f9e2af]")
                 return
 
             loading.display = False
@@ -93,7 +93,7 @@ class HomeScreen(Screen):
                 agent_list.mount(card)
 
         except Exception as e:
-            loading.update(f"[red]Failed to load agents: {e}[/red]")
+            loading.update(f"[#f38ba8]Failed to load agents: {e}[/#f38ba8]")
 
     def on_click(self, event) -> None:
         for widget in self.query(".agent-card"):

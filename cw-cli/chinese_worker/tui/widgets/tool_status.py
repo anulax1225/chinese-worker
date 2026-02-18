@@ -8,7 +8,7 @@ from textual.widgets import Static
 
 
 class ToolStatusWidget(Static):
-    """Shows a tool's lifecycle: executing → completed/failed."""
+    """Shows a tool's lifecycle: executing -> completed/failed."""
 
     tool_name: reactive[str] = reactive("")
     call_id: reactive[str] = reactive("")
@@ -29,25 +29,29 @@ class ToolStatusWidget(Static):
 
     def render(self) -> str:
         if self.status == "executing":
-            return f"[yellow]\u25b6[/yellow] [bold]{self.tool_name}[/bold] [dim]running...[/dim]"
+            return f"[#fab387]\u25b6[/#fab387] [bold]{self.tool_name}[/bold] [#7f849c]running...[/#7f849c]"
         elif self.status == "completed" and self.success:
             preview = self._truncate(self.result_content, 200)
-            result = f"[green]\u2713[/green] [bold]{self.tool_name}[/bold]"
+            result = f"[#a6e3a1]\u2713[/#a6e3a1] [bold]{self.tool_name}[/bold]"
             if preview:
-                result += f"\n[dim]{preview}[/dim]"
+                result += f"\n[#7f849c]{preview}[/#7f849c]"
             return result
         elif self.status == "completed" and not self.success:
             preview = self._truncate(self.result_content, 200)
-            result = f"[red]\u2717[/red] [bold]{self.tool_name}[/bold] [red]failed[/red]"
+            result = f"[#f38ba8]\u2717[/#f38ba8] [bold]{self.tool_name}[/bold] [#f38ba8]failed[/#f38ba8]"
             if preview:
-                result += f"\n[dim]{preview}[/dim]"
+                result += f"\n[#7f849c]{preview}[/#7f849c]"
             return result
-        return f"[dim]{self.tool_name}[/dim]"
+        return f"[#7f849c]{self.tool_name}[/#7f849c]"
 
     def complete(self, success: bool, content: str = "") -> None:
         self.success = success
         self.result_content = content
         self.status = "completed"
+        if success:
+            self.add_class("-success-border")
+        else:
+            self.add_class("-error-border")
 
     @staticmethod
     def _truncate(text: str, max_len: int) -> str:

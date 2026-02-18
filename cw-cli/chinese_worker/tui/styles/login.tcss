@@ -1,4 +1,4 @@
-/* LoginScreen styles */
+/* LoginScreen styles — Catppuccin Mocha */
 
 #login-container {
     align: center middle;
@@ -9,30 +9,37 @@
 #login-form {
     width: 56;
     height: auto;
-    padding: 1 2;
-    border: solid $primary;
+    padding: 2 3;
+    border: solid $ctp-lavender;
     background: $panel;
 }
 
 #login-title {
     text-align: center;
     text-style: bold;
-    color: $primary;
+    color: $ctp-mauve;
     padding: 1 0;
 }
 
 #login-subtitle {
     text-align: center;
-    color: $text-muted;
+    color: $ctp-subtext0;
     padding-bottom: 2;
 }
 
 #login-form Label {
     padding: 1 0 0 0;
+    color: $ctp-subtext1;
 }
 
 #login-form Input {
     margin: 0 0 1 0;
+    background: $surface;
+    border: tall $ctp-surface2;
+}
+
+#login-form Input:focus {
+    border: tall $ctp-lavender;
 }
 
 #login-btn {
@@ -43,4 +50,5 @@
 #login-error {
     margin-top: 1;
     text-align: center;
+    color: $error;
 }

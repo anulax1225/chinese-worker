@@ -50,10 +50,10 @@ class LoginScreen(Screen):
         password = password_input.value
 
         if not email or not password:
-            error_msg.update("[red]Please enter email and password[/red]")
+            error_msg.update("[#f38ba8]Please enter email and password[/#f38ba8]")
             return
 
-        error_msg.update("[dim]Logging in...[/dim]")
+        error_msg.update("[#7f849c]Logging in...[/#7f849c]")
         email_input.disabled = True
         password_input.disabled = True
 
@@ -69,7 +69,7 @@ class LoginScreen(Screen):
             from .home import HomeScreen
             self.app.switch_screen(HomeScreen())
         except Exception as e:
-            error_msg.update(f"[red]Login failed: {e}[/red]")
+            error_msg.update(f"[#f38ba8]Login failed: {e}[/#f38ba8]")
             email_input.disabled = False
             password_input.disabled = False
 

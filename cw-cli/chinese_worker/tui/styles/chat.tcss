@@ -1,34 +1,43 @@
-/* ChatScreen + widget styles */
+/* ChatScreen + widget styles — Catppuccin Mocha */
 
 ChatScreen {
     layout: vertical;
 }
 
-/* Status bar */
+/* ── Status bar ──────────────────────────────────────────── */
+
 #status-bar {
     dock: top;
     height: 1;
     padding: 0 2;
-    background: $primary-darken-2;
-    color: $text;
+    background: $ctp-mantle;
+    color: $ctp-text;
 }
 
-/* Message list */
+/* ── Message list ────────────────────────────────────────── */
+
 #message-list {
     height: 1fr;
     padding: 0 1;
     scrollbar-gutter: stable;
 }
 
-/* Chat input */
+/* ── Chat input ──────────────────────────────────────────── */
+
 #chat-input {
     dock: bottom;
     width: 100%;
     margin: 0 1;
-    background: $surface-darken-1;
+    background: $surface;
+    border: tall $ctp-surface2;
 }
 
-/* Messages */
+#chat-input:focus {
+    border: tall $ctp-lavender;
+}
+
+/* ── Messages ────────────────────────────────────────────── */
+
 .message-user {
     padding: 0 1;
     margin: 1 0 0 8;
@@ -38,11 +47,11 @@ ChatScreen {
     padding: 1 2;
     margin: 1 0 0 0;
     background: $panel;
-    border-left: thick $success;
+    border-left: thick $ctp-green;
 }
 
 .message-assistant.streaming {
-    border-left: thick $warning;
+    border-left: thick $ctp-lavender;
 }
 
 .message-assistant Markdown {
@@ -54,58 +63,64 @@ ChatScreen {
     padding: 0 1;
     margin: 1 0;
     text-align: center;
-    color: $text-muted;
+    color: $ctp-overlay1;
 }
 
 .message-error {
-    padding: 1;
+    padding: 1 2;
     margin: 1 0;
     background: $panel;
     border: solid $error;
+    border-left: thick $error;
 }
 
 .message-tool {
-    padding: 1;
+    padding: 1 2;
     margin: 1 0;
-    background: $surface-darken-1;
-    border-left: thick $warning;
+    background: $surface;
+    border-left: thick $ctp-peach;
 }
 
-/* Thinking block */
+/* ── Thinking block ──────────────────────────────────────── */
+
 .thinking-block {
     margin: 0 0 0 2;
-    border-left: solid #666666;
+    border-left: solid $ctp-overlay0;
 }
 
 .thinking-block > CollapsibleTitle {
-    color: #888888;
+    color: $ctp-overlay1;
     text-style: italic;
 }
 
 .thinking-text {
-    color: #888888;
+    color: $ctp-overlay1;
     padding: 0 1;
 }
 
-/* Tool approval panel */
+/* ── Tool approval panel ─────────────────────────────────── */
+
 .tool-panel {
     padding: 1 2;
     margin: 1 0;
-    background: $surface-darken-1;
-    border: solid $warning;
+    background: $surface;
+    border: solid $ctp-peach;
 }
 
 .tool-panel:focus {
-    border: double $warning;
+    border: double $ctp-peach;
+    background: $surface-lighten-1;
 }
 
 #tool-header {
     margin-bottom: 1;
+    color: $ctp-peach;
 }
 
 #tool-args {
     padding: 1;
-    background: $surface-darken-1;
+    background: $ctp-mantle;
+    color: $ctp-subtext1;
 }
 
 #tool-buttons {
@@ -120,16 +135,28 @@ ChatScreen {
 
 #tool-help {
     margin-top: 1;
+    color: $ctp-overlay0;
 }
 
-/* Tool execution status */
+/* ── Tool execution status ───────────────────────────────── */
+
 .tool-status {
     padding: 0 2;
     margin: 0 0 0 2;
-    border-left: thick $warning;
+    border-left: thick $ctp-peach;
 }
 
-/* Assistant prefix */
+.tool-status.-success-border {
+    border-left: thick $ctp-green;
+}
+
+.tool-status.-error-border {
+    border-left: thick $ctp-red;
+}
+
+/* ── Assistant prefix ────────────────────────────────────── */
+
 #message-prefix {
     margin-bottom: 1;
+    color: $ctp-green;
 }

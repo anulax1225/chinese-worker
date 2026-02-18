@@ -1,4 +1,4 @@
-/* HomeScreen styles */
+/* HomeScreen styles — Catppuccin Mocha */
 
 #home-container {
     width: 100%;
@@ -10,13 +10,16 @@
     dock: top;
     height: 3;
     padding: 0 2;
-    background: $primary-darken-2;
+    background: $ctp-mantle;
     content-align: center middle;
+    color: $ctp-mauve;
+    text-style: bold;
 }
 
 #loading {
     text-align: center;
     padding: 2;
+    color: $ctp-subtext0;
 }
 
 #agent-list {
@@ -25,19 +28,24 @@
 }
 
 .agent-card {
-    padding: 1;
+    padding: 1 2;
     margin: 0 0 1 0;
-    border: solid $primary-darken-2;
+    border: solid $ctp-surface2;
     background: $panel;
 }
 
-.agent-card.selected {
-    border: solid $primary;
-    background: $primary-darken-3;
+.agent-card:hover {
+    background: $surface-lighten-1;
+    border: solid $ctp-overlay0;
 }
 
-.agent-card:hover {
-    background: $primary-darken-2;
+.agent-card.selected {
+    border: solid $ctp-mauve;
+    background: $surface;
+}
+
+.agent-card.selected:hover {
+    background: $surface-lighten-1;
 }
 
 #home-help {
@@ -45,5 +53,6 @@
     height: 1;
     padding: 0 1;
     text-align: center;
-    background: $surface-darken-1;
+    background: $ctp-mantle;
+    color: $ctp-overlay1;
 }

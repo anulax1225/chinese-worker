@@ -1,6 +1,64 @@
-/* Chinese Worker TUI — shared design tokens (Catppuccin Mocha-inspired) */
+/* Chinese Worker TUI — Catppuccin Mocha design tokens & utility classes */
 
 Screen {
-    background: $surface;
+    background: $background;
     color: $text;
+}
+
+/* ── Semantic state classes ─────────────────────────────────── */
+
+.-success {
+    color: $success;
+}
+
+.-success-border {
+    border-left: thick $ctp-green;
+}
+
+.-error {
+    color: $error;
+}
+
+.-error-border {
+    border: solid $error;
+}
+
+.-executing {
+    border-left: thick $ctp-peach;
+}
+
+.-streaming {
+    border-left: thick $ctp-lavender;
+}
+
+.-warning {
+    color: $warning;
+}
+
+.-warning-border {
+    border: solid $warning;
+}
+
+/* ── Focus / hover shared patterns ──────────────────────────── */
+
+.-focusable:focus {
+    border: double $ctp-lavender;
+}
+
+.-hoverable:hover {
+    background: $surface-lighten-1;
+}
+
+/* ── Typography helpers ─────────────────────────────────────── */
+
+.-muted {
+    color: $text-muted;
+}
+
+.-dim {
+    color: $ctp-overlay1;
+}
+
+.-subtext {
+    color: $ctp-subtext0;
 }

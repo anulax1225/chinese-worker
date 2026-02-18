@@ -46,7 +46,7 @@ class CommandRegistry:
     async def _cmd_help(self) -> None:
         lines = ["[bold]Available Commands:[/bold]"]
         for cmd, desc in self.COMMANDS.items():
-            lines.append(f"  [cyan]{cmd}[/cyan] - {desc}")
+            lines.append(f"  [#89dceb]{cmd}[/#89dceb] - {desc}")
         self.screen.add_system_message("\n".join(lines))
 
     async def _cmd_agents(self) -> None:
@@ -65,7 +65,7 @@ class CommandRegistry:
             tools = self.screen.tool_executor.get_tool_names()
             lines = ["[bold]Available Tools:[/bold]"]
             for name in sorted(tools):
-                lines.append(f"  - [cyan]{name}[/cyan]")
+                lines.append(f"  - [#89dceb]{name}[/#89dceb]")
             self.screen.add_system_message("\n".join(lines))
         else:
             self.screen.add_system_message("Tool handler not initialized.")
@@ -73,7 +73,7 @@ class CommandRegistry:
     async def _cmd_approve_all(self) -> None:
         self.screen.app.auto_approve_tools = True
         self.screen.add_system_message(
-            "[green]Auto-approve mode enabled.[/green] All future tools will be automatically approved."
+            "[#a6e3a1]Auto-approve mode enabled.[/#a6e3a1] All future tools will be automatically approved."
         )
 
     async def _cmd_exit(self) -> None:
