@@ -415,8 +415,9 @@ class ChatScreen(Screen):
                         tool = data.get("tool", {})
                         t_name = tool.get("name", "unknown")
                         t_call_id = tool.get("call_id", "")
+                        t_input = tool.get("input", {})
                         status.set_status(f"Tool: {t_name}")
-                        tw = ToolStatusWidget(t_name, call_id=t_call_id)
+                        tw = ToolStatusWidget(t_name, call_id=t_call_id, tool_input=t_input)
                         if t_call_id:
                             tool_widgets[t_call_id] = tw
                         message_list.mount(tw)
