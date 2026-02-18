@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Api\V1;
 use App\Enums\DocumentSourceType;
 use App\Enums\DocumentStageType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\SearchDocumentsRequest;
 use App\Http\Requests\StoreDocumentRequest;
 use App\Http\Resources\DocumentChunkResource;
 use App\Http\Resources\DocumentResource;
 use App\Http\Resources\DocumentStageResource;
 use App\Models\Document;
+use App\Models\DocumentChunk;
 use App\Models\User;
 use App\Services\Document\DocumentIngestionService;
+use App\Services\RAG\RAGPipeline;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -25,7 +28,10 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
  */
 class DocumentController extends Controller
 {
-    public function __construct(protected DocumentIngestionService $ingestionService) {}
+    public function __construct(
+        protected DocumentIngestionService $ingestionService,
+        protected RAGPipeline $ragPipeline,
+    ) {}
 
     /**
      * List Documents
@@ -244,6 +250,113 @@ class DocumentController extends Controller
         $this->ingestionService->delete($document);
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Search Documents
+     *
+     * Search document content using semantic similarity (RAG) with keyword fallback.
+     * Searches across all documents owned by the authenticated user, or scoped to a
+     * single document when `document_id` is provided.
+     *
+     * @bodyParam query string required The search query (min 2 chars). Example: "authentication flow"
+     * @bodyParam document_id integer optional Limit search to a specific document. Example: 1
+     * @bodyParam max_results integer Maximum results to return (1–10). Default: 5. Example: 5
+     *
+     * @response 200 scenario="Success" {
+     *   "query": "authentication flow",
+     *   "strategy": "vector",
+     *   "results": [
+     *     {
+     *       "document_id": 1,
+     *       "document_title": "API Design Guide",
+     *       "chunk_index": 3,
+     *       "score": 0.921,
+     *       "preview": "Authentication is handled via Bearer tokens...",
+     *       "section_title": "Authentication"
+     *     }
+     *   ],
+     *   "count": 1
+     * }
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"query": ["A search query is required."]}}
+     */
+    public function search(SearchDocumentsRequest $request): JsonResponse
+    {
+        $user = $request->user();
+        $query = $request->validated('query');
+        $maxResults = (int) $request->validated('max_results', 5);
+        $documentId = $request->validated('document_id');
+
+        if ($documentId) {
+            $document = Document::query()->where('id', $documentId)->firstOrFail();
+            $this->authorize('view', $document);
+            $documents = collect([$document]);
+        } else {
+            $documents = $user->documents()->get();
+        }
+
+        if ($documents->isEmpty()) {
+            return response()->json([
+                'query' => $query,
+                'strategy' => 'none',
+                'results' => [],
+                'count' => 0,
+            ]);
+        }
+
+        // Try RAG pipeline first
+        $ragResult = $this->ragPipeline->execute($query, $documents, [
+            'top_k' => $maxResults,
+            'user_id' => $user->id,
+        ]);
+
+        if ($ragResult->success && $ragResult->hasContext()) {
+            $results = collect($ragResult->retrieval->chunks)->map(function (DocumentChunk $chunk) use ($ragResult): array {
+                $score = $ragResult->retrieval->scores[$chunk->id] ?? null;
+
+                return [
+                    'document_id' => $chunk->document_id,
+                    'document_title' => $chunk->document->title ?? 'Untitled',
+                    'chunk_index' => $chunk->chunk_index,
+                    'score' => $score !== null ? round($score, 4) : null,
+                    'preview' => $chunk->getPreview(300),
+                    'section_title' => $chunk->section_title,
+                ];
+            });
+
+            return response()->json([
+                'query' => $query,
+                'strategy' => $ragResult->strategy(),
+                'results' => $results,
+                'count' => $results->count(),
+            ]);
+        }
+
+        // Fallback to keyword search
+        $chunks = DocumentChunk::query()
+            ->whereIn('document_id', $documents->pluck('id'))
+            ->search($query)
+            ->ordered()
+            ->limit($maxResults)
+            ->with('document')
+            ->get();
+
+        $results = $chunks->map(fn (DocumentChunk $chunk): array => [
+            'document_id' => $chunk->document_id,
+            'document_title' => $chunk->document->title ?? 'Untitled',
+            'chunk_index' => $chunk->chunk_index,
+            'score' => null,
+            'preview' => $chunk->getPreview(300),
+            'section_title' => $chunk->section_title,
+        ]);
+
+        return response()->json([
+            'query' => $query,
+            'strategy' => 'keyword',
+            'results' => $results,
+            'count' => $results->count(),
+        ]);
     }
 
     /**

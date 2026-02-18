@@ -67,6 +67,7 @@ Route::prefix('v1')->group(function (): void {
 
         // Documents
         Route::get('documents/supported-types', [DocumentController::class, 'supportedTypes']);
+        Route::post('documents/search', [DocumentController::class, 'search']);
         Route::apiResource('documents', DocumentController::class)->except(['update']);
         Route::get('documents/{document}/stages', [DocumentController::class, 'stages']);
         Route::get('documents/{document}/chunks', [DocumentController::class, 'chunks']);
