@@ -53,7 +53,9 @@ class FileService
      */
     public function storeFromPath(string $path, string $type, int $userId, string $mimeType): File
     {
-        $storagePath = "files/{$type}/".uniqid('doc_', true);
+        $extension = pathinfo($path, PATHINFO_EXTENSION);
+        $suffix = $extension ? ".{$extension}" : '';
+        $storagePath = "files/{$type}/".uniqid('doc_', true).$suffix;
         Storage::put($storagePath, file_get_contents($path));
 
         return File::query()->create([
