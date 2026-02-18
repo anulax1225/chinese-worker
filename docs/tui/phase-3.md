@@ -268,9 +268,9 @@ async def poll_document_status(self, doc_id: int):
 
 ## Acceptance Criteria
 
-- [ ] DocumentListScreen shows all documents with status
-- [ ] Can filter documents by status
-- [ ] Can upload a document via file path
+- [X] DocumentListScreen shows all documents with status
+- [X] Can filter documents by status
+- [X] Can upload a document via file path
 - [ ] Can upload a document via URL
 - [ ] Upload shows progress, polls for completion
 - [ ] DocumentDetailScreen shows metadata + processing stages + preview

@@ -9,6 +9,8 @@
 - Use conventional commit format: `type(scope): description` (e.g., `feat(api): add summary endpoints`, `fix(auth): resolve token expiration`).
 - Do not batch unrelated changes into a single commit.
 - If the code changes are big, use the commit-writter agent.
+- When writing commit messages do not add "Co-Authored by MODEL_NAME" 
+- NEVER restore files if you don't know why there here. Ask the user what to do about it.  
 
 ### Laravel Sail
 
