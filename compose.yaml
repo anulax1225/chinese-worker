@@ -174,14 +174,14 @@ services:
             OLLAMA_CONTEXT_LENGTH: 1000000
             OLLAMA_KEEP_ALIVE: 3600
         # Vulkan adapter if not an nvidia card
-            OLLAMA_VULKAN: 1
-        devices:
-            # - /dev/kfd
-            - /dev/dri
+        #     OLLAMA_VULKAN: 1
+        # devices:
+        #     # - /dev/kfd
+        #     - /dev/dri
         group_add:
            - video
         # if it's an nvdia card (also install nvidia-container-kit for integration with docker)
-        # gpus: all
+        gpus: all
         ports:
             - '${FORWARD_OLLAMA_PORT:-11434}:11434'
         volumes:
@@ -202,28 +202,28 @@ services:
     vllm-gpu:
         build:
             context: './.sail/cw-vllm'
-            # dockerfile: Dockerfile.nvidia
-            dockerfile: Dockerfile.rocm
-        # image: 'sail/vllm-managed-gpu-nvidia:latest'
-        image: 'sail/vllm-managed-gpu-rocm:latest'
+            dockerfile: Dockerfile.nvidia
+            # dockerfile: Dockerfile.rocm
+        image: 'sail/vllm-managed-gpu-nvidia:latest'
+        # image: 'sail/vllm-managed-gpu-rocm:latest'
         # if it's an nvidia card (also install nvidia-container-kit for integration with docker)
-        # deploy:
-        #     resources:
-        #         reservations:
-        #             devices:
-        #                 - driver: nvidia
-        #                   count: all
-        #                   capabilities: [gpu]
-        # ulimits:
-        #     memlock:
-        #         soft: -1
-        #         hard: -1        # ← unlimited locked memory for CUDA pinned alloc
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - driver: nvidia
+                          count: all
+                          capabilities: [gpu]
+        ulimits:
+            memlock:
+                soft: -1
+                hard: -1        # ← unlimited locked memory for CUDA pinned alloc
         # Vulkan / AMD ROCm alternative (requires changing base image in Dockerfile):
-        devices:
-            # - /dev/kfd
-            - /dev/dri
-        group_add:
-           - video
+        # devices:
+        #     # - /dev/kfd
+        #     - /dev/dri
+        # group_add:
+        #    - video
         restart: 'no'
         ports:
             - '${FORWARD_VLLM_GPU_PORT:-8001}:8000'
