@@ -7,8 +7,10 @@ Chinese Worker supports multiple AI backends through a unified interface. This g
 | Backend | Type | Streaming | Function Calling | Vision | Model Management |
 |---------|------|-----------|------------------|--------|------------------|
 | **Ollama** | Local | Yes | Yes | Yes | Yes |
+| **vLLM** | Self-hosted | Yes | Yes | Yes | Yes |
 | **Anthropic Claude** | Cloud | Yes | Yes | No* | No |
 | **OpenAI** | Cloud | Yes | Yes | Yes | No |
+| **HuggingFace** | Cloud | Yes | Yes | Yes | No |
 
 \* Claude supports vision but it's not yet implemented in Chinese Worker.
 
@@ -22,7 +24,7 @@ Set in `.env`:
 AI_BACKEND=ollama
 ```
 
-Options: `ollama`, `claude`, `openai`
+Options: `ollama`, `vllm-gpu`, `vllm-cpu`, `claude`, `openai`, `huggingface`
 
 ### Per-Agent Override
 
@@ -176,6 +178,143 @@ curl http://localhost:11434/api/generate -d '{
 }'
 ```
 
+## vLLM
+
+vLLM is a high-performance inference server optimized for serving LLMs with GPU acceleration. It supports model management through a manager service that provides Ollama-compatible APIs.
+
+### When to Use vLLM
+
+- **GPU inference** with higher throughput than Ollama
+- **Production deployments** requiring PagedAttention and continuous batching
+- **HuggingFace models** without conversion to GGUF format
+- **Reasoning models** like DeepSeek-R1 with thinking/reasoning support
+
+### Configuration
+
+Chinese Worker supports both GPU and CPU vLLM deployments:
+
+```env
+# GPU deployment (recommended)
+AI_BACKEND=vllm-gpu
+VLLM_GPU_BASE_URL=http://vllm-gpu:8000/v1
+VLLM_GPU_MODEL=meta-llama/Llama-3.1-8B-Instruct
+
+# CPU deployment (slower, no GPU required)
+AI_BACKEND=vllm-cpu
+VLLM_CPU_BASE_URL=http://vllm-cpu:8000/v1
+VLLM_CPU_MODEL=meta-llama/Llama-3.2-3B-Instruct
+
+# Optional authentication
+VLLM_API_KEY=your-api-key
+
+# Timeouts and limits
+VLLM_TIMEOUT=120
+VLLM_MAX_TOKENS=4096
+```
+
+### Model Management
+
+vLLM includes model management through a manager service that provides pull, delete, switch, and list operations.
+
+#### Pull Models
+
+```bash
+# Via API
+POST /api/v1/ai-backends/vllm-gpu/models/pull
+{
+    "model": "meta-llama/Llama-3.1-8B-Instruct"
+}
+```
+
+#### List Models
+
+```bash
+# Via API
+GET /api/v1/ai-backends/vllm-gpu/models
+```
+
+#### Switch Models
+
+Pre-warm a model before inference to avoid cold-start delays:
+
+```bash
+# Via API
+POST /api/v1/ai-backends/vllm-gpu/models/switch
+{
+    "model": "meta-llama/Llama-3.1-8B-Instruct"
+}
+```
+
+#### Delete Models
+
+```bash
+# Via API
+DELETE /api/v1/ai-backends/vllm-gpu/models/meta-llama/Llama-3.1-8B-Instruct
+```
+
+Note: Cannot delete the currently loaded model. Switch to another model first.
+
+### Supported Models
+
+vLLM supports most HuggingFace Transformers models. Popular choices include:
+
+| Model | Size | Context | Notes |
+|-------|------|---------|-------|
+| `meta-llama/Llama-3.1-8B-Instruct` | 8B | 128K | Default, balanced |
+| `meta-llama/Llama-3.1-70B-Instruct` | 70B | 128K | High capability |
+| `meta-llama/Llama-3.2-3B-Instruct` | 3B | 128K | Fast, CPU-friendly |
+| `Qwen/Qwen2.5-72B-Instruct` | 72B | 128K | Strong multilingual |
+| `Qwen/Qwen2.5-Coder-32B-Instruct` | 32B | 128K | Code-specialized |
+| `deepseek-ai/DeepSeek-R1` | 7B-671B | 64K | Reasoning-focused |
+
+### Model Configuration
+
+```json
+{
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "temperature": 0.7,
+    "maxTokens": 4096,
+    "topP": 0.9
+}
+```
+
+**vLLM-specific parameters:**
+
+| Parameter | Range | Default | Description |
+|-----------|-------|---------|-------------|
+| `temperature` | 0-2 | 0.7 | Randomness of output |
+| `maxTokens` | 1-∞ | 4096 | Maximum response tokens |
+| `topP` | 0-1 | 0.9 | Nucleus sampling |
+| `topK` | 1-100 | - | Top-k sampling |
+
+### Reasoning/Thinking Support
+
+vLLM supports reasoning models that expose their "thinking" process. The backend handles both `reasoning_content` (vLLM <=0.11) and `reasoning` (vLLM >=0.12) fields, streaming them to the UI.
+
+### Health Check
+
+```bash
+# Check manager status
+curl http://localhost:8000/api/status
+
+# Check health endpoint
+curl http://localhost:8000/health
+
+# List available models
+curl http://localhost:8000/api/tags
+```
+
+### GPU Requirements
+
+vLLM requires NVIDIA GPU with CUDA support for GPU inference. Memory requirements depend on model size:
+
+| Model Size | Minimum VRAM |
+|------------|--------------|
+| 3B | 8 GB |
+| 7-8B | 16 GB |
+| 13-14B | 24 GB |
+| 70B+ | 80 GB+ (multi-GPU) |
+
 ## Anthropic Claude
 
 Claude is Anthropic's flagship AI model, known for its reasoning capabilities and safety.
@@ -282,6 +421,95 @@ OPENAI_MODEL=gpt-4
 
 OpenAI uses pay-per-token pricing. Check https://openai.com/pricing for current rates.
 
+## HuggingFace
+
+HuggingFace Inference Providers give you access to a wide range of open models hosted on HuggingFace infrastructure. This is a pay-per-token cloud service similar to OpenAI/Anthropic but with open-weight models.
+
+### Getting an API Key
+
+1. Go to https://huggingface.co/
+2. Create an account
+3. Navigate to Settings > Access Tokens
+4. Create a new token with "Read" permissions
+
+Note: API keys must start with `hf_`.
+
+### Configuration
+
+```env
+AI_BACKEND=huggingface
+HUGGINGFACE_API_KEY=hf_...
+HUGGINGFACE_MODEL=meta-llama/Llama-3.1-8B-Instruct
+HUGGINGFACE_TIMEOUT=120
+```
+
+For advanced routing, you can specify a provider:
+
+```env
+# Route to a specific inference provider
+HUGGINGFACE_PROVIDER=together
+HUGGINGFACE_BASE_URL=https://router.huggingface.co/v1
+```
+
+### Available Models
+
+HuggingFace hosts many open models. Popular choices include:
+
+| Model | Context | Notes |
+|-------|---------|-------|
+| `meta-llama/Llama-3.1-8B-Instruct` | 128K | Fast, efficient |
+| `meta-llama/Llama-3.1-70B-Instruct` | 128K | High capability |
+| `Qwen/Qwen2.5-72B-Instruct` | 128K | Strong multilingual |
+| `Qwen/Qwen2.5-Coder-32B-Instruct` | 128K | Code-specialized |
+| `mistralai/Mistral-7B-Instruct-v0.3` | 32K | Fast and efficient |
+| `deepseek-ai/DeepSeek-R1` | 64K | Reasoning-focused |
+| `google/gemma-2-2b-it` | 8K | Tiny, fast model |
+
+Check https://huggingface.co/models for the full catalog.
+
+### Model Configuration
+
+```json
+{
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "temperature": 0.7,
+    "maxTokens": 4096
+}
+```
+
+**HuggingFace-specific parameters:**
+
+| Parameter | Range | Default | Description |
+|-----------|-------|---------|-------------|
+| `temperature` | 0-2 | 0.7 | Randomness |
+| `maxTokens` | 1-∞ | 4096 | Maximum output tokens |
+| `topP` | 0-1 | 0.9 | Nucleus sampling |
+
+### Model Management
+
+HuggingFace Inference Providers do not support model management (pull/delete). Models are hosted by HuggingFace and available on-demand.
+
+### Provider Selection
+
+You can optionally specify a provider suffix to route to a specific inference provider:
+
+```env
+# Use Together AI as the inference provider
+HUGGINGFACE_PROVIDER=together
+```
+
+When set, the model name becomes `meta-llama/Llama-3.1-8B-Instruct:together`.
+
+### Pricing
+
+HuggingFace Inference Providers use pay-per-token pricing. Rates vary by model and provider. Check https://huggingface.co/pricing for current rates.
+
+### Limitations
+
+- No model management (models are cloud-hosted)
+- No embeddings support (use Ollama or OpenAI for embeddings)
+- API key must start with `hf_`
+
 ## Configuration Normalization
 
 Chinese Worker normalizes configuration across backends using `ModelConfigNormalizer`:
@@ -352,9 +580,12 @@ curl -X GET /api/v1/ai-backends
 
 # Check backend status
 curl -X GET /api/v1/ai-backends/ollama
+curl -X GET /api/v1/ai-backends/vllm-gpu
+curl -X GET /api/v1/ai-backends/huggingface
 
-# List models
+# List models (for backends that support model management)
 curl -X GET /api/v1/ai-backends/ollama/models
+curl -X GET /api/v1/ai-backends/vllm-gpu/models
 ```
 
 ### Via Tinker
@@ -365,14 +596,24 @@ php artisan tinker
 >>> $manager = app(\App\Services\AIBackendManager::class);
 >>> $backend = $manager->driver('ollama');
 >>> $backend->listModels();
+
+# Test vLLM
+>>> $vllm = $manager->driver('vllm-gpu');
+>>> $vllm->getStatus();
+
+# Test HuggingFace
+>>> $hf = $manager->driver('huggingface');
+>>> $hf->listModels();
 ```
 
 ## Best Practices
 
 1. **Development:** Use Ollama with small models (llama3.2:1b, qwen2.5:0.5b)
-2. **Production (cost-sensitive):** Use Ollama with appropriate hardware
-3. **Production (performance-focused):** Use Claude or GPT-4 with caching
-4. **Mixed workloads:** Use per-agent backend selection
+2. **Production (self-hosted, cost-sensitive):** Use Ollama or vLLM with appropriate hardware
+3. **Production (self-hosted, high throughput):** Use vLLM with GPU for better batching
+4. **Production (cloud, performance-focused):** Use Claude or GPT-4 with caching
+5. **Production (cloud, open models):** Use HuggingFace Inference Providers
+6. **Mixed workloads:** Use per-agent backend selection
 
 ## Troubleshooting
 
@@ -387,6 +628,34 @@ journalctl -u ollama -f
 
 # Test connection
 curl http://localhost:11434/api/tags
+```
+
+### vLLM Not Responding
+
+```bash
+# Check manager status
+curl http://localhost:8000/api/status
+
+# Common issues:
+# - 502/503: Model still loading (can take minutes for large models)
+# - 404: Model endpoint not found, server may be starting
+# - 0: Cannot connect, check if container is running
+
+# With Docker Compose
+docker compose logs vllm-gpu
+```
+
+### HuggingFace API Errors
+
+```bash
+# Verify API key format (must start with hf_)
+echo $HUGGINGFACE_API_KEY | head -c 3
+
+# Test API directly
+curl https://router.huggingface.co/v1/chat/completions \
+  -H "Authorization: Bearer $HUGGINGFACE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "meta-llama/Llama-3.1-8B-Instruct", "messages": [{"role": "user", "content": "Hi"}], "max_tokens": 10}'
 ```
 
 ### API Key Errors
