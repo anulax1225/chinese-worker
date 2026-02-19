@@ -6,6 +6,8 @@ use App\Contracts\AIBackendInterface;
 use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
+use App\DTOs\GenerateRequest;
+use App\DTOs\GenerateResponse;
 use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
@@ -708,5 +710,27 @@ class HuggingFaceBackend implements AIBackendInterface
     public function getEmbeddingDimensions(?string $_model = null): int
     {
         throw new RuntimeException('Embeddings are not yet implemented for HuggingFace backend.');
+    }
+
+    /**
+     * Generate text completion from a prompt (non-streaming).
+     *
+     * @throws RuntimeException Always throws as generate endpoint is not yet implemented
+     */
+    public function generate(GenerateRequest $request): GenerateResponse
+    {
+        throw new RuntimeException('Generate endpoint is not yet implemented for HuggingFace backend.');
+    }
+
+    /**
+     * Generate text completion with streaming.
+     *
+     * @param  callable(string, string): void  $callback
+     *
+     * @throws RuntimeException Always throws as generate endpoint is not yet implemented
+     */
+    public function streamGenerate(GenerateRequest $request, callable $callback): GenerateResponse
+    {
+        throw new RuntimeException('Generate endpoint is not yet implemented for HuggingFace backend.');
     }
 }

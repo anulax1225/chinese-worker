@@ -6,6 +6,8 @@ use App\Contracts\AIBackendInterface;
 use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
+use App\DTOs\GenerateRequest;
+use App\DTOs\GenerateResponse;
 use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
@@ -216,5 +218,61 @@ class FakeBackend implements AIBackendInterface
     public function getEmbeddingDimensions(?string $model = null): int
     {
         return $this->embeddingDimensions;
+    }
+
+    /**
+     * Generate text completion from a prompt (non-streaming).
+     */
+    public function generate(GenerateRequest $request): GenerateResponse
+    {
+        return new GenerateResponse(
+            content: 'This is a fake generated response for: '.substr($request->prompt, 0, 50),
+            model: $this->model,
+            done: true,
+            doneReason: 'stop',
+            thinking: $request->think ? 'Fake thinking process...' : null,
+            totalDuration: 100_000_000,
+            loadDuration: 10_000_000,
+            promptEvalCount: 10,
+            promptEvalDuration: 20_000_000,
+            evalCount: 20,
+            evalDuration: 70_000_000,
+        );
+    }
+
+    /**
+     * Generate text completion with streaming.
+     *
+     * @param  callable(string, string): void  $callback
+     */
+    public function streamGenerate(GenerateRequest $request, callable $callback): GenerateResponse
+    {
+        $content = 'This is a fake streamed response for: '.substr($request->prompt, 0, 50);
+        $thinking = $request->think ? 'Fake thinking process...' : null;
+
+        if ($thinking) {
+            $callback($thinking, 'thinking');
+        }
+
+        // Stream content word by word
+        $words = explode(' ', $content);
+        foreach ($words as $i => $word) {
+            $chunk = $i === 0 ? $word : ' '.$word;
+            $callback($chunk, 'content');
+        }
+
+        return new GenerateResponse(
+            content: $content,
+            model: $this->model,
+            done: true,
+            doneReason: 'stop',
+            thinking: $thinking,
+            totalDuration: 100_000_000,
+            loadDuration: 10_000_000,
+            promptEvalCount: 10,
+            promptEvalDuration: 20_000_000,
+            evalCount: 20,
+            evalDuration: 70_000_000,
+        );
     }
 }

@@ -6,6 +6,8 @@ use App\Contracts\AIBackendInterface;
 use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
+use App\DTOs\GenerateRequest;
+use App\DTOs\GenerateResponse;
 use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
@@ -806,5 +808,27 @@ class OpenAIBackend implements AIBackendInterface
             'text-embedding-ada-002' => 1536,
             default => 1536,
         };
+    }
+
+    /**
+     * Generate text completion from a prompt (non-streaming).
+     *
+     * @throws RuntimeException Always throws as generate endpoint is not yet implemented
+     */
+    public function generate(GenerateRequest $request): GenerateResponse
+    {
+        throw new RuntimeException('Generate endpoint is not yet implemented for OpenAI backend.');
+    }
+
+    /**
+     * Generate text completion with streaming.
+     *
+     * @param  callable(string, string): void  $callback
+     *
+     * @throws RuntimeException Always throws as generate endpoint is not yet implemented
+     */
+    public function streamGenerate(GenerateRequest $request, callable $callback): GenerateResponse
+    {
+        throw new RuntimeException('Generate endpoint is not yet implemented for OpenAI backend.');
     }
 }

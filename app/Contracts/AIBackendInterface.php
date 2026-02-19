@@ -5,6 +5,8 @@ namespace App\Contracts;
 use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
+use App\DTOs\GenerateRequest;
+use App\DTOs\GenerateResponse;
 use App\DTOs\ModelPullProgress;
 use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
@@ -128,4 +130,25 @@ interface AIBackendInterface
      * @return int The number of dimensions in the embedding vector
      */
     public function getEmbeddingDimensions(?string $model = null): int;
+
+    /**
+     * Generate text completion from a prompt (non-streaming).
+     *
+     * Unlike execute() which is agent-based chat completion, this method
+     * performs simple text generation from a raw prompt.
+     *
+     * @throws \RuntimeException If generation fails or is not supported
+     */
+    public function generate(GenerateRequest $request): GenerateResponse;
+
+    /**
+     * Generate text completion with streaming.
+     *
+     * Calls the callback with streamed chunks as they arrive.
+     *
+     * @param  callable(string, string): void  $callback  Receives (content, type) where type is 'content' or 'thinking'
+     *
+     * @throws \RuntimeException If generation fails or is not supported
+     */
+    public function streamGenerate(GenerateRequest $request, callable $callback): GenerateResponse;
 }

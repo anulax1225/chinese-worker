@@ -6,6 +6,8 @@ use App\Contracts\AIBackendInterface;
 use App\DTOs\AIModel;
 use App\DTOs\AIResponse;
 use App\DTOs\ChatMessage;
+use App\DTOs\GenerateRequest;
+use App\DTOs\GenerateResponse;
 use App\DTOs\ModelPullProgress;
 use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
@@ -694,5 +696,139 @@ class OllamaBackend implements AIBackendInterface
             'snowflake-arctic-embed' => 1024,
             default => 768,
         };
+    }
+
+    /**
+     * Generate text completion from a prompt (non-streaming).
+     */
+    public function generate(GenerateRequest $request): GenerateResponse
+    {
+        $request->validate();
+
+        try {
+            $payload = $request->toOllamaPayload($this->model, false);
+
+            // Merge backend options with request options
+            if (! empty($this->options)) {
+                $payload['options'] = array_merge($this->options, $payload['options'] ?? []);
+            }
+
+            Log::info('Ollama generate request', [
+                'model' => $this->model,
+                'prompt_length' => strlen($request->prompt),
+                'has_images' => ! empty($request->images),
+                'think_mode' => $request->think,
+            ]);
+
+            $response = $this->client->post('/api/generate', [
+                'json' => $payload,
+                'timeout' => $this->timeout,
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            return GenerateResponse::fromOllamaResponse($data);
+        } catch (GuzzleException $e) {
+            throw new RuntimeException(
+                "Ollama generate request failed: {$e->getMessage()}",
+                $e->getCode(),
+                $e
+            );
+        }
+    }
+
+    /**
+     * Generate text completion with streaming.
+     *
+     * @param  callable(string, string): void  $callback  Receives (content, type)
+     */
+    public function streamGenerate(GenerateRequest $request, callable $callback): GenerateResponse
+    {
+        $request->validate();
+
+        try {
+            $payload = $request->toOllamaPayload($this->model, true);
+
+            // Merge backend options with request options
+            if (! empty($this->options)) {
+                $payload['options'] = array_merge($this->options, $payload['options'] ?? []);
+            }
+
+            Log::info('Ollama streaming generate request', [
+                'model' => $this->model,
+                'prompt_length' => strlen($request->prompt),
+                'has_images' => ! empty($request->images),
+                'think_mode' => $request->think,
+            ]);
+
+            $response = $this->client->post('/api/generate', [
+                'json' => $payload,
+                'stream' => true,
+            ]);
+
+            $body = $response->getBody();
+            $fullContent = '';
+            $fullThinking = '';
+            $lastData = [];
+
+            try {
+                while (! $body->eof()) {
+                    $line = $this->readLine($body);
+
+                    if (empty($line)) {
+                        continue;
+                    }
+
+                    $data = json_decode($line, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        continue;
+                    }
+
+                    // Handle thinking streaming (when think mode is enabled)
+                    if (isset($data['thinking']) && $data['thinking'] !== '') {
+                        $thinking = $data['thinking'];
+                        $fullThinking .= $thinking;
+                        $callback($thinking, 'thinking');
+                    }
+
+                    // Handle response content streaming
+                    if (isset($data['response']) && $data['response'] !== '') {
+                        $content = $data['response'];
+                        $fullContent .= $content;
+                        $callback($content, 'content');
+                    }
+
+                    if (! empty($data['done'])) {
+                        $lastData = $data;
+                        break;
+                    }
+                }
+
+                // Build final response with accumulated content
+                return new GenerateResponse(
+                    content: $fullContent,
+                    model: $lastData['model'] ?? $this->model,
+                    done: true,
+                    doneReason: $lastData['done_reason'] ?? null,
+                    thinking: $fullThinking ?: null,
+                    totalDuration: $lastData['total_duration'] ?? null,
+                    loadDuration: $lastData['load_duration'] ?? null,
+                    promptEvalCount: $lastData['prompt_eval_count'] ?? null,
+                    promptEvalDuration: $lastData['prompt_eval_duration'] ?? null,
+                    evalCount: $lastData['eval_count'] ?? null,
+                    evalDuration: $lastData['eval_duration'] ?? null,
+                    createdAt: $lastData['created_at'] ?? null,
+                );
+            } finally {
+                $body->close();
+            }
+        } catch (GuzzleException|RuntimeException $e) {
+            throw new RuntimeException(
+                "Ollama streaming generate request failed: {$e->getMessage()}",
+                $e->getCode(),
+                $e
+            );
+        }
     }
 }
