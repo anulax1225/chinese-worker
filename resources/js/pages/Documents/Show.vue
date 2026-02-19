@@ -9,6 +9,7 @@ import {
     preview as fetchPreview,
 } from '@/actions/App/Http/Controllers/Api/V1/DocumentController';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -47,6 +48,8 @@ import {
     Hash,
     AlertCircle,
     CheckCircle2,
+    Search,
+    X,
 } from 'lucide-vue-next';
 import type { Document, DocumentStage, BreadcrumbItem } from '@/types';
 
@@ -75,6 +78,17 @@ const chunksData = ref<DocumentChunk[]>([]);
 const chunksLoading = ref(false);
 const chunksPage = ref(1);
 const chunksHasMore = ref(false);
+const chunkSearch = ref('');
+
+const filteredChunks = computed(() => {
+    const query = chunkSearch.value.trim().toLowerCase();
+    if (!query) return chunksData.value;
+    return chunksData.value.filter(
+        (chunk) =>
+            chunk.content.toLowerCase().includes(query) ||
+            chunk.section_title?.toLowerCase().includes(query)
+    );
+});
 
 // Preview data (lazy loaded)
 const previewData = ref<{
@@ -246,6 +260,9 @@ const handleTabChange = (tab: string) => {
         loadChunks();
     } else if (tab === 'preview' && !previewData.value) {
         loadPreview();
+    }
+    if (tab !== 'chunks') {
+        chunkSearch.value = '';
     }
 };
 
@@ -623,12 +640,34 @@ onUnmounted(() => {
                     </div>
 
                     <div v-else class="space-y-3">
-                        <div class="flex items-center justify-between text-sm text-muted-foreground">
-                            <span>{{ chunksData.length }} of {{ chunksCount }} chunks loaded</span>
-                            <span>{{ totalTokens.toLocaleString() }} total tokens</span>
+                        <div class="flex items-center justify-between gap-4">
+                            <div class="relative flex-1 max-w-sm">
+                                <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                <Input
+                                    v-model="chunkSearch"
+                                    placeholder="Search chunks..."
+                                    class="pl-9 pr-9"
+                                />
+                                <button
+                                    v-if="chunkSearch"
+                                    @click="chunkSearch = ''"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                    <X class="h-4 w-4" />
+                                </button>
+                            </div>
+                            <div class="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
+                                <span v-if="chunkSearch">{{ filteredChunks.length }} of {{ chunksData.length }} shown</span>
+                                <span v-else>{{ chunksData.length }} of {{ chunksCount }} loaded</span>
+                                <span>{{ totalTokens.toLocaleString() }} tokens</span>
+                            </div>
                         </div>
 
-                        <Card v-for="chunk in chunksData" :key="chunk.id">
+                        <div v-if="chunkSearch && filteredChunks.length === 0" class="text-center py-8">
+                            <p class="text-muted-foreground">No chunks match your search</p>
+                        </div>
+
+                        <Card v-for="chunk in filteredChunks" :key="chunk.id">
                             <CardHeader class="pb-2">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center gap-2">
