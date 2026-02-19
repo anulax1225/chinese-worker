@@ -15,6 +15,7 @@ class WebFetchService
         private readonly WebFetchClientInterface $client,
         private readonly ContentExtractor $extractor,
         private readonly ?FetchCache $cache = null,
+        private readonly ?FetchedPageStore $fetchedPageStore = null,
     ) {}
 
     /**
@@ -88,6 +89,15 @@ class WebFetchService
             $this->cache->put($request, $document);
         }
 
+        // Persist to DB for future semantic search (fire-and-forget, never blocks fetch)
+        if ($this->fetchedPageStore && $document->hasContent()) {
+            try {
+                $this->fetchedPageStore->persist($document);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
+
         return $document;
     }
 
@@ -117,7 +127,10 @@ class WebFetchService
         $cache = config('webfetch.cache.enabled', true)
             ? FetchCache::fromConfig()
             : null;
+        $store = config('ai.rag.enabled', false)
+            ? app(FetchedPageStore::class)
+            : null;
 
-        return new self($client, $extractor, $cache);
+        return new self($client, $extractor, $cache, $store);
     }
 }
