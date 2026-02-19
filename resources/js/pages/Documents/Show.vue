@@ -7,6 +7,7 @@ import {
     reprocess,
     chunks as fetchChunks,
     preview as fetchPreview,
+    search as searchDocument,
 } from '@/actions/App/Http/Controllers/Api/V1/DocumentController';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,15 +81,65 @@ const chunksPage = ref(1);
 const chunksHasMore = ref(false);
 const chunkSearch = ref('');
 
-const filteredChunks = computed(() => {
-    const query = chunkSearch.value.trim().toLowerCase();
-    if (!query) return chunksData.value;
-    return chunksData.value.filter(
-        (chunk) =>
-            chunk.content.toLowerCase().includes(query) ||
-            chunk.section_title?.toLowerCase().includes(query)
-    );
-});
+interface SearchResultItem {
+    document_id: number;
+    document_title: string;
+    chunk_index: number;
+    score: number | null;
+    preview: string;
+    section_title: string | null;
+}
+
+const searchResults = ref<SearchResultItem[] | null>(null);
+const searchLoading = ref(false);
+const searchStrategy = ref<string | null>(null);
+const searchError = ref<string | null>(null);
+
+const runSearch = async () => {
+    const query = chunkSearch.value.trim();
+    if (!query) return;
+
+    searchLoading.value = true;
+    searchError.value = null;
+
+    try {
+        const response = await fetch(searchDocument.url(), {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'X-XSRF-TOKEN': decodeURIComponent(
+                    document.cookie.match(/XSRF-TOKEN=([^;]+)/)?.[1] || ''
+                ),
+            },
+            body: JSON.stringify({
+                query,
+                document_id: props.document.id,
+                max_results: 10,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Search failed');
+        }
+
+        const data = await response.json();
+        searchResults.value = data.results;
+        searchStrategy.value = data.strategy;
+    } catch {
+        searchError.value = 'Search failed. Please try again.';
+        searchResults.value = null;
+    } finally {
+        searchLoading.value = false;
+    }
+};
+
+const clearSearch = () => {
+    chunkSearch.value = '';
+    searchResults.value = null;
+    searchStrategy.value = null;
+    searchError.value = null;
+};
 
 // Preview data (lazy loaded)
 const previewData = ref<{
@@ -262,7 +313,7 @@ const handleTabChange = (tab: string) => {
         loadPreview();
     }
     if (tab !== 'chunks') {
-        chunkSearch.value = '';
+        clearSearch();
     }
 };
 
@@ -640,72 +691,111 @@ onUnmounted(() => {
                     </div>
 
                     <div v-else class="space-y-3">
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="relative flex-1 max-w-sm">
+                        <!-- Search bar -->
+                        <div class="flex items-center gap-2">
+                            <div class="relative flex-1">
                                 <Search class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                                 <Input
                                     v-model="chunkSearch"
-                                    placeholder="Search chunks..."
+                                    placeholder="Search chunks semantically..."
                                     class="pl-9 pr-9"
+                                    @keyup.enter="runSearch"
                                 />
                                 <button
                                     v-if="chunkSearch"
-                                    @click="chunkSearch = ''"
+                                    @click="clearSearch"
                                     class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                                 >
                                     <X class="h-4 w-4" />
                                 </button>
                             </div>
-                            <div class="flex items-center gap-4 text-sm text-muted-foreground shrink-0">
-                                <span v-if="chunkSearch">{{ filteredChunks.length }} of {{ chunksData.length }} shown</span>
-                                <span v-else>{{ chunksData.length }} of {{ chunksCount }} loaded</span>
-                                <span>{{ totalTokens.toLocaleString() }} tokens</span>
-                            </div>
-                        </div>
-
-                        <div v-if="chunkSearch && filteredChunks.length === 0" class="text-center py-8">
-                            <p class="text-muted-foreground">No chunks match your search</p>
-                        </div>
-
-                        <Card v-for="chunk in filteredChunks" :key="chunk.id">
-                            <CardHeader class="pb-2">
-                                <div class="flex items-center justify-between">
-                                    <div class="flex items-center gap-2">
-                                        <Badge variant="secondary">
-                                            Chunk #{{ chunk.chunk_index + 1 }}
-                                        </Badge>
-                                        <span class="text-xs text-muted-foreground">
-                                            {{ chunk.token_count }} tokens
-                                        </span>
-                                    </div>
-                                    <span
-                                        v-if="chunk.section_title"
-                                        class="text-xs text-muted-foreground"
-                                    >
-                                        {{ chunk.section_title }}
-                                    </span>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <pre
-                                    class="text-sm font-mono whitespace-pre-wrap text-muted-foreground"
-                                >{{ chunk.content }}</pre>
-                            </CardContent>
-                        </Card>
-
-                        <div v-if="chunksHasMore" class="text-center">
                             <Button
-                                variant="outline"
-                                @click="loadChunks(chunksPage + 1)"
-                                :disabled="chunksLoading"
+                                @click="runSearch"
+                                :disabled="searchLoading || !chunkSearch.trim()"
                             >
-                                <Loader2
-                                    v-if="chunksLoading"
-                                    class="h-4 w-4 mr-2 animate-spin"
-                                />
-                                Load More
+                                <Loader2 v-if="searchLoading" class="h-4 w-4 mr-2 animate-spin" />
+                                <Search v-else class="h-4 w-4 mr-2" />
+                                Search
                             </Button>
                         </div>
+
+                        <!-- Search error -->
+                        <p v-if="searchError" class="text-sm text-destructive">{{ searchError }}</p>
+
+                        <!-- Search results -->
+                        <template v-if="searchResults !== null">
+                            <div class="flex items-center gap-3 text-sm text-muted-foreground">
+                                <span>{{ searchResults.length }} result{{ searchResults.length !== 1 ? 's' : '' }}</span>
+                                <Badge v-if="searchStrategy" variant="outline" class="text-xs font-normal">
+                                    {{ searchStrategy }}
+                                </Badge>
+                            </div>
+
+                            <div v-if="searchResults.length === 0" class="text-center py-8">
+                                <p class="text-muted-foreground">No results found for "{{ chunkSearch }}"</p>
+                            </div>
+
+                            <Card v-for="(result, index) in searchResults" :key="index">
+                                <CardHeader class="pb-2">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <Badge variant="secondary">
+                                                Chunk #{{ result.chunk_index + 1 }}
+                                            </Badge>
+                                            <span v-if="result.score !== null" class="text-xs text-muted-foreground">
+                                                score {{ result.score }}
+                                            </span>
+                                        </div>
+                                        <span v-if="result.section_title" class="text-xs text-muted-foreground">
+                                            {{ result.section_title }}
+                                        </span>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <pre class="text-sm font-mono whitespace-pre-wrap text-muted-foreground">{{ result.preview }}</pre>
+                                </CardContent>
+                            </Card>
+                        </template>
+
+                        <!-- Normal chunk list -->
+                        <template v-else>
+                            <div class="flex items-center justify-between text-sm text-muted-foreground">
+                                <span>{{ chunksData.length }} of {{ chunksCount }} loaded</span>
+                                <span>{{ totalTokens.toLocaleString() }} tokens</span>
+                            </div>
+
+                            <Card v-for="chunk in chunksData" :key="chunk.id">
+                                <CardHeader class="pb-2">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <Badge variant="secondary">
+                                                Chunk #{{ chunk.chunk_index + 1 }}
+                                            </Badge>
+                                            <span class="text-xs text-muted-foreground">
+                                                {{ chunk.token_count }} tokens
+                                            </span>
+                                        </div>
+                                        <span v-if="chunk.section_title" class="text-xs text-muted-foreground">
+                                            {{ chunk.section_title }}
+                                        </span>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <pre class="text-sm font-mono whitespace-pre-wrap text-muted-foreground">{{ chunk.content }}</pre>
+                                </CardContent>
+                            </Card>
+
+                            <div v-if="chunksHasMore" class="text-center">
+                                <Button
+                                    variant="outline"
+                                    @click="loadChunks(chunksPage + 1)"
+                                    :disabled="chunksLoading"
+                                >
+                                    <Loader2 v-if="chunksLoading" class="h-4 w-4 mr-2 animate-spin" />
+                                    Load More
+                                </Button>
+                            </div>
+                        </template>
                     </div>
                 </TabsContent>
 
