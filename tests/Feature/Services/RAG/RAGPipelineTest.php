@@ -1,13 +1,14 @@
 <?php
 
 use App\DTOs\RetrievalResult;
+use App\DTOs\SearchResult;
 use App\Models\Conversation;
 use App\Models\Document;
 use App\Models\DocumentChunk;
+use App\Services\Embedding\VectorSearchService;
 use App\Services\RAG\RAGContextBuilder;
 use App\Services\RAG\RAGPipeline;
 use App\Services\RAG\RAGPipelineResult;
-use App\Services\RAG\RetrievalService;
 use Illuminate\Support\Facades\Config;
 
 describe('RAGPipeline', function () {
@@ -40,17 +41,17 @@ describe('RAGPipeline', function () {
             ->withEmbedding()
             ->create();
 
-        $mockRetrievalResult = new RetrievalResult(
-            chunks: $chunks,
+        $mockSearchResult = new SearchResult(
+            items: $chunks,
             strategy: 'hybrid',
             scores: [$chunks[0]->id => 0.9, $chunks[1]->id => 0.8],
             executionTimeMs: 50.0,
         );
 
-        $mockRetrievalService = Mockery::mock(RetrievalService::class);
-        $mockRetrievalService->shouldReceive('retrieve')
+        $mockVectorSearch = Mockery::mock(VectorSearchService::class);
+        $mockVectorSearch->shouldReceive('search')
             ->once()
-            ->andReturn($mockRetrievalResult);
+            ->andReturn($mockSearchResult);
 
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
         $mockContextBuilder->shouldReceive('build')
@@ -60,7 +61,7 @@ describe('RAGPipeline', function () {
             ->once()
             ->andReturn([]);
 
-        $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
+        $pipeline = new RAGPipeline($mockVectorSearch, $mockContextBuilder);
         $result = $pipeline->execute('test query', collect([$document]));
 
         expect($result)->toBeInstanceOf(RAGPipelineResult::class)
@@ -71,12 +72,12 @@ describe('RAGPipeline', function () {
     test('execute returns disabled result when RAG disabled', function () {
         Config::set('ai.rag.enabled', false);
 
-        $mockRetrievalService = Mockery::mock(RetrievalService::class);
-        $mockRetrievalService->shouldNotReceive('retrieve');
+        $mockVectorSearch = Mockery::mock(VectorSearchService::class);
+        $mockVectorSearch->shouldNotReceive('search');
 
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
 
-        $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
+        $pipeline = new RAGPipeline($mockVectorSearch, $mockContextBuilder);
         $result = $pipeline->execute('test query', collect());
 
         expect($result->success)->toBeFalse()
@@ -96,21 +97,22 @@ describe('RAGPipeline', function () {
             ->withEmbedding()
             ->create();
 
-        $mockRetrievalResult = new RetrievalResult(
-            chunks: collect([$chunks]),
+        $mockSearchResult = new SearchResult(
+            items: collect([$chunks]),
             strategy: 'hybrid',
+            scores: [],
         );
 
-        $mockRetrievalService = Mockery::mock(RetrievalService::class);
-        $mockRetrievalService->shouldReceive('retrieve')
+        $mockVectorSearch = Mockery::mock(VectorSearchService::class);
+        $mockVectorSearch->shouldReceive('search')
             ->once()
-            ->andReturn($mockRetrievalResult);
+            ->andReturn($mockSearchResult);
 
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
         $mockContextBuilder->shouldReceive('build')->andReturn('Context');
         $mockContextBuilder->shouldReceive('extractCitations')->andReturn([]);
 
-        $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
+        $pipeline = new RAGPipeline($mockVectorSearch, $mockContextBuilder);
         $result = $pipeline->executeForConversation($conversation, 'query');
 
         expect($result->success)->toBeTrue();
@@ -120,12 +122,12 @@ describe('RAGPipeline', function () {
         $conversation = Conversation::factory()->create();
         // No documents attached
 
-        $mockRetrievalService = Mockery::mock(RetrievalService::class);
-        $mockRetrievalService->shouldNotReceive('retrieve');
+        $mockVectorSearch = Mockery::mock(VectorSearchService::class);
+        $mockVectorSearch->shouldNotReceive('search');
 
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
 
-        $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
+        $pipeline = new RAGPipeline($mockVectorSearch, $mockContextBuilder);
         $result = $pipeline->executeForConversation($conversation, 'query');
 
         expect($result->success)->toBeFalse()
@@ -147,20 +149,21 @@ describe('RAGPipeline', function () {
             ->withEmbedding()
             ->create();
 
-        $mockRetrievalResult = new RetrievalResult(
-            chunks: collect([$chunks]),
+        $mockSearchResult = new SearchResult(
+            items: collect([$chunks]),
             strategy: 'hybrid',
+            scores: [],
             executionTimeMs: 100.0,
         );
 
-        $mockRetrievalService = Mockery::mock(RetrievalService::class);
-        $mockRetrievalService->shouldReceive('retrieve')->andReturn($mockRetrievalResult);
+        $mockVectorSearch = Mockery::mock(VectorSearchService::class);
+        $mockVectorSearch->shouldReceive('search')->andReturn($mockSearchResult);
 
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
         $mockContextBuilder->shouldReceive('build')->andReturn('Context');
         $mockContextBuilder->shouldReceive('extractCitations')->andReturn([]);
 
-        $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
+        $pipeline = new RAGPipeline($mockVectorSearch, $mockContextBuilder);
         $result = $pipeline->execute('query', collect([$document]));
 
         expect($result->executionTimeMs)->toBeGreaterThan(0);
@@ -173,23 +176,24 @@ describe('RAGPipeline', function () {
             ->withEmbedding()
             ->create();
 
-        $mockRetrievalResult = new RetrievalResult(
-            chunks: collect([$chunk]),
+        $mockSearchResult = new SearchResult(
+            items: collect([$chunk]),
             strategy: 'hybrid',
+            scores: [],
         );
 
         $mockCitations = [
             ['citation' => '[1] source.pdf', 'chunk_id' => $chunk->id],
         ];
 
-        $mockRetrievalService = Mockery::mock(RetrievalService::class);
-        $mockRetrievalService->shouldReceive('retrieve')->andReturn($mockRetrievalResult);
+        $mockVectorSearch = Mockery::mock(VectorSearchService::class);
+        $mockVectorSearch->shouldReceive('search')->andReturn($mockSearchResult);
 
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
         $mockContextBuilder->shouldReceive('build')->andReturn('Context with [1]');
         $mockContextBuilder->shouldReceive('extractCitations')->andReturn($mockCitations);
 
-        $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
+        $pipeline = new RAGPipeline($mockVectorSearch, $mockContextBuilder);
         $result = $pipeline->execute('query', collect([$document]));
 
         expect($result->citations)->toBe($mockCitations)
@@ -200,16 +204,14 @@ describe('RAGPipeline', function () {
         $document = Document::factory()->create();
         // No chunks
 
-        $mockRetrievalResult = RetrievalResult::empty();
+        $mockSearchResult = SearchResult::empty();
 
-        $mockRetrievalService = Mockery::mock(RetrievalService::class);
-        $mockRetrievalService->shouldReceive('retrieve')->andReturn($mockRetrievalResult);
+        $mockVectorSearch = Mockery::mock(VectorSearchService::class);
+        $mockVectorSearch->shouldReceive('search')->andReturn($mockSearchResult);
 
         $mockContextBuilder = Mockery::mock(RAGContextBuilder::class);
-        $mockContextBuilder->shouldReceive('build')->andReturn('');
-        $mockContextBuilder->shouldReceive('extractCitations')->andReturn([]);
 
-        $pipeline = new RAGPipeline($mockRetrievalService, $mockContextBuilder);
+        $pipeline = new RAGPipeline($mockVectorSearch, $mockContextBuilder);
         $result = $pipeline->execute('query', collect([$document]));
 
         expect($result->success)->toBeTrue()

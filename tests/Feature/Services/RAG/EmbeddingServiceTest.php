@@ -4,7 +4,8 @@ use App\Models\Document;
 use App\Models\DocumentChunk;
 use App\Models\EmbeddingCache;
 use App\Services\AI\FakeBackend;
-use App\Services\RAG\EmbeddingService;
+use App\Services\Embedding\EmbeddingService;
+use App\Services\Embedding\Writers\DocumentEmbeddingWriter;
 use Illuminate\Support\Facades\Config;
 
 defined('TEST_EMBEDDING_DIM') || define('TEST_EMBEDDING_DIM', 4);
@@ -80,31 +81,6 @@ describe('EmbeddingService', function () {
             ->and($results[0])->not->toBe($results[1]);
     });
 
-    test('embedChunks updates DocumentChunk models', function () {
-        $document = Document::factory()->create();
-        $chunk = DocumentChunk::factory()
-            ->for($document)
-            ->needsEmbedding()
-            ->create();
-
-        $service = new EmbeddingService($this->fakeBackend);
-        $service->embedChunks(collect([$chunk]));
-
-        $chunk->refresh();
-
-        expect($chunk->embedding_raw)->toBeArray()
-            ->and($chunk->embedding_raw)->toHaveCount(TEST_EMBEDDING_DIM)
-            ->and($chunk->embedding_model)->toBe(TEST_EMBEDDING_MODEL)
-            ->and($chunk->embedding_generated_at)->not->toBeNull();
-    });
-
-    test('embedChunks skips empty collection', function () {
-        $service = new EmbeddingService($this->fakeBackend);
-        $service->embedChunks(collect());
-
-        expect(true)->toBeTrue();
-    });
-
     test('generateSparseEmbedding creates term frequencies', function () {
         $service = new EmbeddingService($this->fakeBackend);
 
@@ -129,5 +105,61 @@ describe('EmbeddingService', function () {
         $dimensions = $service->getEmbeddingDimensions();
 
         expect($dimensions)->toBe(TEST_EMBEDDING_DIM);
+    });
+});
+
+describe('DocumentEmbeddingWriter', function () {
+    beforeEach(function () {
+        Config::set('ai.rag', [
+            'enabled' => true,
+            'embedding_model' => TEST_EMBEDDING_MODEL,
+            'embedding_backend' => 'fake',
+            'embedding_batch_size' => 100,
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
+            'cache_embeddings' => false,
+        ]);
+
+        $fakeBackend = new FakeBackend([
+            'model' => 'test-model',
+            'embedding_dimensions' => TEST_EMBEDDING_DIM,
+        ]);
+
+        $this->writer = new DocumentEmbeddingWriter(new EmbeddingService($fakeBackend));
+    });
+
+    test('write updates DocumentChunk embedding columns', function () {
+        $document = Document::factory()->create();
+        $chunk = DocumentChunk::factory()
+            ->for($document)
+            ->needsEmbedding()
+            ->create();
+
+        $this->writer->write(collect([$chunk]));
+
+        $chunk->refresh();
+
+        expect($chunk->embedding_raw)->toBeArray()
+            ->and($chunk->embedding_raw)->toHaveCount(TEST_EMBEDDING_DIM)
+            ->and($chunk->embedding_model)->toBe(TEST_EMBEDDING_MODEL)
+            ->and($chunk->embedding_generated_at)->not->toBeNull()
+            ->and($chunk->sparse_vector)->toBeArray()
+            ->and($chunk->sparse_vector)->not->toBeEmpty();
+    });
+
+    test('write skips empty collection', function () {
+        $this->writer->write(collect());
+
+        expect(true)->toBeTrue();
+    });
+
+    test('writeForDocument embeds only unembedded chunks', function () {
+        $document = Document::factory()->create();
+        DocumentChunk::factory()->for($document)->withEmbedding()->create();
+        $needs = DocumentChunk::factory()->for($document)->needsEmbedding()->create();
+
+        $this->writer->writeForDocument($document->id);
+
+        $needs->refresh();
+        expect($needs->embedding_generated_at)->not->toBeNull();
     });
 });

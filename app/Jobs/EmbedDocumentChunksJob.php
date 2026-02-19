@@ -3,8 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Document;
-use App\Models\DocumentChunk;
-use App\Services\RAG\EmbeddingService;
+use App\Services\Embedding\Writers\DocumentEmbeddingWriter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -66,9 +65,8 @@ class EmbedDocumentChunksJob implements ShouldQueue
         ];
     }
 
-    public function handle(EmbeddingService $embeddingService): void
+    public function handle(DocumentEmbeddingWriter $writer): void
     {
-        // Skip if RAG is disabled
         if (! config('ai.rag.enabled', false)) {
             Log::info('Skipping document embedding - RAG is disabled', [
                 'document_id' => $this->document->id,
@@ -86,38 +84,10 @@ class EmbedDocumentChunksJob implements ShouldQueue
         ]);
 
         try {
-            // Get chunks that need embedding
-            $chunks = DocumentChunk::where('document_id', $document->id)
-                ->whereNull('embedding_generated_at')
-                ->get();
+            $writer->writeForDocument($document->id, $this->model);
 
-            if ($chunks->isEmpty()) {
-                Log::info('No chunks need embedding', [
-                    'document_id' => $document->id,
-                ]);
+            $totalEmbedded = $document->chunks()->whereNotNull('embedding_generated_at')->count();
 
-                return;
-            }
-
-            // Process in batches to avoid memory issues
-            $batchSize = config('ai.rag.embedding_batch_size', 100);
-            $chunked = $chunks->chunk($batchSize);
-
-            $totalEmbedded = 0;
-
-            foreach ($chunked as $batch) {
-                $embeddingService->embedChunks($batch, $this->model);
-                $totalEmbedded += $batch->count();
-
-                Log::debug('Embedded batch of chunks', [
-                    'document_id' => $document->id,
-                    'batch_size' => $batch->count(),
-                    'total_embedded' => $totalEmbedded,
-                    'remaining' => $chunks->count() - $totalEmbedded,
-                ]);
-            }
-
-            // Update document metadata
             $metadata = $document->metadata ?? [];
             $metadata['embedding_model'] = $this->model ?? config('ai.rag.embedding_model');
             $metadata['embedded_at'] = now()->toISOString();

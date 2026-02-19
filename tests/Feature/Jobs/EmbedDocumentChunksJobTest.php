@@ -3,7 +3,7 @@
 use App\Jobs\EmbedDocumentChunksJob;
 use App\Models\Document;
 use App\Models\DocumentChunk;
-use App\Services\RAG\EmbeddingService;
+use App\Services\Embedding\Writers\DocumentEmbeddingWriter;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Queue;
 
@@ -27,85 +27,65 @@ describe('EmbedDocumentChunksJob', function () {
             'model' => 'test-model',
             'embedding_dimensions' => TEST_EMBEDDING_DIM,
         ]);
-
-        $this->mockEmbedding = array_fill(0, TEST_EMBEDDING_DIM, 0.1);
     });
 
-    test('job processes all document chunks', function () {
+    test('job delegates to DocumentEmbeddingWriter::writeForDocument', function () {
         $document = Document::factory()->create();
-        $chunks = DocumentChunk::factory()
+        DocumentChunk::factory()
             ->count(3)
             ->for($document)
             ->needsEmbedding()
             ->create();
 
-        $mockService = Mockery::mock(EmbeddingService::class);
-        $mockService->shouldReceive('embedChunks')
+        $mockWriter = Mockery::mock(DocumentEmbeddingWriter::class);
+        $mockWriter->shouldReceive('writeForDocument')
             ->once()
-            ->with(Mockery::on(fn ($arg) => $arg->count() === 3), Mockery::any());
-
-        app()->instance(EmbeddingService::class, $mockService);
+            ->with($document->id, null);
 
         $job = new EmbedDocumentChunksJob($document);
-        $job->handle(app(EmbeddingService::class));
-
-        expect(true)->toBeTrue(); // Job completed without exception
+        $job->handle($mockWriter);
     });
 
-    test('job updates embedding_generated_at timestamp', function () {
+    test('job passes model override to writer', function () {
         $document = Document::factory()->create();
-        $chunk = DocumentChunk::factory()
-            ->for($document)
-            ->needsEmbedding()
-            ->create();
 
-        expect($chunk->embedding_generated_at)->toBeNull();
-
-        $mockService = Mockery::mock(EmbeddingService::class);
-        $mockService->shouldReceive('embedChunks')
+        $mockWriter = Mockery::mock(DocumentEmbeddingWriter::class);
+        $mockWriter->shouldReceive('writeForDocument')
             ->once()
-            ->andReturnUsing(function ($chunks, $model = null) {
-                foreach ($chunks as $chunk) {
-                    $chunk->update([
-                        'embedding_generated_at' => now(),
-                        'embedding_model' => 'text-embedding-3-small',
-                    ]);
-                }
-            });
+            ->with($document->id, 'custom-model');
 
-        app()->instance(EmbeddingService::class, $mockService);
-
-        $job = new EmbedDocumentChunksJob($document);
-        $job->handle(app(EmbeddingService::class));
-
-        $chunk->refresh();
-        expect($chunk->embedding_generated_at)->not->toBeNull();
+        $job = new EmbedDocumentChunksJob($document, 'custom-model');
+        $job->handle($mockWriter);
     });
 
-    test('job skips already embedded chunks', function () {
+    test('job updates document metadata after embedding', function () {
         $document = Document::factory()->create();
-
-        // Create already embedded chunk
         DocumentChunk::factory()
             ->for($document)
             ->withEmbedding()
             ->create();
 
-        // Create chunk needing embedding
-        $needsEmbedding = DocumentChunk::factory()
-            ->for($document)
-            ->needsEmbedding()
-            ->create();
-
-        $mockService = Mockery::mock(EmbeddingService::class);
-        $mockService->shouldReceive('embedChunks')
-            ->once()
-            ->with(Mockery::on(fn ($arg) => $arg->count() === 1 && $arg->first()->id === $needsEmbedding->id), Mockery::any());
-
-        app()->instance(EmbeddingService::class, $mockService);
+        $mockWriter = Mockery::mock(DocumentEmbeddingWriter::class);
+        $mockWriter->shouldReceive('writeForDocument')->once();
 
         $job = new EmbedDocumentChunksJob($document);
-        $job->handle(app(EmbeddingService::class));
+        $job->handle($mockWriter);
+
+        $document->refresh();
+        expect($document->metadata)->toHaveKey('embedding_model')
+            ->and($document->metadata)->toHaveKey('embedded_at');
+    });
+
+    test('job skips when RAG is disabled', function () {
+        Config::set('ai.rag.enabled', false);
+
+        $document = Document::factory()->create();
+
+        $mockWriter = Mockery::mock(DocumentEmbeddingWriter::class);
+        $mockWriter->shouldNotReceive('writeForDocument');
+
+        $job = new EmbedDocumentChunksJob($document);
+        $job->handle($mockWriter);
     });
 
     test('job tags include document ID', function () {
@@ -136,70 +116,6 @@ describe('EmbedDocumentChunksJob', function () {
         Queue::assertPushed(EmbedDocumentChunksJob::class, function ($job) use ($document) {
             return $job->document->id === $document->id;
         });
-    });
-
-    test('job skips when no chunks need embedding', function () {
-        $document = Document::factory()->create();
-        // All chunks already have embeddings
-        DocumentChunk::factory()
-            ->count(2)
-            ->for($document)
-            ->withEmbedding()
-            ->create();
-
-        $mockService = Mockery::mock(EmbeddingService::class);
-        $mockService->shouldNotReceive('embedChunks');
-
-        app()->instance(EmbeddingService::class, $mockService);
-
-        $job = new EmbedDocumentChunksJob($document);
-        $job->handle(app(EmbeddingService::class));
-
-        expect(true)->toBeTrue(); // Completed without calling service
-    });
-
-    test('job skips when RAG is disabled', function () {
-        Config::set('ai.rag.enabled', false);
-
-        $document = Document::factory()->create();
-        DocumentChunk::factory()
-            ->for($document)
-            ->needsEmbedding()
-            ->create();
-
-        $mockService = Mockery::mock(EmbeddingService::class);
-        $mockService->shouldNotReceive('embedChunks');
-
-        app()->instance(EmbeddingService::class, $mockService);
-
-        $job = new EmbedDocumentChunksJob($document);
-        $job->handle(app(EmbeddingService::class));
-    });
-
-    test('job respects batch size config', function () {
-        Config::set('ai.rag.embedding_batch_size', 2);
-
-        $document = Document::factory()->create();
-        DocumentChunk::factory()
-            ->count(5)
-            ->for($document)
-            ->needsEmbedding()
-            ->create();
-
-        $callCount = 0;
-        $mockService = Mockery::mock(EmbeddingService::class);
-        $mockService->shouldReceive('embedChunks')
-            ->times(3) // 5 chunks / 2 batch = 3 calls
-            ->andReturnUsing(function ($chunks, $model = null) use (&$callCount) {
-                $callCount++;
-            });
-
-        app()->instance(EmbeddingService::class, $mockService);
-
-        $job = new EmbedDocumentChunksJob($document);
-        $job->handle(app(EmbeddingService::class));
-
-        expect($callCount)->toBe(3);
     });
 
     test('job uniqueId returns document ID', function () {

@@ -5,12 +5,15 @@ namespace App\Services\RAG;
 use App\DTOs\RetrievalResult;
 use App\Models\Conversation;
 use App\Models\Document;
+use App\Models\DocumentChunk;
+use App\Models\RetrievalLog;
+use App\Services\Embedding\VectorSearchService;
 use Illuminate\Support\Collection;
 
 class RAGPipeline
 {
     public function __construct(
-        private RetrievalService $retrievalService,
+        private VectorSearchService $vectorSearch,
         private RAGContextBuilder $contextBuilder,
     ) {}
 
@@ -26,17 +29,36 @@ class RAGPipeline
         Collection|array|Document $documents,
         array $options = []
     ): RAGPipelineResult {
-        // Check if RAG is enabled
         if (! config('ai.rag.enabled', false)) {
             return RAGPipelineResult::disabled();
         }
 
         $startTime = microtime(true);
 
-        // Step 1: Retrieve relevant chunks
-        $retrieval = $this->retrievalService->retrieve($query, $documents, $options);
+        // Scope to the given documents then delegate all search math to VectorSearchService
+        $ids = $this->extractDocumentIds($documents);
+        $source = DocumentChunk::with('document')
+            ->whereIn('document_id', $ids)
+            ->whereNotNull('embedding_generated_at');
 
-        // Step 2: Build context from retrieved chunks
+        $searchResult = $this->vectorSearch->search($query, $source, $options);
+
+        // Map generic SearchResult → RetrievalResult so RAGContextBuilder is unaffected
+        $retrieval = new RetrievalResult(
+            chunks: $searchResult->items,
+            strategy: $searchResult->strategy,
+            scores: $searchResult->scores,
+            executionTimeMs: $searchResult->executionTimeMs,
+        );
+
+        // Record chunk access (was in RetrievalService)
+        foreach ($retrieval->chunks as $chunk) {
+            $chunk->recordAccess();
+        }
+
+        // Log retrieval for analytics (was in RetrievalService)
+        $this->logRetrieval($query, $retrieval, $options);
+
         $context = '';
         $citations = [];
 
@@ -69,14 +91,12 @@ class RAGPipeline
         string $query,
         array $options = []
     ): RAGPipelineResult {
-        // Get documents attached to conversation
         $documents = $conversation->documents;
 
         if ($documents->isEmpty()) {
             return RAGPipelineResult::noDocuments();
         }
 
-        // Add conversation context for logging
         $options['conversation_id'] = $conversation->id;
         $options['user_id'] = $conversation->user_id;
 
@@ -92,19 +112,58 @@ class RAGPipeline
     }
 
     /**
-     * Get the retrieval service instance.
-     */
-    public function getRetrievalService(): RetrievalService
-    {
-        return $this->retrievalService;
-    }
-
-    /**
      * Get the context builder instance.
      */
     public function getContextBuilder(): RAGContextBuilder
     {
         return $this->contextBuilder;
+    }
+
+    /**
+     * Extract document IDs from the various supported input types.
+     *
+     * @return array<int>
+     */
+    protected function extractDocumentIds(Collection|array|Document $documents): array
+    {
+        if ($documents instanceof Document) {
+            return [$documents->id];
+        }
+
+        if ($documents instanceof Collection) {
+            return $documents->pluck('id')->toArray();
+        }
+
+        return array_map(fn ($d) => $d instanceof Document ? $d->id : $d, $documents);
+    }
+
+    /**
+     * Log retrieval for analytics.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    protected function logRetrieval(string $query, RetrievalResult $result, array $options): void
+    {
+        if (! config('ai.rag.log_retrievals', true)) {
+            return;
+        }
+
+        try {
+            RetrievalLog::create([
+                'conversation_id' => $options['conversation_id'] ?? null,
+                'user_id' => $options['user_id'] ?? null,
+                'query' => $query,
+                'query_expansion' => $options['query_expansion'] ?? null,
+                'retrieved_chunks' => $result->getChunkIds(),
+                'retrieval_strategy' => $result->strategy,
+                'retrieval_scores' => $result->scores,
+                'execution_time_ms' => $result->executionTimeMs,
+                'chunks_found' => $result->count(),
+                'average_score' => $result->averageScore(),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }
 

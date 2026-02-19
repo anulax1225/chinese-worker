@@ -3,10 +3,14 @@
 namespace App\Providers;
 
 use App\Services\AIBackendManager;
-use App\Services\RAG\EmbeddingService;
+use App\Services\Embedding\EmbeddingService;
+use App\Services\Embedding\VectorSearchService;
+use App\Services\Embedding\Writers\DocumentEmbeddingWriter;
+use App\Services\Embedding\Writers\MessageEmbeddingWriter;
+use App\Services\Embedding\Writers\WebFetchEmbeddingWriter;
 use App\Services\RAG\RAGContextBuilder;
 use App\Services\RAG\RAGPipeline;
-use App\Services\RAG\RetrievalService;
+use App\Services\WebFetch\FetchedPageStore;
 use Illuminate\Support\ServiceProvider;
 
 class RAGServiceProvider extends ServiceProvider
@@ -16,9 +20,8 @@ class RAGServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Register EmbeddingService as singleton
+        // Core embedding service — pure text → vector + cache
         $this->app->singleton(EmbeddingService::class, function ($app) {
-            // Get the backend configured for embeddings
             $backendName = config('ai.rag.embedding_backend', 'openai');
             $backendManager = $app->make(AIBackendManager::class);
             $backend = $backendManager->driver($backendName);
@@ -26,20 +29,35 @@ class RAGServiceProvider extends ServiceProvider
             return new EmbeddingService($backend);
         });
 
-        // Register RetrievalService as singleton
-        $this->app->singleton(RetrievalService::class, function ($app) {
-            return new RetrievalService(
+        // Generic vector search — no model knowledge, accepts any Builder
+        $this->app->singleton(VectorSearchService::class, function ($app) {
+            return new VectorSearchService(
                 $app->make(EmbeddingService::class),
             );
         });
 
-        // Register RAGContextBuilder as singleton
+        // Domain-specific writers
+        $this->app->singleton(DocumentEmbeddingWriter::class, function ($app) {
+            return new DocumentEmbeddingWriter($app->make(EmbeddingService::class));
+        });
+
+        $this->app->singleton(MessageEmbeddingWriter::class, function ($app) {
+            return new MessageEmbeddingWriter($app->make(EmbeddingService::class));
+        });
+
+        $this->app->singleton(WebFetchEmbeddingWriter::class, function ($app) {
+            return new WebFetchEmbeddingWriter($app->make(EmbeddingService::class));
+        });
+
+        // WebFetch DB persistence layer
+        $this->app->singleton(FetchedPageStore::class);
+
+        // RAG pipeline
         $this->app->singleton(RAGContextBuilder::class);
 
-        // Register RAGPipeline as singleton
         $this->app->singleton(RAGPipeline::class, function ($app) {
             return new RAGPipeline(
-                $app->make(RetrievalService::class),
+                $app->make(VectorSearchService::class),
                 $app->make(RAGContextBuilder::class),
             );
         });

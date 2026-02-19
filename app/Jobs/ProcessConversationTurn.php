@@ -401,7 +401,7 @@ class ProcessConversationTurn implements ShouldQueue
             if (str_starts_with($toolCall->name, 'conversation_')) {
                 $handler = new ConversationMemoryToolHandler(
                     $this->conversation,
-                    app(\App\Services\RAG\EmbeddingService::class),
+                    app(\App\Services\Embedding\EmbeddingService::class),
                 );
 
                 return $handler->execute($toolCall->name, $toolCall->arguments);

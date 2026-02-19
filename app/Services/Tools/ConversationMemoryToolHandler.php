@@ -5,7 +5,7 @@ namespace App\Services\Tools;
 use App\DTOs\ToolResult;
 use App\Models\Conversation;
 use App\Models\MessageEmbedding;
-use App\Services\RAG\EmbeddingService;
+use App\Services\Embedding\EmbeddingService;
 
 class ConversationMemoryToolHandler
 {

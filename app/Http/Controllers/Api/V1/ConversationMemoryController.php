@@ -7,7 +7,7 @@ use App\Http\Requests\RecallMessagesRequest;
 use App\Jobs\EmbedConversationMessagesJob;
 use App\Models\Conversation;
 use App\Models\MessageEmbedding;
-use App\Services\RAG\EmbeddingService;
+use App\Services\Embedding\EmbeddingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 

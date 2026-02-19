@@ -4,12 +4,10 @@ namespace App\Jobs;
 
 use App\Models\Conversation;
 use App\Models\Message;
-use App\Models\MessageEmbedding;
-use App\Services\RAG\EmbeddingService;
+use App\Services\Embedding\Writers\MessageEmbeddingWriter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -76,9 +74,8 @@ class EmbedConversationMessagesJob implements ShouldQueue
         ];
     }
 
-    public function handle(EmbeddingService $embeddingService): void
+    public function handle(MessageEmbeddingWriter $writer): void
     {
-        // Skip if RAG is disabled
         if (! config('ai.rag.enabled', false)) {
             Log::info('[EmbedConversationMessagesJob] Skipping - RAG is disabled', [
                 'conversation_id' => $this->conversation->id,
@@ -98,7 +95,6 @@ class EmbedConversationMessagesJob implements ShouldQueue
         ]);
 
         try {
-            // Get messages that need embedding
             $messages = $this->getMessagesToEmbed($conversation);
 
             if ($messages->isEmpty()) {
@@ -109,28 +105,12 @@ class EmbedConversationMessagesJob implements ShouldQueue
                 return;
             }
 
-            // Process in batches
-            $batchSize = config('ai.rag.embedding_batch_size', 100);
-            $batches = $messages->chunk($batchSize);
-
-            $totalEmbedded = 0;
-
-            foreach ($batches as $batch) {
-                $this->embedMessageBatch($batch, $embeddingService);
-                $totalEmbedded += $batch->count();
-
-                Log::debug('[EmbedConversationMessagesJob] Embedded batch', [
-                    'conversation_id' => $conversation->id,
-                    'batch_size' => $batch->count(),
-                    'total_embedded' => $totalEmbedded,
-                    'remaining' => $messages->count() - $totalEmbedded,
-                ]);
-            }
+            $writer->write($messages, $this->model);
 
             $duration = microtime(true) - $startTime;
             Log::info('[EmbedConversationMessagesJob] Completed', [
                 'conversation_id' => $conversation->id,
-                'messages_embedded' => $totalEmbedded,
+                'messages_embedded' => $messages->count(),
                 'duration_seconds' => round($duration, 2),
             ]);
         } catch (Throwable $e) {
@@ -151,7 +131,7 @@ class EmbedConversationMessagesJob implements ShouldQueue
     protected function getMessagesToEmbed(Conversation $conversation): Collection
     {
         $query = $conversation->conversationMessages()
-            ->whereIn('role', ['user', 'assistant']) // Only embed user/assistant messages
+            ->whereIn('role', ['user', 'assistant'])
             ->whereDoesntHave('embedding', fn ($q) => $q->whereNotNull('embedding_generated_at'))
             ->orderBy('position');
 
@@ -164,95 +144,6 @@ class EmbedConversationMessagesJob implements ShouldQueue
         }
 
         return $query->get();
-    }
-
-    /**
-     * Embed a batch of messages.
-     *
-     * @param  Collection<int, Message>  $messages
-     */
-    protected function embedMessageBatch(Collection $messages, EmbeddingService $embeddingService): void
-    {
-        $model = $this->model ?? config('ai.rag.embedding_model');
-
-        // Prepare texts for embedding
-        $texts = $messages->map(fn (Message $m) => $this->prepareMessageText($m))->toArray();
-
-        // Generate embeddings
-        $embeddings = $embeddingService->embedBatch($texts, $model);
-
-        // Store embeddings
-        foreach ($messages as $index => $message) {
-            $embeddingArray = $embeddings[$index];
-            $text = $texts[$index];
-
-            $this->storeMessageEmbedding($message, $embeddingArray, $text, $model, $embeddingService);
-        }
-    }
-
-    /**
-     * Prepare message text for embedding.
-     */
-    protected function prepareMessageText(Message $message): string
-    {
-        $text = $message->content ?? '';
-
-        // Include role context for better semantic understanding
-        $rolePrefix = match ($message->role) {
-            'user' => 'User: ',
-            'assistant' => 'Assistant: ',
-            default => '',
-        };
-
-        return $rolePrefix.$text;
-    }
-
-    /**
-     * Store embedding for a message.
-     *
-     * @param  array<float>  $embeddingArray
-     */
-    protected function storeMessageEmbedding(
-        Message $message,
-        array $embeddingArray,
-        string $text,
-        string $model,
-        EmbeddingService $embeddingService
-    ): void {
-        $sparseVector = $embeddingService->generateSparseEmbedding($text);
-        $contentHash = MessageEmbedding::hashContent($text);
-
-        // Create or update embedding record
-        $embedding = MessageEmbedding::updateOrCreate(
-            ['message_id' => $message->id],
-            [
-                'conversation_id' => $message->conversation_id,
-                'embedding_raw' => $embeddingArray,
-                'embedding_model' => $model,
-                'embedding_dimensions' => \count($embeddingArray),
-                'embedding_generated_at' => now(),
-                'sparse_vector' => $sparseVector,
-                'content_hash' => $contentHash,
-                'token_count' => $message->token_count,
-            ]
-        );
-
-        // Update pgvector column directly (skip when dimensions don't match)
-        if ($this->usesPgvector() && \count($embeddingArray) === 1536) {
-            $embeddingString = '['.implode(',', $embeddingArray).']';
-            DB::statement(
-                'UPDATE message_embeddings SET embedding = ?::vector WHERE id = ?',
-                [$embeddingString, $embedding->id]
-            );
-        }
-    }
-
-    /**
-     * Check if we're using PostgreSQL with pgvector.
-     */
-    protected function usesPgvector(): bool
-    {
-        return DB::connection()->getDriverName() === 'pgsql';
     }
 
     /**
