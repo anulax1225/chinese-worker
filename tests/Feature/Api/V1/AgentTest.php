@@ -192,3 +192,136 @@ describe('Agent Management - Unauthenticated', function () {
         $response->assertStatus(401);
     });
 });
+
+describe('Agent Generate', function () {
+    beforeEach(function () {
+        $this->user = User::factory()->create();
+        $this->actingAs($this->user, 'sanctum');
+    });
+
+    test('user can generate text using their agent', function () {
+        $agent = Agent::factory()->create([
+            'user_id' => $this->user->id,
+            'ai_backend' => 'fake',
+        ]);
+
+        $response = $this->postJson("/api/v1/agents/{$agent->id}/generate", [
+            'prompt' => 'Why is the sky blue?',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'content',
+                'model',
+                'done',
+            ])
+            ->assertJson([
+                'done' => true,
+            ]);
+    });
+
+    test('generate requires a prompt', function () {
+        $agent = Agent::factory()->create([
+            'user_id' => $this->user->id,
+            'ai_backend' => 'fake',
+        ]);
+
+        $response = $this->postJson("/api/v1/agents/{$agent->id}/generate", []);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['prompt']);
+    });
+
+    test('user cannot generate using another user\'s agent', function () {
+        $otherAgent = Agent::factory()->create(['ai_backend' => 'fake']);
+
+        $response = $this->postJson("/api/v1/agents/{$otherAgent->id}/generate", [
+            'prompt' => 'Test prompt',
+        ]);
+
+        $response->assertStatus(403);
+    });
+
+    test('generate accepts optional parameters', function () {
+        $agent = Agent::factory()->create([
+            'user_id' => $this->user->id,
+            'ai_backend' => 'fake',
+        ]);
+
+        $response = $this->postJson("/api/v1/agents/{$agent->id}/generate", [
+            'prompt' => 'Explain quantum physics',
+            'system' => 'You are a physics expert.',
+            'temperature' => 0.7,
+            'max_tokens' => 500,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'content',
+                'model',
+                'done',
+            ]);
+    });
+
+    test('generate with thinking mode returns thinking content', function () {
+        $agent = Agent::factory()->create([
+            'user_id' => $this->user->id,
+            'ai_backend' => 'fake',
+        ]);
+
+        $response = $this->postJson("/api/v1/agents/{$agent->id}/generate", [
+            'prompt' => 'Solve: 2+2*2',
+            'think' => true,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'content',
+                'model',
+                'done',
+                'thinking',
+            ]);
+    });
+
+    test('generate validates temperature range', function () {
+        $agent = Agent::factory()->create([
+            'user_id' => $this->user->id,
+            'ai_backend' => 'fake',
+        ]);
+
+        $response = $this->postJson("/api/v1/agents/{$agent->id}/generate", [
+            'prompt' => 'Test',
+            'temperature' => 3.0,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['temperature']);
+    });
+
+    test('generate validates top_p range', function () {
+        $agent = Agent::factory()->create([
+            'user_id' => $this->user->id,
+            'ai_backend' => 'fake',
+        ]);
+
+        $response = $this->postJson("/api/v1/agents/{$agent->id}/generate", [
+            'prompt' => 'Test',
+            'top_p' => 1.5,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['top_p']);
+    });
+
+    test('unauthenticated user cannot generate', function () {
+        $agent = Agent::factory()->create(['ai_backend' => 'fake']);
+
+        $this->app['auth']->forgetGuards();
+
+        $response = $this->postJson("/api/v1/agents/{$agent->id}/generate", [
+            'prompt' => 'Test prompt',
+        ]);
+
+        $response->assertStatus(401);
+    });
+});

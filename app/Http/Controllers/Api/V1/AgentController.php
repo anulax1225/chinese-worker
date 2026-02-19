@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\StreamsServerSentEvents;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AgentGenerateRequest;
 use App\Http\Requests\StoreAgentRequest;
 use App\Http\Requests\UpdateAgentRequest;
 use App\Http\Resources\AgentResource;
 use App\Models\Agent;
 use App\Services\AgentService;
+use App\Services\AIBackendManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * @group Agent Management
@@ -21,7 +25,12 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
  */
 class AgentController extends Controller
 {
-    public function __construct(protected AgentService $agentService) {}
+    use StreamsServerSentEvents;
+
+    public function __construct(
+        protected AgentService $agentService,
+        protected AIBackendManager $backendManager,
+    ) {}
 
     /**
      * List Agents
@@ -147,5 +156,81 @@ class AgentController extends Controller
         $this->agentService->delete($agent);
 
         return response()->json(null, 204);
+    }
+
+    /**
+     * Generate Text
+     *
+     * Generate text completion using the agent's configured AI backend.
+     * This is a simple text generation endpoint (not chat-based).
+     *
+     * @urlParam agent integer required The agent ID. Example: 1
+     *
+     * @bodyParam prompt string required The prompt to generate from. Example: Why is the sky blue?
+     * @bodyParam stream boolean Return a streaming response. Example: false
+     * @bodyParam suffix string Text after prompt for fill-in-the-middle. Example: The end.
+     * @bodyParam images array Base64-encoded images for vision models.
+     * @bodyParam format string|object Structured output format ('json' or JSON schema).
+     * @bodyParam system string System prompt. Example: You are a helpful assistant.
+     * @bodyParam think boolean|string Enable thinking mode (true, false, 'high', 'medium', 'low'). Example: true
+     * @bodyParam raw boolean Skip prompt templating. Example: false
+     * @bodyParam max_tokens integer Maximum tokens to generate. Example: 1000
+     * @bodyParam temperature number Temperature (0-2). Example: 0.7
+     * @bodyParam top_p number Top-p sampling (0-1). Example: 0.9
+     * @bodyParam top_k integer Top-k sampling. Example: 40
+     * @bodyParam seed integer Random seed for reproducibility. Example: 42
+     * @bodyParam stop array|string Stop sequences.
+     *
+     * @response 200 {"content": "The sky appears blue because...", "model": "llama3.1", "done": true, "done_reason": "stop", "tokens_used": 45, "tokens_per_second": 25.5}
+     * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
+     * @response 422 scenario="Validation Error" {"message": "The given data was invalid.", "errors": {"prompt": ["The prompt field is required."]}}
+     */
+    public function generate(AgentGenerateRequest $request, Agent $agent): JsonResponse|StreamedResponse
+    {
+        $this->authorize('view', $agent);
+
+        $generateRequest = $request->toGenerateRequest();
+        $backend = $this->backendManager->forAgent($agent)['backend'];
+
+        if ($request->wantsStream()) {
+            return $this->streamGenerate($backend, $generateRequest);
+        }
+
+        $response = $backend->generate($generateRequest);
+
+        return response()->json($response->toArray());
+    }
+
+    /**
+     * Stream the generate response as SSE events.
+     */
+    protected function streamGenerate(
+        \App\Contracts\AIBackendInterface $backend,
+        \App\DTOs\GenerateRequest $request
+    ): StreamedResponse {
+        return response()->stream(
+            function () use ($backend, $request): \Generator {
+                yield $this->formatSSEEvent('connected', ['status' => 'connected']);
+
+                try {
+                    $response = $backend->streamGenerate($request, function (string $chunk, string $type): void {
+                        echo $this->formatSSEEvent($type, ['chunk' => $chunk]);
+
+                        if (ob_get_level() > 0) {
+                            ob_flush();
+                        }
+                        flush();
+                    });
+
+                    yield $this->formatSSEEvent('completed', $response->toArray());
+                } catch (\Exception $e) {
+                    yield $this->formatSSEEvent('error', [
+                        'message' => $e->getMessage(),
+                    ]);
+                }
+            },
+            200,
+            $this->getSSEHeaders()
+        );
     }
 }

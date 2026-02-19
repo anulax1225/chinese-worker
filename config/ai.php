@@ -121,17 +121,17 @@ return [
         'enabled' => env('RAG_ENABLED', true),
 
         // Embedding configuration
-        'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:0.6b'),
+        'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:4b'),
         'embedding_backend' => env('RAG_EMBEDDING_BACKEND', 'ollama'),
-        'embedding_dimensions' => env('RAG_EMBEDDING_DIMENSIONS', 1536),
+        'embedding_dimensions' => env('RAG_EMBEDDING_DIMENSIONS', 30000),
         'embedding_batch_size' => 100,
         'cache_embeddings' => true,
 
         // Search configuration
-        'search_type' => env('RAG_SEARCH_TYPE', 'hybrid'), // dense, sparse, hybrid
+        'search_type' => env('RAG_SEARCH_TYPE', 'dense'), // dense, sparse, hybrid
         'top_k' => 10,
         'similarity_threshold' => 0.3,
-        'max_context_tokens' => 4000,
+        'max_context_tokens' => 10000,
 
         // Logging
         'log_retrievals' => true,
@@ -197,6 +197,11 @@ return [
             'max_tokens' => 4096,
             'timeout' => env('HUGGINGFACE_TIMEOUT', 120),
             'provider' => env('HUGGINGFACE_PROVIDER'),
+        ],
+        'fake' => [
+            'driver' => 'fake',
+            'model' => 'test-model',
+            'embedding_dimensions' => 4,
         ],
     ],
 ];

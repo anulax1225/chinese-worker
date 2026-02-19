@@ -136,6 +136,26 @@ describe('AIBackendManager', function () {
             {
                 return 4;
             }
+
+            public function generate(\App\DTOs\GenerateRequest $request): \App\DTOs\GenerateResponse
+            {
+                return new \App\DTOs\GenerateResponse(
+                    content: 'test response',
+                    model: 'custom-model',
+                    done: true,
+                );
+            }
+
+            public function streamGenerate(\App\DTOs\GenerateRequest $request, callable $callback): \App\DTOs\GenerateResponse
+            {
+                $callback('test response', 'content');
+
+                return new \App\DTOs\GenerateResponse(
+                    content: 'test response',
+                    model: 'custom-model',
+                    done: true,
+                );
+            }
         };
 
         $manager = app(AIBackendManager::class);

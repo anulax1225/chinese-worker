@@ -26,6 +26,7 @@ Route::prefix('v1')->group(function (): void {
 
         // Agents
         Route::apiResource('agents', AgentController::class);
+        Route::post('agents/{agent}/generate', [AgentController::class, 'generate']);
 
         // System Prompts
         Route::apiResource('system-prompts', SystemPromptController::class);
