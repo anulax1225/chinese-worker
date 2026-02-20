@@ -80,6 +80,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('embeddings/models', [EmbeddingController::class, 'models']);
         Route::get('embeddings/config', [EmbeddingController::class, 'config']);
         Route::post('embeddings/async', [EmbeddingController::class, 'storeAsync']);
+        Route::post('embeddings/compare', [EmbeddingController::class, 'compare']);
         Route::apiResource('embeddings', EmbeddingController::class)->only(['index', 'store', 'show', 'destroy']);
     });
 });

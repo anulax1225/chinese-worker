@@ -637,6 +637,233 @@ describe('Embedding Management', function () {
     });
 });
 
+describe('Compare Embeddings', function () {
+    beforeEach(function () {
+        $this->user = User::factory()->create();
+        $this->actingAs($this->user, 'sanctum');
+        Config::set('ai.rag.enabled', true);
+        Config::set('ai.rag.embedding_model', 'qwen3-embedding:4b');
+        Config::set('ai.rag.embedding_backend', 'ollama');
+    });
+
+    test('can compare two stored embeddings by ID', function () {
+        $embedding1 = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'First text',
+            'embedding_raw' => array_fill(0, 10, 0.5),
+        ]);
+        $embedding2 = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Second text',
+            'embedding_raw' => array_fill(0, 10, 0.5),
+        ]);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $embedding1->id],
+            'targets' => [
+                ['id' => $embedding2->id],
+            ],
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'source' => ['id', 'text'],
+                'results' => [
+                    '*' => [
+                        'target' => ['id', 'text'],
+                        'similarity',
+                    ],
+                ],
+                'model',
+            ]);
+
+        expect($response->json('source.id'))->toBe($embedding1->id);
+        expect($response->json('results.0.target.id'))->toBe($embedding2->id);
+        expect($response->json('results.0.similarity'))->toEqual(1.0);
+    });
+
+    test('can compare two texts on-the-fly', function () {
+        $vector1 = array_fill(0, 10, 0.5);
+        $vector2 = array_fill(0, 10, 0.3);
+
+        $mockService = Mockery::mock(EmbeddingService::class);
+        $mockService->shouldReceive('embed')
+            ->with('Hello world', 'qwen3-embedding:4b')
+            ->andReturn($vector1);
+        $mockService->shouldReceive('embed')
+            ->with('Goodbye world', 'qwen3-embedding:4b')
+            ->andReturn($vector2);
+
+        $this->app->instance(EmbeddingService::class, $mockService);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['text' => 'Hello world'],
+            'targets' => [
+                ['text' => 'Goodbye world'],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        expect($response->json('source.text'))->toBe('Hello world');
+        expect($response->json('results.0.target.text'))->toBe('Goodbye world');
+        expect($response->json('results.0.similarity'))->toBeNumeric();
+    });
+
+    test('can compare mixed ID and text', function () {
+        $storedVector = array_fill(0, 10, 0.5);
+        $embedding = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Stored text',
+            'embedding_raw' => $storedVector,
+        ]);
+
+        $onTheFlyVector = array_fill(0, 10, 0.3);
+        $mockService = Mockery::mock(EmbeddingService::class);
+        $mockService->shouldReceive('embed')
+            ->with('On-the-fly text', 'qwen3-embedding:4b')
+            ->andReturn($onTheFlyVector);
+
+        $this->app->instance(EmbeddingService::class, $mockService);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $embedding->id],
+            'targets' => [
+                ['text' => 'On-the-fly text'],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        expect($response->json('source.id'))->toBe($embedding->id);
+        expect($response->json('results.0.target.text'))->toBe('On-the-fly text');
+        expect($response->json('results.0.similarity'))->toBeNumeric();
+    });
+
+    test('can compare one source against multiple targets', function () {
+        $sourceVector = [1.0, 0.0, 0.0, 0.0, 0.0];
+        $target1Vector = [1.0, 0.0, 0.0, 0.0, 0.0]; // identical
+        $target2Vector = [0.0, 1.0, 0.0, 0.0, 0.0]; // orthogonal
+        $target3Vector = [0.7, 0.7, 0.0, 0.0, 0.0]; // similar
+
+        $source = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Source',
+            'embedding_raw' => $sourceVector,
+        ]);
+        $target1 = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Identical',
+            'embedding_raw' => $target1Vector,
+        ]);
+        $target2 = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Orthogonal',
+            'embedding_raw' => $target2Vector,
+        ]);
+        $target3 = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Similar',
+            'embedding_raw' => $target3Vector,
+        ]);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $source->id],
+            'targets' => [
+                ['id' => $target2->id],
+                ['id' => $target1->id],
+                ['id' => $target3->id],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $results = $response->json('results');
+        expect($results)->toHaveCount(3);
+
+        // Results should be sorted by similarity descending
+        expect($results[0]['similarity'])->toBeGreaterThanOrEqual($results[1]['similarity']);
+        expect($results[1]['similarity'])->toBeGreaterThanOrEqual($results[2]['similarity']);
+
+        // Identical should be first (similarity = 1.0)
+        expect($results[0]['target']['id'])->toBe($target1->id);
+        expect($results[0]['similarity'])->toEqual(1.0);
+    });
+
+    test('returns 400 when RAG is disabled', function () {
+        Config::set('ai.rag.enabled', false);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['text' => 'Hello'],
+            'targets' => [['text' => 'World']],
+        ]);
+
+        $response->assertStatus(400)
+            ->assertJson([
+                'error' => 'Embedding service is not enabled',
+            ]);
+    });
+
+    test('validates source is required', function () {
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'targets' => [['text' => 'World']],
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['source']);
+    });
+
+    test('validates targets is required', function () {
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['text' => 'Hello'],
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['targets']);
+    });
+
+    test('validates targets must have at least one item', function () {
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['text' => 'Hello'],
+            'targets' => [],
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['targets']);
+    });
+
+    test('user cannot compare with another users embedding', function () {
+        $otherUser = User::factory()->create();
+        $otherEmbedding = Embedding::factory()->completed()->create([
+            'user_id' => $otherUser->id,
+        ]);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $otherEmbedding->id],
+            'targets' => [['text' => 'Hello']],
+        ]);
+
+        $response->assertStatus(403);
+    });
+
+    test('returns error when embedding has no vector data', function () {
+        $embedding = Embedding::factory()->pending()->create([
+            'user_id' => $this->user->id,
+            'embedding_raw' => null,
+        ]);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $embedding->id],
+            'targets' => [['text' => 'Hello']],
+        ]);
+
+        $response->assertStatus(500)
+            ->assertJson([
+                'error' => 'Failed to compare embeddings',
+            ]);
+    });
+});
+
 describe('Embedding Management - Unauthenticated', function () {
     test('unauthenticated user cannot list embeddings', function () {
         $response = $this->getJson('/api/v1/embeddings');
@@ -678,6 +905,14 @@ describe('Embedding Management - Unauthenticated', function () {
 
     test('unauthenticated user cannot get config', function () {
         $response = $this->getJson('/api/v1/embeddings/config');
+        $response->assertStatus(401);
+    });
+
+    test('unauthenticated user cannot compare embeddings', function () {
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['text' => 'Hello'],
+            'targets' => [['text' => 'World']],
+        ]);
         $response->assertStatus(401);
     });
 });

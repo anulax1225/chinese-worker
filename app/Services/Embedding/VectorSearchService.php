@@ -194,7 +194,7 @@ class VectorSearchService
      * @param  array<float>  $a
      * @param  array<float>  $b
      */
-    protected function cosineSimilarity(array $a, array $b): float
+    public function cosineSimilarity(array $a, array $b): float
     {
         if (\count($a) !== \count($b) || empty($a)) {
             return 0.0;
