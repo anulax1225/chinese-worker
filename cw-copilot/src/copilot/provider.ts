@@ -21,7 +21,13 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
     ): Promise<vscode.InlineCompletionItem[] | undefined> {
         const config = getConfig();
 
-        if (!config.enabled || !config.apiToken) {
+        if (!config.enabled) {
+            logger.info('Skipped: disabled');
+            return undefined;
+        }
+
+        if (!config.apiToken) {
+            logger.warn('Skipped: no API token configured (set cw.apiToken)');
             return undefined;
         }
 
@@ -30,7 +36,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         try {
             await delay(config.debounceMs, token);
         } catch {
-            return undefined;
+            return undefined; // Cancelled during debounce — normal flow
         }
 
         if (token.isCancellationRequested) {
@@ -45,11 +51,14 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         );
 
         if (prompt.trim() === '') {
+            logger.info('Skipped: empty prompt');
             return undefined;
         }
 
         const langConfig = this.langConfigs.get(document.languageId);
         const stopSequences = langConfig?.stopSequences ?? ['\n\n'];
+
+        logger.info(`Request: lang=${document.languageId}, file=${document.fileName}, line=${position.line + 1}:${position.character}, prompt=${prompt.length} chars, suffix=${suffix.length} chars, stops=${stopSequences.length}`);
 
         this.abortController = new AbortController();
         const { signal } = this.abortController;
@@ -72,14 +81,17 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
                 signal,
             );
 
-            if (!response || !response.content) {
+            if (!response) {
+                logger.warn('Response: null (API error or aborted)');
+                return undefined;
+            }
+
+            if (!response.content || response.content.trim() === '') {
+                logger.info('Response: empty content');
                 return undefined;
             }
 
             const content = response.content;
-            if (content.trim() === '') {
-                return undefined;
-            }
 
             logger.info(`Completion: ${content.length} chars, model=${response.model}`);
 

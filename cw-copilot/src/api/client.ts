@@ -28,6 +28,7 @@ export class CWApiClient {
         signal?: AbortSignal,
     ): Promise<GenerateResponse | null> {
         const url = `${this.baseUrl}/api/v1/agents/${agentId}/generate`;
+        logger.info(`POST ${url}`);
 
         try {
             const response = await fetch(url, {
@@ -42,14 +43,17 @@ export class CWApiClient {
             });
 
             if (!response.ok) {
-                logger.warn(`API returned ${response.status}: ${response.statusText}`);
+                const body = await response.text().catch(() => '');
+                logger.warn(`API ${response.status} ${response.statusText}: ${body}`);
                 return null;
             }
 
             const data = await response.json() as GenerateResponse;
+            logger.info(`API 200: ${data.content.length} chars, model=${data.model}, tokens=${data.tokens_used ?? '?'}`);
             return data;
         } catch (err: unknown) {
             if (err instanceof Error && err.name === 'AbortError') {
+                logger.info('API request aborted (new keystroke)');
                 return null;
             }
 
