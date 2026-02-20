@@ -79,4 +79,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Document::class);
     }
+
+    /**
+     * Get the embeddings for the user.
+     */
+    public function embeddings(): HasMany
+    {
+        return $this->hasMany(Embedding::class);
+    }
 }

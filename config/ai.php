@@ -121,7 +121,7 @@ return [
         'enabled' => env('RAG_ENABLED', true),
 
         // Embedding configuration
-        'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:4b'),
+        'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:0.6b'),
         'embedding_backend' => env('RAG_EMBEDDING_BACKEND', 'ollama'),
         'embedding_dimensions' => env('RAG_EMBEDDING_DIMENSIONS', 30000),
         'embedding_batch_size' => 100,
@@ -197,11 +197,6 @@ return [
             'max_tokens' => 4096,
             'timeout' => env('HUGGINGFACE_TIMEOUT', 120),
             'provider' => env('HUGGINGFACE_PROVIDER'),
-        ],
-        'fake' => [
-            'driver' => 'fake',
-            'model' => 'test-model',
-            'embedding_dimensions' => 4,
         ],
     ],
 ];

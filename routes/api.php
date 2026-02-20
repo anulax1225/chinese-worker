@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\ConversationController;
 use App\Http\Controllers\Api\V1\ConversationMemoryController;
 use App\Http\Controllers\Api\V1\ConversationSummaryController;
 use App\Http\Controllers\Api\V1\DocumentController;
+use App\Http\Controllers\Api\V1\EmbeddingController;
 use App\Http\Controllers\Api\V1\FileController;
 use App\Http\Controllers\Api\V1\SystemPromptController;
 use Illuminate\Support\Facades\Route;
@@ -74,5 +75,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('documents/{document}/chunks', [DocumentController::class, 'chunks']);
         Route::get('documents/{document}/preview', [DocumentController::class, 'preview']);
         Route::post('documents/{document}/reprocess', [DocumentController::class, 'reprocess']);
+
+        // Embeddings
+        Route::get('embeddings/models', [EmbeddingController::class, 'models']);
+        Route::get('embeddings/config', [EmbeddingController::class, 'config']);
+        Route::post('embeddings/async', [EmbeddingController::class, 'storeAsync']);
+        Route::apiResource('embeddings', EmbeddingController::class)->only(['index', 'store', 'show', 'destroy']);
     });
 });
