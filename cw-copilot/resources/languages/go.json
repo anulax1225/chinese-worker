@@ -1,0 +1,22 @@
+{
+  "id": "go",
+  "extensions": [".go"],
+  "commentPrefix": "//",
+  "stopSequences": [
+    "\n\n",
+    "\nfunc ",
+    "\ntype ",
+    "\nvar ",
+    "\nconst "
+  ],
+  "topLevelNodes": [
+    "function_declaration",
+    "method_declaration",
+    "type_declaration"
+  ],
+  "nodeStopPatterns": {
+    "function_declaration": ["\nfunc "],
+    "method_declaration": ["\nfunc "],
+    "type_declaration": ["\ntype "]
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "name": "cw-copilot",
+  "displayName": "CW Copilot",
+  "description": "Inline FIM completions powered by Chinese Worker",
+  "version": "0.1.0",
+  "publisher": "chinese-worker",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "CW Copilot",
+      "properties": {
+        "cw.apiUrl": {
+          "type": "string",
+          "default": "http://localhost",
+          "description": "Base URL of your Chinese Worker instance"
+        },
+        "cw.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Sanctum API bearer token"
+        },
+        "cw.agentId": {
+          "type": "number",
+          "default": 1,
+          "description": "Agent ID to use for completions"
+        },
+        "cw.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline completions"
+        },
+        "cw.debounceMs": {
+          "type": "number",
+          "default": 300,
+          "description": "Delay in ms before triggering completion"
+        },
+        "cw.maxPrefixLines": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum lines before cursor sent as prompt"
+        },
+        "cw.maxSuffixLines": {
+          "type": "number",
+          "default": 30,
+          "description": "Maximum lines after cursor sent as suffix"
+        },
+        "cw.maxTokens": {
+          "type": "number",
+          "default": 256,
+          "description": "Maximum tokens for the completion response"
+        },
+        "cw.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "description": "Sampling temperature (0-2)"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "cw.toggle",
+        "title": "CW Copilot: Toggle"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run build -- --watch",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.5.0"
+  }
+}

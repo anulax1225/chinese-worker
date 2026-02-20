@@ -1,0 +1,28 @@
+{
+  "id": "javascript",
+  "extensions": [".js", ".jsx", ".mjs", ".cjs"],
+  "commentPrefix": "//",
+  "stopSequences": [
+    "\n\n",
+    "\nfunction ",
+    "\nclass ",
+    "\nexport ",
+    "\nconst ",
+    "\nimport ",
+    "\nlet "
+  ],
+  "topLevelNodes": [
+    "class_declaration",
+    "function_declaration",
+    "lexical_declaration",
+    "export_statement",
+    "import_statement"
+  ],
+  "nodeStopPatterns": {
+    "class_declaration": ["\nclass "],
+    "function_declaration": ["\nfunction "],
+    "lexical_declaration": ["\nconst ", "\nlet ", "\nvar "],
+    "export_statement": ["\nexport "],
+    "import_statement": ["\nimport "]
+  }
+}
