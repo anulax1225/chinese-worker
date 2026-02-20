@@ -189,16 +189,45 @@ class VectorSearchService
     }
 
     /**
+     * Project two vectors to the same dimensionality by zero-padding the shorter one.
+     *
+     * @param  array<float>  $a
+     * @param  array<float>  $b
+     * @return array{array<float>, array<float>}
+     */
+    public function projectVectors(array $a, array $b): array
+    {
+        $lenA = \count($a);
+        $lenB = \count($b);
+
+        if ($lenA === $lenB) {
+            return [$a, $b];
+        }
+
+        if ($lenA < $lenB) {
+            $a = array_merge($a, array_fill(0, $lenB - $lenA, 0.0));
+        } else {
+            $b = array_merge($b, array_fill(0, $lenA - $lenB, 0.0));
+        }
+
+        return [$a, $b];
+    }
+
+    /**
      * Compute cosine similarity between two vectors.
+     *
+     * Vectors of different dimensions are projected via zero-padding.
      *
      * @param  array<float>  $a
      * @param  array<float>  $b
      */
     public function cosineSimilarity(array $a, array $b): float
     {
-        if (\count($a) !== \count($b) || empty($a)) {
+        if (empty($a) || empty($b)) {
             return 0.0;
         }
+
+        [$a, $b] = $this->projectVectors($a, $b);
 
         $dotProduct = 0.0;
         $normA = 0.0;

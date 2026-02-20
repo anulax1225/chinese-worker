@@ -862,6 +862,78 @@ describe('Compare Embeddings', function () {
                 'error' => 'Failed to compare embeddings',
             ]);
     });
+
+    test('can compare embeddings with different dimensions using projection', function () {
+        $embedding5d = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Short vector',
+            'embedding_raw' => [1.0, 0.0, 0.0, 0.0, 0.0],
+        ]);
+        $embedding10d = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Long vector',
+            'embedding_raw' => [1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5, 0.5],
+        ]);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $embedding5d->id],
+            'targets' => [
+                ['id' => $embedding10d->id],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $similarity = $response->json('results.0.similarity');
+        expect($similarity)->toBeNumeric();
+        expect($similarity)->toBeGreaterThan(0.0);
+    });
+
+    test('projected flag is true when dimensions differ', function () {
+        $embedding5d = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Short vector',
+            'embedding_raw' => [1.0, 0.0, 0.0, 0.0, 0.0],
+        ]);
+        $embedding10d = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Long vector',
+            'embedding_raw' => [1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5, 0.5],
+        ]);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $embedding5d->id],
+            'targets' => [
+                ['id' => $embedding10d->id],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+        expect($response->json('results.0.projected'))->toBeTrue();
+    });
+
+    test('projected flag is false when dimensions match', function () {
+        $embedding1 = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'First',
+            'embedding_raw' => [1.0, 0.0, 0.0],
+        ]);
+        $embedding2 = Embedding::factory()->completed()->create([
+            'user_id' => $this->user->id,
+            'text' => 'Second',
+            'embedding_raw' => [0.0, 1.0, 0.0],
+        ]);
+
+        $response = $this->postJson('/api/v1/embeddings/compare', [
+            'source' => ['id' => $embedding1->id],
+            'targets' => [
+                ['id' => $embedding2->id],
+            ],
+        ]);
+
+        $response->assertStatus(200);
+        expect($response->json('results.0.projected'))->toBeFalse();
+    });
 });
 
 describe('Embedding Management - Unauthenticated', function () {

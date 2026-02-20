@@ -271,11 +271,13 @@ class EmbeddingController extends Controller
             foreach ($request->input('targets') as $targetData) {
                 $targetVector = $this->resolveVector($targetData, $model);
                 $targetInfo = $this->resolveInfo($targetData);
+                $projected = \count($sourceVector) !== \count($targetVector);
                 $similarity = $this->vectorSearchService->cosineSimilarity($sourceVector, $targetVector);
 
                 $results[] = [
                     'target' => $targetInfo,
                     'similarity' => round($similarity, 6),
+                    'projected' => $projected,
                 ];
             }
 
