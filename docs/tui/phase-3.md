@@ -271,10 +271,10 @@ async def poll_document_status(self, doc_id: int):
 - [X] DocumentListScreen shows all documents with status
 - [X] Can filter documents by status
 - [X] Can upload a document via file path
-- [ ] Can upload a document via URL
-- [ ] Upload shows progress, polls for completion
-- [ ] DocumentDetailScreen shows metadata + processing stages + preview
-- [ ] Can reprocess a failed document
-- [ ] Can delete a document
-- [ ] Document tool usage shown clearly in chat
-- [ ] Slash commands work (/docs, /upload)
+- [X] Can upload a document via URL
+- [-] Upload shows progress, polls for completion
+- [X] DocumentDetailScreen shows metadata + processing stages + preview
+- [X] Can reprocess a failed document
+- [X] Can delete a document
+- [X] Document tool usage shown clearly in chat
+- [X] Slash commands work (/docs, /upload)
