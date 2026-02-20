@@ -105,7 +105,7 @@ return [
     */
 
     'chunking' => [
-        'default_max_tokens' => env('CHUNK_MAX_TOKENS', 1000),
+        'default_max_tokens' => env('CHUNK_MAX_TOKENS', 500),
         'default_overlap_tokens' => env('CHUNK_OVERLAP_TOKENS', 100),
         'min_chunk_tokens' => 50,
         'respect_sections' => true,

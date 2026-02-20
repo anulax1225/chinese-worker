@@ -21,7 +21,7 @@ class VectorSearchService
      */
     public function search(string $query, Builder $source, array $options = []): SearchResult
     {
-        $strategy = $options['strategy'] ?? config('ai.rag.search_type', 'hybrid');
+        $strategy = $options['strategy'] ?? config('ai.rag.search_type', 'sparse');
         $startTime = microtime(true);
 
         $result = match ($strategy) {
