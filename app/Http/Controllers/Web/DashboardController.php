@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Agent;
 use App\Models\Conversation;
-use App\Models\Tool;
 use App\Services\AIBackendManager;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -47,8 +46,6 @@ class DashboardController extends Controller
                 sum(case when started_at::date = CURRENT_DATE - INTERVAL '1 day' then 1 else 0 end) as yesterday
             ")->first();
 
-        $totalTools = Tool::where('user_id', $user->id)->count();
-
         // Top agents by conversation count
         $topAgents = Agent::where('user_id', $user->id)
             ->withCount('conversations')
@@ -84,7 +81,6 @@ class DashboardController extends Controller
                     'today' => (int) ($conversationStats->today ?? 0),
                     'yesterday' => (int) ($conversationStats->yesterday ?? 0),
                 ],
-                'tools' => $totalTools,
                 'successRate' => $total > 0 ? round(($completed / $total) * 100, 1) : 0,
             ],
             'topAgents' => $topAgents,
