@@ -125,9 +125,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         const chunkInfo = retrievedChunks?.length ? `, context=${retrievedChunks.length} chunks` : '';
         logger.info(`Request: fim=${config.enableFIM}, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars${chunkInfo}`);
 
-        if (retrievedChunks?.length) {
-            logger.info(`Full prompt being sent to AI:\n--- PROMPT START ---\n${ctx.prompt.slice(0, 2000)}${ctx.prompt.length > 2000 ? '\n... (truncated)' : ''}\n--- PROMPT END ---`);
-        }
+        logger.info(`Prompt being sent to AI:\n--- PROMPT START ---\n${ctx.prompt.slice(0, 2000)}${ctx.prompt.length > 2000 ? '\n... (truncated)' : ''}\n--- PROMPT END ---`);
 
         this.abortController = new AbortController();
         const { signal } = this.abortController;
@@ -164,7 +162,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
 
             const content = response.content;
 
-            logger.info(`Completion: ${content.length} chars, model=${response.model}`);
+            logger.info(`Completion: ${content.length} chars, model=${response.model}\n--- RESPONSE START ---\n${content.slice(0, 2000)}${content.length > 2000 ? '\n... (truncated)' : ''}\n--- RESPONSE END ---`);
 
             return [
                 new vscode.InlineCompletionItem(
