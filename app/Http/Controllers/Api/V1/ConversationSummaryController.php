@@ -64,7 +64,7 @@ class ConversationSummaryController extends Controller
      * @bodyParam from_position integer The starting message position (0-indexed). Defaults to first message. Example: 0
      * @bodyParam to_position integer The ending message position. Must be greater than from_position. Defaults to last message. Example: 50
      *
-     * @apiResource 202 App\Http\Resources\ConversationSummaryResource
+     * @apiResource App\Http\Resources\ConversationSummaryResource
      *
      * @apiResourceModel App\Models\ConversationSummary
      *
