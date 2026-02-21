@@ -18,28 +18,29 @@ export async function buildRetrievalQuery(
     parts.push(`// File: ${relPath}`);
 
     // 2-4. LSP calls with individual 20ms timeouts, run in parallel
+    // Wrap Thenable → Promise since vscode.commands.executeCommand returns Thenable
     const [symbols, sigHelp, hovers] = await Promise.all([
         withTimeout(
-            vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
+            Promise.resolve(vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
                 'vscode.executeDocumentSymbolProvider',
                 document.uri,
-            ),
+            )),
             20,
         ),
         withTimeout(
-            vscode.commands.executeCommand<vscode.SignatureHelp>(
+            Promise.resolve(vscode.commands.executeCommand<vscode.SignatureHelp>(
                 'vscode.executeSignatureHelpProvider',
                 document.uri,
                 position,
-            ),
+            )),
             20,
         ),
         withTimeout(
-            vscode.commands.executeCommand<vscode.Hover[]>(
+            Promise.resolve(vscode.commands.executeCommand<vscode.Hover[]>(
                 'vscode.executeHoverProvider',
                 document.uri,
                 position,
-            ),
+            )),
             20,
         ),
     ]);
