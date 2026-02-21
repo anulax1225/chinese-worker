@@ -5,12 +5,14 @@ import { buildFIMContext } from './context';
 import { delay } from '../util/debounce';
 import { logger } from '../util/logger';
 import type { LanguageConfig } from './languages';
+import type { FIMTokenMap } from './fim-tokens';
 
 export class CWCompletionProvider implements vscode.InlineCompletionItemProvider {
     private abortController: AbortController | null = null;
 
     constructor(
         private langConfigs: Map<string, LanguageConfig>,
+        private fimTokens: FIMTokenMap,
     ) {}
 
     async provideInlineCompletionItems(
@@ -43,12 +45,21 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
+        const fimFamily = config.enableFIM && config.fimTokenFamily
+            ? this.fimTokens[config.fimTokenFamily]
+            : undefined;
+
+        if (config.enableFIM && config.fimTokenFamily && !fimFamily) {
+            logger.warn(`Unknown FIM token family: "${config.fimTokenFamily}"`);
+        }
+
         const ctx = buildFIMContext(
             document,
             position,
             config.maxPrefixLines,
             config.maxSuffixLines,
             config.enableFIM,
+            fimFamily,
         );
 
         if (ctx.prompt.trim() === '') {
@@ -73,8 +84,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
                 config.agentId,
                 {
                     prompt: ctx.prompt,
-                    suffix: config.enableFIM ? ctx.suffix : undefined,
-                    system: ctx.system,
+                    suffix: ctx.raw ? undefined : (config.enableFIM ? ctx.suffix : undefined),
+                    raw: ctx.raw || undefined,
                     max_tokens: config.maxTokens,
                     temperature: config.temperature,
                     stop: stopSequences ?? [],

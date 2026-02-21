@@ -54,7 +54,7 @@
         },
         "cw.maxTokens": {
           "type": "number",
-          "default": 256,
+          "default": 100,
           "description": "Maximum tokens for the completion response"
         },
         "cw.temperature": {
@@ -66,6 +66,11 @@
           "type": "boolean",
           "default": false,
           "description": "Send suffix for fill-in-the-middle (requires FIM-capable model)"
+        },
+        "cw.fimTokenFamily": {
+          "type": "string",
+          "default": "",
+          "description": "FIM token family (qwen, codellama, starcoder, deepseek, codestral, codegemma, devstral). See .cw/fim-tokens.json."
         },
         "cw.thinkingModel": {
           "type": "boolean",

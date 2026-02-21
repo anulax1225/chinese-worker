@@ -3,7 +3,7 @@ import { logger } from '../util/logger';
 export interface GenerateParams {
     prompt: string;
     suffix?: string;
-    system?: string;
+    raw?: boolean;
     max_tokens?: number;
     temperature?: number;
     stop?: string[];

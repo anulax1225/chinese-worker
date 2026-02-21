@@ -11,6 +11,7 @@ export interface CWConfig {
     maxTokens: number;
     temperature: number;
     enableFIM: boolean;
+    fimTokenFamily: string;
     thinkingModel: boolean;
 }
 
@@ -28,6 +29,7 @@ export function getConfig(): CWConfig {
         maxTokens: cfg.get<number>('maxTokens', 256),
         temperature: cfg.get<number>('temperature', 0.2),
         enableFIM: cfg.get<boolean>('enableFIM', false),
+        fimTokenFamily: cfg.get<string>('fimTokenFamily', ''),
         thinkingModel: cfg.get<boolean>('thinkingModel', false),
     };
 }

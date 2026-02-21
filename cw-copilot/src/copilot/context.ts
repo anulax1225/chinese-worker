@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
+import type { FIMTokenFamily } from './fim-tokens';
 
 export interface FIMContext {
     prompt: string;
     suffix: string;
-    system: string;
+    raw: boolean;
     fileName: string;
     languageId: string;
 }
@@ -15,6 +16,7 @@ export function buildFIMContext(
     maxPrefixLines: number,
     maxSuffixLines: number,
     enableFIM: boolean,
+    fimTokenFamily?: FIMTokenFamily,
 ): FIMContext {
     const startLine = Math.max(0, position.line - maxPrefixLines);
     const endLine = Math.min(document.lineCount - 1, position.line + maxSuffixLines);
@@ -29,22 +31,22 @@ export function buildFIMContext(
     const fileName = path.basename(document.fileName);
     const languageId = document.languageId;
 
-    if (enableFIM) {
+    if (enableFIM && fimTokenFamily) {
+        const prompt = `${fimTokenFamily.prefix}${prefix}${fimTokenFamily.suffix}${suffix}${fimTokenFamily.middle}`;
         return {
-            prompt: prefix,
-            suffix,
-            system: `You are a code completion engine. Complete the code at the cursor position in the file "${fileName}" (${languageId}). Output ONLY the code that goes between the prefix and suffix. No explanations, NO MARKDOWN.`,
+            prompt,
+            suffix: '',
+            raw: true,
             fileName,
             languageId,
         };
     }
 
-    const prompt = `// File: ${fileName} (${languageId})\n${prefix}`;
-
+    const instruction = `Continue the code exactly where it left off in "${fileName}" (${languageId}). Output ONLY the code continuation. No explanations, no markdown, no repeating existing code, no code block syntax.\n\n`;
     return {
-        prompt,
+        prompt: instruction + prefix,
         suffix,
-        system: `You are a code completion engine. Continue the code exactly where it left off. Output ONLY the code continuation. No explanations, no markdown, no repeating existing code.`,
+        raw: false,
         fileName,
         languageId,
     };

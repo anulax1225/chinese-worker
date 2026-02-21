@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { getConfig } from './config';
 import { CWCompletionProvider } from './copilot/provider';
 import { scaffoldLanguageConfigs, loadAllLanguageConfigs } from './copilot/languages';
+import { scaffoldFIMTokens, loadFIMTokens } from './copilot/fim-tokens';
 import { logger } from './util/logger';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -13,12 +14,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     if (workspaceRoot) {
         await scaffoldLanguageConfigs(workspaceRoot, context.extensionPath);
+        await scaffoldFIMTokens(workspaceRoot, context.extensionPath);
     }
 
     const langConfigs = await loadAllLanguageConfigs(context.extensionPath, workspaceRoot);
     logger.info(`Languages available: ${[...langConfigs.keys()].join(', ') || '(none)'}`);
 
-    const provider = new CWCompletionProvider(langConfigs);
+    const fimTokens = await loadFIMTokens(context.extensionPath, workspaceRoot);
+
+    const provider = new CWCompletionProvider(langConfigs, fimTokens);
 
     const providerDisposable = vscode.languages.registerInlineCompletionItemProvider(
         { pattern: '**' },
