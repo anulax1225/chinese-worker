@@ -134,6 +134,10 @@ readonly class GenerateRequest
             $payload['top_logprobs'] = $this->topLogprobs;
         }
 
+        if ($this->stop !== null) {
+            $payload['stop'] = is_array($this->stop) ? $this->stop : [$this->stop];
+        }
+
         $options = $this->buildOptions();
         if (! empty($options)) {
             $payload['options'] = $options;
@@ -175,9 +179,7 @@ readonly class GenerateRequest
             $options['seed'] = $this->seed;
         }
 
-        if ($this->stop !== null) {
-            $options['stop'] = $this->stop;
-        }
+        // stop is a top-level Ollama parameter, not an option — see toOllamaPayload()
 
         if ($this->contextLength !== null) {
             $options['num_ctx'] = $this->contextLength;
