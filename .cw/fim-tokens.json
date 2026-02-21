@@ -1,0 +1,56 @@
+{
+  "qwen": {
+    "prefix": "<|fim_prefix|>",
+    "suffix": "<|fim_suffix|>",
+    "middle": "<|fim_middle|>",
+    "modelPattern": "qwen"
+  },
+  "qwen3": {
+    "prefix": "<|fim_prefix|>",
+    "suffix": "<|fim_suffix|>",
+    "middle": "<|fim_middle|>",
+    "modelPattern": "qwen3"
+  },
+  "codellama": {
+    "prefix": "<PRE> ",
+    "suffix": " <SUF>",
+    "middle": " <MID>",
+    "modelPattern": "codellama"
+  },
+  "starcoder": {
+    "prefix": "<fim_prefix>",
+    "suffix": "<fim_suffix>",
+    "middle": "<fim_middle>",
+    "modelPattern": "starcoder"
+  },
+  "deepseek": {
+    "prefix": "<｜fim▁begin｜>",
+    "suffix": "<｜fim▁hole｜>",
+    "middle": "<｜fim▁end｜>",
+    "modelPattern": "deepseek"
+  },
+  "codestral": {
+    "prefix": "[PREFIX]",
+    "suffix": "[SUFFIX]",
+    "middle": "[MIDDLE]",
+    "modelPattern": "codestral"
+  },
+  "mistral": {
+    "prefix": "[PREFIX]",
+    "suffix": "[SUFFIX]",
+    "middle": "[MIDDLE]",
+    "modelPattern": "mistral"
+  },
+  "codegemma": {
+    "prefix": "<|fim_prefix|>",
+    "suffix": "<|fim_suffix|>",
+    "middle": "<|fim_middle|>",
+    "modelPattern": "codegemma"
+  },
+  "devstral": {
+    "prefix": "[PREFIX]",
+    "suffix": "[SUFFIX]",
+    "middle": "[MIDDLE]",
+    "modelPattern": "devstral"
+  }
+}
