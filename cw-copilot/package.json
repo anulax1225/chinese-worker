@@ -83,6 +83,10 @@
       {
         "command": "cw.toggle",
         "title": "CW Copilot: Toggle"
+      },
+      {
+        "command": "cw.reindex",
+        "title": "CW Copilot: Reindex Project"
       }
     ]
   },

@@ -1,0 +1,12 @@
+{
+  "scan": ["."],
+  "ignore": [
+    "node_modules",
+    ".git",
+    "vendor",
+    "dist",
+    "out",
+    "build",
+    ".cw"
+  ]
+}
