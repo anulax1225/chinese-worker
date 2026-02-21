@@ -76,6 +76,31 @@
           "type": "boolean",
           "default": false,
           "description": "Strip <think> blocks from response (for thinking models like lfm2.5-thinking)"
+        },
+        "cw.retrieval.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable project context retrieval for completions (requires .cw/config.json)"
+        },
+        "cw.retrieval.topK": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum number of code chunks to retrieve as context"
+        },
+        "cw.retrieval.threshold": {
+          "type": "number",
+          "default": 0.5,
+          "description": "Minimum similarity score for retrieved context (0-1)"
+        },
+        "cw.retrieval.maxLines": {
+          "type": "number",
+          "default": 50,
+          "description": "Maximum total lines of retrieved context to inject into the prompt"
+        },
+        "cw.retrieval.timeoutMs": {
+          "type": "number",
+          "default": 200,
+          "description": "Maximum time in ms to wait for retrieval before falling back to plain completion"
         }
       }
     },

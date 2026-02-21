@@ -54,16 +54,36 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
-        // Retrieve project context (non-blocking, with 200ms timeout)
+        // Retrieve project context (before generate, with configurable timeout)
         let retrievedChunks: RetrievedChunk[] | undefined;
 
-        if (this.retriever && this.workspaceRoot) {
+        if (this.retriever && this.workspaceRoot && config.retrievalEnabled) {
             try {
+                const retrievalStart = Date.now();
                 const query = await buildRetrievalQuery(document, position, this.workspaceRoot);
+                logger.info(`Retrieval query (${query.queryText.length} chars):\n${query.queryText}`);
+
                 retrievedChunks = await Promise.race([
-                    this.retriever.retrieve(query, { topK: 3, threshold: 0.5, maxLines: 50 }),
-                    new Promise<RetrievedChunk[]>(resolve => setTimeout(() => resolve([]), 200)),
+                    this.retriever.retrieve(query, {
+                        topK: config.retrievalTopK,
+                        threshold: config.retrievalThreshold,
+                        maxLines: config.retrievalMaxLines,
+                    }),
+                    new Promise<RetrievedChunk[]>(resolve =>
+                        setTimeout(() => resolve([]), config.retrievalTimeoutMs),
+                    ),
                 ]);
+
+                const retrievalMs = Date.now() - retrievalStart;
+
+                if (retrievedChunks?.length) {
+                    logger.info(`Retrieved ${retrievedChunks.length} chunk(s) in ${retrievalMs}ms:`);
+                    for (const chunk of retrievedChunks) {
+                        logger.info(`  - ${chunk.filePath} :: ${chunk.node_type} ${chunk.symbol} (similarity=${chunk.similarity.toFixed(3)}, ${chunk.lineCount} lines)`);
+                    }
+                } else {
+                    logger.info(`Retrieval returned 0 chunks in ${retrievalMs}ms`);
+                }
             } catch (err: unknown) {
                 logger.warn(`Retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
             }
@@ -104,6 +124,10 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
 
         const chunkInfo = retrievedChunks?.length ? `, context=${retrievedChunks.length} chunks` : '';
         logger.info(`Request: fim=${config.enableFIM}, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars${chunkInfo}`);
+
+        if (retrievedChunks?.length) {
+            logger.info(`Full prompt being sent to AI:\n--- PROMPT START ---\n${ctx.prompt.slice(0, 2000)}${ctx.prompt.length > 2000 ? '\n... (truncated)' : ''}\n--- PROMPT END ---`);
+        }
 
         this.abortController = new AbortController();
         const { signal } = this.abortController;
