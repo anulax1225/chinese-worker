@@ -1,0 +1,28 @@
+{
+  "id": "php",
+  "extensions": [".php"],
+  "commentPrefix": "//",
+  "stopSequences": [
+    "\n\n",
+    "\nfunction ",
+    "\nclass ",
+    "\n/**",
+    "\ninterface ",
+    "\ntrait ",
+    "\nenum "
+  ],
+  "topLevelNodes": [
+    "class_declaration",
+    "function_definition",
+    "interface_declaration",
+    "trait_declaration",
+    "enum_declaration"
+  ],
+  "nodeStopPatterns": {
+    "class_declaration": ["\nclass "],
+    "function_definition": ["\nfunction "],
+    "interface_declaration": ["\ninterface "],
+    "trait_declaration": ["\ntrait "],
+    "enum_declaration": ["\nenum "]
+  }
+}

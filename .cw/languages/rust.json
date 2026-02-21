@@ -1,0 +1,31 @@
+{
+  "id": "rust",
+  "extensions": [".rs"],
+  "commentPrefix": "//",
+  "stopSequences": [
+    "\n\n",
+    "\nfn ",
+    "\nstruct ",
+    "\nimpl ",
+    "\nenum ",
+    "\ntrait ",
+    "\nmod ",
+    "\npub "
+  ],
+  "topLevelNodes": [
+    "function_item",
+    "struct_item",
+    "impl_item",
+    "enum_item",
+    "trait_item",
+    "mod_item"
+  ],
+  "nodeStopPatterns": {
+    "function_item": ["\nfn ", "\npub fn "],
+    "struct_item": ["\nstruct ", "\npub struct "],
+    "impl_item": ["\nimpl "],
+    "enum_item": ["\nenum ", "\npub enum "],
+    "trait_item": ["\ntrait ", "\npub trait "],
+    "mod_item": ["\nmod "]
+  }
+}

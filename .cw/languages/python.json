@@ -1,0 +1,22 @@
+{
+  "id": "python",
+  "extensions": [".py"],
+  "commentPrefix": "#",
+  "stopSequences": [
+    "\n\n",
+    "\ndef ",
+    "\nclass ",
+    "\n# ",
+    "\n@"
+  ],
+  "topLevelNodes": [
+    "class_definition",
+    "function_definition",
+    "decorated_definition"
+  ],
+  "nodeStopPatterns": {
+    "class_definition": ["\nclass "],
+    "function_definition": ["\ndef "],
+    "decorated_definition": ["\n@"]
+  }
+}
