@@ -69,7 +69,7 @@
         },
         "cw.fimTokenFamily": {
           "type": "string",
-          "default": "",
+          "default": "qwen",
           "description": "FIM token family (qwen, codellama, starcoder, deepseek, codestral, codegemma, devstral). See .cw/fim-tokens.json."
         },
         "cw.thinkingModel": {
