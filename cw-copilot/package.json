@@ -61,6 +61,16 @@
           "type": "number",
           "default": 0.2,
           "description": "Sampling temperature (0-2)"
+        },
+        "cw.enableFIM": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send suffix for fill-in-the-middle (requires FIM-capable model)"
+        },
+        "cw.thinkingModel": {
+          "type": "boolean",
+          "default": false,
+          "description": "Strip <think> blocks from response (for thinking models like lfm2.5-thinking)"
         }
       }
     },

@@ -10,6 +10,8 @@ export interface CWConfig {
     maxSuffixLines: number;
     maxTokens: number;
     temperature: number;
+    enableFIM: boolean;
+    thinkingModel: boolean;
 }
 
 export function getConfig(): CWConfig {
@@ -18,12 +20,14 @@ export function getConfig(): CWConfig {
     return {
         apiUrl: cfg.get<string>('apiUrl', 'http://localhost'),
         apiToken: cfg.get<string>('apiToken', ''),
-        agentId: cfg.get<number>('agentId', 1),
+        agentId: cfg.get<number>('agentId', 2),
         enabled: cfg.get<boolean>('enabled', true),
         debounceMs: cfg.get<number>('debounceMs', 300),
         maxPrefixLines: cfg.get<number>('maxPrefixLines', 100),
         maxSuffixLines: cfg.get<number>('maxSuffixLines', 30),
         maxTokens: cfg.get<number>('maxTokens', 256),
         temperature: cfg.get<number>('temperature', 0.2),
+        enableFIM: cfg.get<boolean>('enableFIM', false),
+        thinkingModel: cfg.get<boolean>('thinkingModel', false),
     };
 }

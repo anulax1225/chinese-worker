@@ -43,14 +43,15 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
-        const { prompt, suffix } = buildFIMContext(
+        const ctx = buildFIMContext(
             document,
             position,
             config.maxPrefixLines,
             config.maxSuffixLines,
+            config.enableFIM,
         );
 
-        if (prompt.trim() === '') {
+        if (ctx.prompt.trim() === '') {
             logger.info('Skipped: empty prompt');
             return undefined;
         }
@@ -58,7 +59,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         const langConfig = this.langConfigs.get(document.languageId);
         const stopSequences = langConfig?.stopSequences ?? ['\n\n'];
 
-        logger.info(`Request: lang=${document.languageId}, file=${document.fileName}, line=${position.line + 1}:${position.character}, prompt=${prompt.length} chars, suffix=${suffix.length} chars, stops=${stopSequences.length}`);
+        logger.info(`Request: fim=${config.enableFIM}, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars`);
 
         this.abortController = new AbortController();
         const { signal } = this.abortController;
@@ -71,12 +72,14 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             const response = await client.generate(
                 config.agentId,
                 {
-                    prompt,
-                    suffix,
+                    prompt: ctx.prompt,
+                    suffix: config.enableFIM ? ctx.suffix : undefined,
+                    system: ctx.system,
                     max_tokens: config.maxTokens,
                     temperature: config.temperature,
-                    stop: stopSequences,
+                    stop: stopSequences ?? [],
                     stream: false,
+                    think: config.thinkingModel || undefined,
                 },
                 signal,
             );
