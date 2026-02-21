@@ -25,8 +25,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Enable Sanctum stateful authentication for SPA
         $middleware->statefulApi();
 
-        // Enable API rate limiting (60 requests per minute)
-        $middleware->throttleApi('60,1');
+        // Enable API rate limiting (configurable via API_RATE_LIMIT_ENABLED and API_RATE_LIMIT)
+        $middleware->throttleApi('api');
     })
     ->withSchedule(function (Schedule $schedule): void {
         // Clean up temporary files daily at 2 AM

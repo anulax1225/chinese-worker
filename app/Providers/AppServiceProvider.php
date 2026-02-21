@@ -5,11 +5,14 @@ namespace App\Providers;
 use App\Services\Search\SearchService;
 use App\Services\WebFetch\WebFetchService;
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -45,6 +48,7 @@ class AppServiceProvider extends ServiceProvider
         JsonResource::withoutWrapping();
         $this->configureDefaults();
         $this->configureGates();
+        $this->configureRateLimiting();
     }
 
     protected function configureGates(): void
@@ -52,6 +56,19 @@ class AppServiceProvider extends ServiceProvider
         // Gate for managing AI models (pull, delete, etc.)
         // Can be restricted to admin users when role system is added
         Gate::define('manage-ai-models', fn ($_user) => true);
+    }
+
+    protected function configureRateLimiting(): void
+    {
+        RateLimiter::for('api', function (Request $request) {
+            if (! config('app.api_rate_limit_enabled', true)) {
+                return Limit::none();
+            }
+
+            return Limit::perMinute(
+                config('app.api_rate_limit', 60),
+            )->by($request->user()?->id ?: $request->ip());
+        });
     }
 
     protected function configureDefaults(): void

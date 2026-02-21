@@ -123,4 +123,19 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | API Rate Limiting
+    |--------------------------------------------------------------------------
+    |
+    | These options control the API rate limiting behavior. You can toggle
+    | rate limiting on or off and configure the maximum number of requests
+    | per minute.
+    |
+    */
+
+    'api_rate_limit_enabled' => (bool) env('API_RATE_LIMIT_ENABLED', true),
+
+    'api_rate_limit' => (int) env('API_RATE_LIMIT', 60),
+
 ];
