@@ -6,14 +6,23 @@ import { delay } from '../util/debounce';
 import { logger } from '../util/logger';
 import type { LanguageConfig } from './languages';
 import type { FIMTokenMap } from './fim-tokens';
+import type { ContextRetriever, RetrievedChunk } from '../retriever/retriever';
+import { buildRetrievalQuery } from '../retriever/query-builder';
 
 export class CWCompletionProvider implements vscode.InlineCompletionItemProvider {
     private abortController: AbortController | null = null;
+    private retriever: ContextRetriever | null = null;
+    private workspaceRoot: string | null = null;
 
     constructor(
         private langConfigs: Map<string, LanguageConfig>,
         private fimTokens: FIMTokenMap,
     ) {}
+
+    setRetriever(retriever: ContextRetriever, workspaceRoot: string): void {
+        this.retriever = retriever;
+        this.workspaceRoot = workspaceRoot;
+    }
 
     async provideInlineCompletionItems(
         document: vscode.TextDocument,
@@ -45,6 +54,25 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
+        // Retrieve project context (non-blocking, with 200ms timeout)
+        let retrievedChunks: RetrievedChunk[] | undefined;
+
+        if (this.retriever && this.workspaceRoot) {
+            try {
+                const query = await buildRetrievalQuery(document, position, this.workspaceRoot);
+                retrievedChunks = await Promise.race([
+                    this.retriever.retrieve(query, { topK: 3, threshold: 0.5, maxLines: 50 }),
+                    new Promise<RetrievedChunk[]>(resolve => setTimeout(() => resolve([]), 200)),
+                ]);
+            } catch (err: unknown) {
+                logger.warn(`Retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
         const fimFamily = config.enableFIM && config.fimTokenFamily
             ? this.fimTokens[config.fimTokenFamily]
             : undefined;
@@ -53,6 +81,9 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             logger.warn(`Unknown FIM token family: "${config.fimTokenFamily}"`);
         }
 
+        const langConfig = this.langConfigs.get(document.languageId);
+        const commentPrefix = langConfig?.commentPrefix ?? '//';
+
         const ctx = buildFIMContext(
             document,
             position,
@@ -60,6 +91,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             config.maxSuffixLines,
             config.enableFIM,
             fimFamily,
+            retrievedChunks,
+            commentPrefix,
         );
 
         if (ctx.prompt.trim() === '') {
@@ -67,10 +100,10 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
-        const langConfig = this.langConfigs.get(document.languageId);
         const stopSequences = langConfig?.stopSequences ?? ['\n\n'];
 
-        logger.info(`Request: fim=${config.enableFIM}, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars`);
+        const chunkInfo = retrievedChunks?.length ? `, context=${retrievedChunks.length} chunks` : '';
+        logger.info(`Request: fim=${config.enableFIM}, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars${chunkInfo}`);
 
         this.abortController = new AbortController();
         const { signal } = this.abortController;
