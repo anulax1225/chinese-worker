@@ -14,7 +14,11 @@
       "Bash(php artisan make:test:*)",
       "Bash(./vendor/bin/sail test:*)",
       "Bash(./vendor/bin/sail pint:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx tsc:*)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }
