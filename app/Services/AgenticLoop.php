@@ -224,10 +224,11 @@ class AgenticLoop
                 $onToolCompleted,
                 $onToolRequest,
             );
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             Log::error('Agentic loop turn failed', [
                 'runtime_id' => $runtime->getId(),
                 'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
                 'trace' => $e->getTraceAsString(),
             ]);
 

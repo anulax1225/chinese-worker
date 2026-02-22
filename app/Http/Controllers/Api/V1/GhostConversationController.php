@@ -10,7 +10,9 @@ use App\Models\Agent;
 use App\Services\AgenticLoop;
 use App\Services\Runtime\InMemoryRuntime;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 /**
  * @group Ghost Conversations
@@ -68,13 +70,32 @@ class GhostConversationController extends Controller
     {
         $runtime = $this->buildRuntime($request, $agent);
 
-        $result = $this->agenticLoop->run(
-            $runtime,
-            onChunk: function () {},
-            onToolExecuting: function () {},
-            onToolCompleted: function () {},
-            onToolRequest: function () {},
-        );
+        try {
+            $result = $this->agenticLoop->run(
+                $runtime,
+                onChunk: function () {},
+                onToolExecuting: function () {},
+                onToolCompleted: function () {},
+                onToolRequest: function () {},
+            );
+        } catch (Throwable $e) {
+            Log::error('Ghost conversation failed', [
+                'agent_id' => $agent->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status' => 'failed',
+                'messages' => array_map(
+                    fn (ChatMessage $m) => $m->toArray(),
+                    $runtime->getMessages(),
+                ),
+                'tool_request' => null,
+                'error' => $e->getMessage(),
+                'stats' => $runtime->getStats(),
+            ], 500);
+        }
 
         return response()->json([
             'status' => $result->status,
@@ -147,42 +168,61 @@ class GhostConversationController extends Controller
                 'status' => 'connected',
             ]);
 
-            $result = $this->agenticLoop->run(
-                $runtime,
-                onChunk: fn (string $chunk, string $type) => $sendSSE('text_chunk', [
-                    'chunk' => $chunk,
-                    'type' => $type,
-                ]),
-                onToolExecuting: fn (array $tc) => $sendSSE('tool_executing', [
-                    'tool' => [
-                        'call_id' => $tc['call_id'] ?? $tc['id'] ?? '',
-                        'name' => $tc['name'] ?? '',
-                        'arguments' => $tc['arguments'] ?? [],
-                    ],
-                ]),
-                onToolCompleted: fn (string $callId, string $name, bool $success, string $content) => $sendSSE('tool_completed', [
-                    'call_id' => $callId,
-                    'name' => $name,
-                    'success' => $success,
-                    'content' => $content,
-                ]),
-                onToolRequest: fn (array $tr) => $sendSSE('tool_request', [
-                    'tool_request' => $tr,
-                    'stats' => $runtime->getStats(),
-                ]),
-            );
+            try {
+                $result = $this->agenticLoop->run(
+                    $runtime,
+                    onChunk: fn (string $chunk, string $type) => $sendSSE('text_chunk', [
+                        'chunk' => $chunk,
+                        'type' => $type,
+                    ]),
+                    onToolExecuting: fn (array $tc) => $sendSSE('tool_executing', [
+                        'tool' => [
+                            'call_id' => $tc['call_id'] ?? $tc['id'] ?? '',
+                            'name' => $tc['name'] ?? '',
+                            'arguments' => $tc['arguments'] ?? [],
+                        ],
+                    ]),
+                    onToolCompleted: fn (string $callId, string $name, bool $success, string $content) => $sendSSE('tool_completed', [
+                        'call_id' => $callId,
+                        'name' => $name,
+                        'success' => $success,
+                        'content' => $content,
+                    ]),
+                    onToolRequest: fn (array $tr) => $sendSSE('tool_request', [
+                        'tool_request' => $tr,
+                        'stats' => $runtime->getStats(),
+                    ]),
+                );
 
-            // Send final event
-            $sendSSE($result->status, [
-                'status' => $result->status,
-                'messages' => array_map(
-                    fn (ChatMessage $m) => $m->toArray(),
-                    $runtime->getMessages(),
-                ),
-                'tool_request' => $result->toolRequest,
-                'error' => $result->error,
-                'stats' => $runtime->getStats(),
-            ]);
+                // Send final event
+                $sendSSE($result->status, [
+                    'status' => $result->status,
+                    'messages' => array_map(
+                        fn (ChatMessage $m) => $m->toArray(),
+                        $runtime->getMessages(),
+                    ),
+                    'tool_request' => $result->toolRequest,
+                    'error' => $result->error,
+                    'stats' => $runtime->getStats(),
+                ]);
+            } catch (Throwable $e) {
+                Log::error('Ghost conversation stream failed', [
+                    'agent_id' => $runtime->getAgent()->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+
+                $sendSSE('failed', [
+                    'status' => 'failed',
+                    'messages' => array_map(
+                        fn (ChatMessage $m) => $m->toArray(),
+                        $runtime->getMessages(),
+                    ),
+                    'tool_request' => null,
+                    'error' => $e->getMessage(),
+                    'stats' => $runtime->getStats(),
+                ]);
+            }
         }, 200, $this->getSSEHeaders());
     }
 
