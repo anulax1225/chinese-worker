@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\ConversationSummaryController;
 use App\Http\Controllers\Api\V1\DocumentController;
 use App\Http\Controllers\Api\V1\EmbeddingController;
 use App\Http\Controllers\Api\V1\FileController;
+use App\Http\Controllers\Api\V1\GhostConversationController;
 use App\Http\Controllers\Api\V1\SystemPromptController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,10 @@ Route::prefix('v1')->group(function (): void {
         // Files
         Route::apiResource('files', FileController::class)->except(['update']);
         Route::get('files/{file}/download', [FileController::class, 'download']);
+
+        // Ghost Conversations (stateless, no DB persistence)
+        Route::post('agents/{agent}/ghost', [GhostConversationController::class, 'send']);
+        Route::post('agents/{agent}/ghost/stream', [GhostConversationController::class, 'stream']);
 
         // Conversations
         Route::post('agents/{agent}/conversations', [ConversationController::class, 'store']);
