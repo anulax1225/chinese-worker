@@ -77,6 +77,17 @@ export class ContextRetriever {
             return [];
         }
 
+        // Log all compare results sorted by best similarity
+        const sorted = [...compareResult.results].sort((a, b) => b.similarity - a.similarity);
+        logger.info(`Embeddings compare response (${sorted.length} results, sorted by score):`);
+        for (const r of sorted) {
+            const targetId = r.target.id;
+            const found = targetId !== undefined ? this.store.findNodeByEmbeddingId(this.index, targetId) : null;
+            const label = found ? `${found.filePath} :: ${found.node.node_type} ${found.node.symbol}` : `id=${targetId}`;
+            const above = r.similarity >= options.threshold ? '✓' : '✗';
+            logger.info(`  ${above} ${r.similarity.toFixed(4)} — ${label}`);
+        }
+
         // Filter by threshold and take topK
         const filtered = compareResult.results
             .filter(r => r.similarity >= options.threshold)
