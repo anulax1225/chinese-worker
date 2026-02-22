@@ -134,7 +134,7 @@ return [
     |
     */
 
-    'api_rate_limit_enabled' => (bool) env('API_RATE_LIMIT_ENABLED', true),
+    'api_rate_limit_enabled' => (bool) env('API_RATE_LIMIT_ENABLED', false),
 
     'api_rate_limit' => (int) env('API_RATE_LIMIT', 60),
 
