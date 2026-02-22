@@ -40,6 +40,43 @@ export interface CompareResponse {
     model: string;
 }
 
+export interface GhostToolSchema {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+}
+
+export interface GhostMessage {
+    role: string;
+    content: string;
+    tool_calls?: Array<{ call_id: string; name: string; arguments: Record<string, unknown> }> | null;
+    tool_call_id?: string | null;
+    thinking?: string | null;
+    name?: string | null;
+}
+
+export interface GhostConversationRequest {
+    content: string;
+    messages?: GhostMessage[];
+    client_tool_schemas?: GhostToolSchema[];
+    max_turns?: number;
+    context?: Record<string, string>;
+}
+
+export interface GhostToolRequest {
+    call_id: string;
+    name: string;
+    arguments: Record<string, unknown>;
+}
+
+export interface GhostConversationResponse {
+    status: string;
+    messages: GhostMessage[];
+    tool_request: GhostToolRequest | null;
+    error: string | null;
+    stats: { turns: number; tokens: number; prompt_tokens: number; completion_tokens: number };
+}
+
 export interface EmbeddingConfigResponse {
     enabled: boolean;
     model: string | null;
@@ -91,6 +128,46 @@ export class CWApiClient {
             }
 
             logger.error(`API request failed: ${err instanceof Error ? err.message : String(err)}`);
+            return null;
+        }
+    }
+
+    async ghostConversation(
+        agentId: number,
+        params: GhostConversationRequest,
+        signal?: AbortSignal,
+    ): Promise<GhostConversationResponse | null> {
+        const url = `${this.baseUrl}/api/v1/agents/${agentId}/ghost`;
+        logger.info(`POST ${url} (ghost conversation)`);
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(params),
+                signal,
+            });
+
+            if (!response.ok) {
+                const body = await response.text().catch(() => '');
+                logger.warn(`Ghost API ${response.status} ${response.statusText}: ${body}`);
+                return null;
+            }
+
+            const data = await response.json() as GhostConversationResponse;
+            logger.info(`Ghost API 200: status=${data.status}, messages=${data.messages.length}, tokens=${data.stats.tokens}`);
+            return data;
+        } catch (err: unknown) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                logger.info('Ghost API request aborted (new keystroke)');
+                return null;
+            }
+
+            logger.error(`Ghost API request failed: ${err instanceof Error ? err.message : String(err)}`);
             return null;
         }
     }

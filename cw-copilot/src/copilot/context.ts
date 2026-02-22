@@ -107,6 +107,67 @@ function formatTokenFIM(
     return parts.join('\n');
 }
 
+export interface GhostContext {
+    userMessage: string;
+    contextVariables: Record<string, string>;
+    isEmpty: boolean;
+}
+
+export function buildGhostContext(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    maxPrefixLines: number,
+    maxSuffixLines: number,
+    retrievedChunks?: RetrievedChunk[],
+    projectName?: string,
+    relativeFilePath?: string,
+): GhostContext {
+    const startLine = Math.max(0, position.line - maxPrefixLines);
+    const endLine = Math.min(document.lineCount - 1, position.line + maxSuffixLines);
+
+    const prefixRange = new vscode.Range(startLine, 0, position.line, position.character);
+    const prefix = document.getText(prefixRange);
+
+    const lastChar = document.lineAt(endLine).text.length;
+    const suffixRange = new vscode.Range(position.line, position.character, endLine, lastChar);
+    const suffix = document.getText(suffixRange);
+
+    const userMessage = `<prefix>\n${prefix}\n<blank/>\n<suffix>\n${suffix}\n</suffix>`;
+
+    const contextVariables: Record<string, string> = {};
+
+    if (relativeFilePath) {
+        contextVariables.file_path = relativeFilePath;
+    }
+    if (document.languageId) {
+        contextVariables.language = document.languageId;
+    }
+    if (projectName) {
+        contextVariables.project_name = projectName;
+    }
+    if (retrievedChunks?.length) {
+        contextVariables.retrieved_context = formatRetrievedContextForGhost(retrievedChunks);
+    }
+
+    return {
+        userMessage,
+        contextVariables,
+        isEmpty: prefix.trim() === '' && suffix.trim() === '',
+    };
+}
+
+function formatRetrievedContextForGhost(chunks: RetrievedChunk[]): string {
+    const parts: string[] = [];
+
+    for (const chunk of chunks) {
+        parts.push(`--- ${chunk.filePath} (${chunk.node_type} ${chunk.symbol}) ---`);
+        parts.push(chunk.code);
+        parts.push('');
+    }
+
+    return parts.join('\n');
+}
+
 function formatRetrievedContext(
     chunks: RetrievedChunk[] | undefined,
     commentPrefix: string,
