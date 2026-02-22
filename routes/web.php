@@ -45,6 +45,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('settings')->name('settings.')->group(function () {
         Route::put('/profile', [SettingsController::class, 'updateProfile'])->name('profile.update');
         Route::put('/password', [SettingsController::class, 'updatePassword'])->name('password.update');
+        Route::get('#tokens', [SettingsController::class, 'tokens'])->name('tokens');
         Route::post('/tokens', [SettingsController::class, 'createToken'])->name('tokens.store');
         Route::delete('/tokens/{token}', [SettingsController::class, 'deleteToken'])->name('tokens.destroy');
     });
