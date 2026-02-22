@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 import { CWApiClient } from '../api/client';
 import { getConfig } from '../config';
 import { buildFIMContext } from './context';
@@ -104,6 +105,11 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         const langConfig = this.langConfigs.get(document.languageId);
         const commentPrefix = langConfig?.commentPrefix ?? '//';
 
+        const projectName = this.workspaceRoot ? path.basename(this.workspaceRoot) : undefined;
+        const relativeFilePath = this.workspaceRoot
+            ? path.relative(this.workspaceRoot, document.uri.fsPath)
+            : undefined;
+
         const ctx = buildFIMContext(
             document,
             position,
@@ -113,6 +119,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             fimFamily,
             retrievedChunks,
             commentPrefix,
+            projectName,
+            relativeFilePath,
         );
 
         if (ctx.prompt.trim() === '') {
@@ -120,7 +128,9 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
-        const stopSequences = langConfig?.stopSequences ?? ['\n\n'];
+        const langStop = langConfig?.stopSequences ?? ['\n\n'];
+        const fimStop = fimFamily?.stop ?? [];
+        const stopSequences = [...new Set([...langStop, ...fimStop])];
 
         const chunkInfo = retrievedChunks?.length ? `, context=${retrievedChunks.length} chunks` : '';
         logger.info(`Request: fim=${config.enableFIM}, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars${chunkInfo}`);

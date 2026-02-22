@@ -7,6 +7,9 @@ export interface FIMTokenFamily {
     suffix: string;
     middle: string;
     modelPattern: string;
+    repoName?: string;
+    fileSep?: string;
+    stop?: string[];
 }
 
 export type FIMTokenMap = Record<string, FIMTokenFamily>;
