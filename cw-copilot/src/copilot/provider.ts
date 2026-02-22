@@ -55,25 +55,30 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
-        // Retrieve project context (before generate, with configurable timeout)
+        // Retrieve project context (before generate, with abort-based timeout)
         let retrievedChunks: RetrievedChunk[] | undefined;
 
         if (this.retriever && this.workspaceRoot && config.retrievalEnabled) {
+            const retrievalStart = Date.now();
+            const retrievalAbort = new AbortController();
+            const retrievalTimer = setTimeout(
+                () => retrievalAbort.abort(),
+                config.retrievalTimeoutMs,
+            );
+
             try {
-                const retrievalStart = Date.now();
                 const query = await buildRetrievalQuery(document, position, this.workspaceRoot);
                 logger.info(`Retrieval query (${query.queryText.length} chars):\n${query.queryText}`);
 
-                retrievedChunks = await Promise.race([
-                    this.retriever.retrieve(query, {
+                retrievedChunks = await this.retriever.retrieve(
+                    query,
+                    {
                         topK: config.retrievalTopK,
                         threshold: config.retrievalThreshold,
                         maxLines: config.retrievalMaxLines,
-                    }),
-                    new Promise<RetrievedChunk[]>(resolve =>
-                        setTimeout(() => resolve([]), config.retrievalTimeoutMs),
-                    ),
-                ]);
+                    },
+                    retrievalAbort.signal,
+                );
 
                 const retrievalMs = Date.now() - retrievalStart;
 
@@ -86,7 +91,14 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
                     logger.info(`Retrieval returned 0 chunks in ${retrievalMs}ms`);
                 }
             } catch (err: unknown) {
-                logger.warn(`Retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
+                const retrievalMs = Date.now() - retrievalStart;
+                if (retrievalAbort.signal.aborted) {
+                    logger.info(`Retrieval timed out after ${retrievalMs}ms (limit: ${config.retrievalTimeoutMs}ms)`);
+                } else {
+                    logger.warn(`Retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            } finally {
+                clearTimeout(retrievalTimer);
             }
         }
 

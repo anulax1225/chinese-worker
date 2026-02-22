@@ -40,6 +40,6 @@ export function getConfig(): CWConfig {
         retrievalTopK: cfg.get<number>('retrieval.topK', 3),
         retrievalThreshold: cfg.get<number>('retrieval.threshold', 0.5),
         retrievalMaxLines: cfg.get<number>('retrieval.maxLines', 50),
-        retrievalTimeoutMs: cfg.get<number>('retrieval.timeoutMs', 2000),
+        retrievalTimeoutMs: cfg.get<number>('retrieval.timeoutMs', 5000),
     };
 }

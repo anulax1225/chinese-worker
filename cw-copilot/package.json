@@ -99,7 +99,7 @@
         },
         "cw.retrieval.timeoutMs": {
           "type": "number",
-          "default": 2000,
+          "default": 5000,
           "description": "Maximum time in ms to wait for retrieval before falling back to plain completion"
         }
       }
