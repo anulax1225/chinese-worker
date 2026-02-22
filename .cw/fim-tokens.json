@@ -3,54 +3,91 @@
     "prefix": "<|fim_prefix|>",
     "suffix": "<|fim_suffix|>",
     "middle": "<|fim_middle|>",
+    "repoName": "<|repo_name|>",
+    "fileSep": "<|file_sep|>",
+    "stop": ["<|endoftext|>", "<|fim_prefix|>", "<|fim_suffix|>", "<|fim_middle|>", "<|fim_pad|>", "<|repo_name|>", "<|file_sep|>", "<|im_start|>", "<|im_end|>"],
     "modelPattern": "qwen"
   },
   "qwen3": {
     "prefix": "<|fim_prefix|>",
     "suffix": "<|fim_suffix|>",
     "middle": "<|fim_middle|>",
+    "repoName": "<|repo_name|>",
+    "fileSep": "<|file_sep|>",
+    "stop": ["<|endoftext|>", "<|fim_prefix|>", "<|fim_suffix|>", "<|fim_middle|>", "<|fim_pad|>", "<|repo_name|>", "<|file_sep|>", "<|im_start|>", "<|im_end|>"],
     "modelPattern": "qwen3"
   },
   "codellama": {
     "prefix": "<PRE> ",
     "suffix": " <SUF>",
     "middle": " <MID>",
+    "stop": ["<EOT>"],
     "modelPattern": "codellama"
   },
   "starcoder": {
     "prefix": "<fim_prefix>",
     "suffix": "<fim_suffix>",
     "middle": "<fim_middle>",
+    "repoName": "<repo_name>",
+    "fileSep": "<file_sep>",
+    "stop": ["<|endoftext|>", "<fim_prefix>", "<fim_suffix>", "<fim_middle>", "<file_sep>"],
     "modelPattern": "starcoder"
+  },
+  "santacoder": {
+    "prefix": "<fim-prefix>",
+    "suffix": "<fim-suffix>",
+    "middle": "<fim-middle>",
+    "stop": ["<|endoftext|>"],
+    "modelPattern": "santacoder"
   },
   "deepseek": {
     "prefix": "<｜fim▁begin｜>",
     "suffix": "<｜fim▁hole｜>",
     "middle": "<｜fim▁end｜>",
-    "modelPattern": "deepseek"
+    "stop": ["<|EOT|>"],
+    "modelPattern": "deepseek-coder(?!.*v2)"
+  },
+  "deepseek-v2": {
+    "prefix": "<｜fim▁begin｜>",
+    "suffix": "<｜fim▁hole｜>",
+    "middle": "<｜fim▁end｜>",
+    "stop": ["<｜end▁of▁sentence｜>"],
+    "modelPattern": "deepseek.*(v2|coder-v2)"
   },
   "codestral": {
     "prefix": "[PREFIX]",
     "suffix": "[SUFFIX]",
     "middle": "[MIDDLE]",
+    "stop": ["[PREFIX]", "[SUFFIX]"],
     "modelPattern": "codestral"
   },
   "mistral": {
     "prefix": "[PREFIX]",
     "suffix": "[SUFFIX]",
     "middle": "[MIDDLE]",
+    "stop": ["[PREFIX]", "[SUFFIX]"],
     "modelPattern": "mistral"
-  },
-  "codegemma": {
-    "prefix": "<|fim_prefix|>",
-    "suffix": "<|fim_suffix|>",
-    "middle": "<|fim_middle|>",
-    "modelPattern": "codegemma"
   },
   "devstral": {
     "prefix": "[PREFIX]",
     "suffix": "[SUFFIX]",
     "middle": "[MIDDLE]",
+    "stop": ["[PREFIX]", "[SUFFIX]"],
     "modelPattern": "devstral"
+  },
+  "codegemma": {
+    "prefix": "<|fim_prefix|>",
+    "suffix": "<|fim_suffix|>",
+    "middle": "<|fim_middle|>",
+    "fileSep": "<|file_separator|>",
+    "stop": ["<|fim_prefix|>", "<|fim_suffix|>", "<|fim_middle|>", "<|file_separator|>", "<end_of_turn>"],
+    "modelPattern": "codegemma"
+  },
+  "stablecode": {
+    "prefix": "<fim_prefix>",
+    "suffix": "<fim_suffix>",
+    "middle": "<fim_middle>",
+    "stop": ["<|endoftext|>", "<fim_prefix>", "<fim_suffix>", "<fim_middle>"],
+    "modelPattern": "stable.?code"
   }
 }
