@@ -7,7 +7,7 @@ namespace App\DTOs;
 readonly class AgenticLoopResult
 {
     /**
-     * @param  'completed'|'waiting_for_tool'|'failed'|'max_turns'|'continue'  $status
+     * @param  'completed'|'waiting_for_tool'|'failed'|'max_turns'|'continue'|'cancelled'  $status
      * @param  array<string, mixed>|null  $toolRequest
      */
     public function __construct(
@@ -35,6 +35,11 @@ readonly class AgenticLoopResult
     public static function maxTurns(int $turnsExecuted): self
     {
         return new self('max_turns', turnsExecuted: $turnsExecuted);
+    }
+
+    public static function cancelled(int $turnsExecuted): self
+    {
+        return new self('cancelled', turnsExecuted: $turnsExecuted);
     }
 
     public static function continue(int $turnsExecuted): self

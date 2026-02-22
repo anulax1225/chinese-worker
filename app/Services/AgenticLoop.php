@@ -112,7 +112,7 @@ class AgenticLoop
             // Check cancellation
             $runtime->refresh();
             if ($runtime->isCancelled()) {
-                return AgenticLoopResult::completed(0);
+                return AgenticLoopResult::cancelled(0);
             }
 
             // Get AI backend
@@ -274,7 +274,7 @@ class AgenticLoop
                     'pending_tool' => $toolCall->name,
                 ]);
 
-                return AgenticLoopResult::completed(1);
+                return AgenticLoopResult::cancelled(1);
             }
 
             // Builtin tool → pause and wait for client
@@ -305,7 +305,7 @@ class AgenticLoop
                 'runtime_id' => $runtime->getId(),
             ]);
 
-            return AgenticLoopResult::completed(1);
+            return AgenticLoopResult::cancelled(1);
         }
 
         // All system tools executed → signal to continue

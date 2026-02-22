@@ -5,6 +5,7 @@ use App\Jobs\ProcessConversationTurn;
 use App\Models\Agent;
 use App\Models\Conversation;
 use App\Models\User;
+use App\Services\AgenticLoop;
 use App\Services\AI\FakeBackend;
 use App\Services\AIBackendManager;
 use App\Services\ConversationService;
@@ -17,6 +18,24 @@ describe('ProcessConversationTurn context filtering', function () {
             'model' => 'test-model',
         ]);
         Config::set('ai.default', 'fake');
+
+        $fakeBackend = new FakeBackend(['model' => 'test-model']);
+
+        $modelConfig = new NormalizedModelConfig(
+            model: 'test-model',
+            temperature: 0.7,
+            maxTokens: 4096,
+            contextLength: 4096,
+            timeout: 120,
+        );
+
+        $this->mock(AIBackendManager::class, function ($mock) use ($fakeBackend, $modelConfig) {
+            $mock->shouldReceive('forAgent')
+                ->andReturn([
+                    'backend' => $fakeBackend->withConfig($modelConfig),
+                    'config' => $modelConfig,
+                ]);
+        });
     });
 
     /**
@@ -43,32 +62,7 @@ describe('ProcessConversationTurn context filtering', function () {
         return $conversation;
     };
 
-    /**
-     * Build a mocked AIBackendManager that returns FakeBackend for forAgent().
-     */
-    $makeBackendManager = function (): AIBackendManager {
-        $fakeBackend = new FakeBackend(['model' => 'test-model']);
-
-        $modelConfig = new NormalizedModelConfig(
-            model: 'test-model',
-            temperature: 0.7,
-            maxTokens: 4096,
-            contextLength: 4096,
-            timeout: 120,
-        );
-
-        $mockManager = Mockery::mock(AIBackendManager::class);
-        $mockManager->shouldReceive('forAgent')
-            ->once()
-            ->andReturn([
-                'backend' => $fakeBackend->withConfig($modelConfig),
-                'config' => $modelConfig,
-            ]);
-
-        return $mockManager;
-    };
-
-    test('ProcessConversationTurn uses ConversationService for messages', function () use ($makeConversation, $makeBackendManager) {
+    test('ProcessConversationTurn uses ConversationService for messages', function () use ($makeConversation) {
         $conversation = $makeConversation();
 
         $mockConversationService = Mockery::mock(ConversationService::class);
@@ -79,16 +73,16 @@ describe('ProcessConversationTurn context filtering', function () {
             })
             ->andReturn($conversation->getMessages());
 
+        $this->app->instance(ConversationService::class, $mockConversationService);
+
+        $loop = app(AgenticLoop::class);
         $job = new ProcessConversationTurn($conversation);
-        $job->handle(
-            $makeBackendManager(),
-            $mockConversationService,
-        );
+        $job->handle($loop);
 
         // Mockery verifies the expectation (called once) on teardown
     });
 
-    test('context filtering passes toolDefinitionTokens greater than zero', function () use ($makeConversation, $makeBackendManager) {
+    test('context filtering passes toolDefinitionTokens greater than zero', function () use ($makeConversation) {
         $conversation = $makeConversation();
 
         $capturedTokens = null;
@@ -109,11 +103,11 @@ describe('ProcessConversationTurn context filtering', function () {
             })
             ->andReturn($conversation->getMessages());
 
+        $this->app->instance(ConversationService::class, $mockConversationService);
+
+        $loop = app(AgenticLoop::class);
         $job = new ProcessConversationTurn($conversation);
-        $job->handle(
-            $makeBackendManager(),
-            $mockConversationService,
-        );
+        $job->handle($loop);
 
         expect($capturedTokens)->toBeGreaterThan(0);
     });

@@ -80,10 +80,11 @@ class ProcessConversationTurn implements ShouldQueue
             );
 
             match ($result->status) {
-                'completed', 'max_turns' => $broadcaster->completed($this->conversation),
+                'completed' => $broadcaster->completed($this->conversation),
                 'waiting_for_tool' => null, // Already broadcast via onToolRequest callback
                 'continue' => self::dispatch($this->conversation), // System tools done, next turn
                 'failed' => $broadcaster->failed($this->conversation, $result->error ?? 'Unknown error'),
+                'cancelled', 'max_turns' => null, // Silent return, matching original behavior
             };
         } catch (Exception $e) {
             Log::error('Conversation turn failed', [
