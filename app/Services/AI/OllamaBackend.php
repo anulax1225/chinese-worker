@@ -13,6 +13,7 @@ use App\DTOs\NormalizedModelConfig;
 use App\DTOs\ToolCall;
 use App\Models\Agent;
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ClientException;
 use GuzzleHttp\Exception\GuzzleException;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
@@ -195,6 +196,24 @@ class OllamaBackend implements AIBackendInterface
             } finally {
                 $body->close();
             }
+        } catch (ClientException $e) {
+            $responseBody = '';
+            try {
+                $responseBody = $e->getResponse()?->getBody()?->getContents() ?? '';
+            } catch (\Throwable) {
+            }
+
+            Log::error('Ollama 4xx error', [
+                'status' => $e->getResponse()?->getStatusCode(),
+                'response_body' => $responseBody,
+                'model' => $this->model,
+            ]);
+
+            throw new RuntimeException(
+                "Ollama streaming request failed ({$e->getResponse()?->getStatusCode()}): {$responseBody}",
+                $e->getCode(),
+                $e
+            );
         } catch (GuzzleException|RuntimeException $e) {
             throw new RuntimeException(
                 "Ollama streaming request failed: {$e->getMessage()}",
