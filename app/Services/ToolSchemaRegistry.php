@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Contracts\ConversationRuntime;
 use App\Models\Conversation;
 use Illuminate\Support\Facades\Log;
 
@@ -280,6 +281,49 @@ class ToolSchemaRegistry
             $systemTools = array_values(array_filter(
                 $systemTools,
                 fn ($tool) => ! str_starts_with($tool['name'], 'conversation_')
+            ));
+        }
+
+        return array_merge($tools, $systemTools);
+    }
+
+    /**
+     * Get tool schemas for a ConversationRuntime (used by AgenticLoop).
+     *
+     * For non-persistent runtimes, filters out tools that require DB access
+     * (todo, document, conversation memory).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function getToolsForRuntime(ConversationRuntime $runtime): array
+    {
+        $tools = $runtime->getClientToolSchemas();
+
+        $systemTools = $this->getSystemToolSchemas();
+
+        // Filter document tools if no documents attached
+        if (! $runtime->hasDocuments()) {
+            $systemTools = array_values(array_filter(
+                $systemTools,
+                fn ($tool) => ! str_starts_with($tool['name'], 'document_')
+            ));
+        }
+
+        // Filter conversation memory tools if RAG is disabled
+        if (! config('ai.rag.enabled', false)) {
+            $systemTools = array_values(array_filter(
+                $systemTools,
+                fn ($tool) => ! str_starts_with($tool['name'], 'conversation_')
+            ));
+        }
+
+        // For non-persistent runtimes, also filter tools that require DB
+        if (! $runtime->isPersistent()) {
+            $systemTools = array_values(array_filter(
+                $systemTools,
+                fn ($tool) => ! str_starts_with($tool['name'], 'todo_')
+                    && ! str_starts_with($tool['name'], 'document_')
+                    && ! str_starts_with($tool['name'], 'conversation_')
             ));
         }
 
