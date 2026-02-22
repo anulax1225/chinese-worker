@@ -93,9 +93,13 @@ function formatTokenFIM(
         parts.push(`${tokens.repoName}${projectName}`);
     }
 
-    for (const chunk of chunks) {
-        parts.push(`${tokens.fileSep}${chunk.filePath}`);
-        parts.push(chunk.code);
+    const groups = groupChunksByFile(chunks);
+
+    for (const [filePath, fileChunks] of groups) {
+        parts.push(`${tokens.fileSep}${filePath}`);
+        for (const chunk of fileChunks) {
+            parts.push(chunk.code);
+        }
     }
 
     if (currentFilePath) {
@@ -156,13 +160,34 @@ export function buildGhostContext(
     };
 }
 
-function formatRetrievedContextForGhost(chunks: RetrievedChunk[]): string {
-    const parts: string[] = [];
+function groupChunksByFile(chunks: RetrievedChunk[]): Map<string, RetrievedChunk[]> {
+    const groups = new Map<string, RetrievedChunk[]>();
 
     for (const chunk of chunks) {
-        parts.push(`--- ${chunk.filePath} (${chunk.node_type} ${chunk.symbol}) ---`);
-        parts.push(chunk.code);
-        parts.push('');
+        const existing = groups.get(chunk.filePath);
+        if (existing) {
+            existing.push(chunk);
+        } else {
+            groups.set(chunk.filePath, [chunk]);
+        }
+    }
+
+    return groups;
+}
+
+function formatRetrievedContextForGhost(chunks: RetrievedChunk[]): string {
+    const parts: string[] = [];
+    const groups = groupChunksByFile(chunks);
+
+    for (const [filePath, fileChunks] of groups) {
+        parts.push(`--- ${filePath} ---`);
+        for (const chunk of fileChunks) {
+            if (chunk.node_type !== 'imports') {
+                parts.push(`// ${chunk.node_type} ${chunk.symbol}`);
+            }
+            parts.push(chunk.code);
+            parts.push('');
+        }
     }
 
     return parts.join('\n');
@@ -181,10 +206,17 @@ function formatRetrievedContext(
     parts.push(`${commentPrefix} ─── Related code from project ───`);
     parts.push('');
 
-    for (const chunk of chunks) {
-        parts.push(`${commentPrefix} ${chunk.filePath} (${chunk.node_type} ${chunk.symbol})`);
-        parts.push(chunk.code);
-        parts.push('');
+    const groups = groupChunksByFile(chunks);
+
+    for (const [filePath, fileChunks] of groups) {
+        parts.push(`${commentPrefix} ${filePath}`);
+        for (const chunk of fileChunks) {
+            if (chunk.node_type !== 'imports') {
+                parts.push(`${commentPrefix} ${chunk.node_type} ${chunk.symbol}`);
+            }
+            parts.push(chunk.code);
+            parts.push('');
+        }
     }
 
     parts.push(`${commentPrefix} ─── Current file ───`);

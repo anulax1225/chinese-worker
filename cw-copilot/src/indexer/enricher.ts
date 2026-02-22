@@ -10,22 +10,28 @@ export async function enrichNode(
     const parts: string[] = [];
 
     parts.push(`${commentPrefix} File: ${filePath}`);
-    parts.push(`${commentPrefix} ${capitalize(node.node_type)}: ${camelToWords(node.symbol)}`);
 
-    switch (node.node_type) {
-        case 'class':
-        case 'interface':
-        case 'struct':
-            parts.push(buildSkeleton(node, document));
-            break;
+    if (node.node_type === 'imports') {
+        parts.push(`${commentPrefix} Imports`);
+        parts.push(extractBounded(node, document, commentPrefix, 50));
+    } else {
+        parts.push(`${commentPrefix} ${capitalize(node.node_type)}: ${camelToWords(node.symbol)}`);
 
-        case 'function':
-            parts.push(extractSignature(node, document));
-            break;
+        switch (node.node_type) {
+            case 'class':
+            case 'interface':
+            case 'struct':
+                parts.push(buildSkeleton(node, document));
+                break;
 
-        default:
-            parts.push(extractBounded(node, document, commentPrefix, 30));
-            break;
+            case 'function':
+                parts.push(extractSignature(node, document));
+                break;
+
+            default:
+                parts.push(extractBounded(node, document, commentPrefix, 30));
+                break;
+        }
     }
 
     return parts.join('\n');

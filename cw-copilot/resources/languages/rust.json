@@ -20,6 +20,7 @@
     "trait_item",
     "mod_item"
   ],
+  "importPatterns": ["^use\\s", "^pub\\s+use\\s"],
   "nodeStopPatterns": {
     "function_item": ["\nfn ", "\npub fn "],
     "struct_item": ["\nstruct ", "\npub struct "],

@@ -14,6 +14,7 @@
     "method_declaration",
     "type_declaration"
   ],
+  "importPatterns": ["^import\\s"],
   "nodeStopPatterns": {
     "function_declaration": ["\nfunc "],
     "method_declaration": ["\nfunc "],

@@ -10,6 +10,7 @@ export interface LanguageConfig {
     commentPrefix: string;
     topLevelNodes: string[];
     nodeStopPatterns: Record<string, string[]>;
+    importPatterns?: string[];
 }
 
 export async function scaffoldLanguageConfigs(

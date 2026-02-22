@@ -22,6 +22,7 @@
     "enum_declaration",
     "export_statement"
   ],
+  "importPatterns": ["^import\\s", "^export\\s+\\{"],
   "nodeStopPatterns": {
     "class_declaration": ["\nclass "],
     "function_declaration": ["\nfunction "],

@@ -69,6 +69,80 @@ export async function getTopLevelNodes(uri: vscode.Uri): Promise<TopLevelNode[]>
         }));
 }
 
+export function getImportNode(
+    document: vscode.TextDocument,
+    importPatterns: string[],
+): TopLevelNode | null {
+    if (!importPatterns.length) {
+        return null;
+    }
+
+    const regexes = importPatterns.map(p => new RegExp(p));
+    const lineCount = document.lineCount;
+    let firstImportLine = -1;
+    let lastImportLine = -1;
+    let inImportBlock = false;
+
+    for (let i = 0; i < lineCount; i++) {
+        const line = document.lineAt(i).text;
+        const trimmed = line.trim();
+
+        // Go-style block import: `import (`
+        if (/^import\s*\(/.test(trimmed)) {
+            inImportBlock = true;
+            if (firstImportLine === -1) {
+                firstImportLine = i;
+            }
+            lastImportLine = i;
+            continue;
+        }
+
+        if (inImportBlock) {
+            lastImportLine = i;
+            if (trimmed === ')') {
+                inImportBlock = false;
+            }
+            continue;
+        }
+
+        // Skip blanks, comments, PHP open tags, and declare statements
+        if (
+            trimmed === '' ||
+            trimmed.startsWith('//') ||
+            trimmed.startsWith('#') ||
+            trimmed.startsWith('/*') ||
+            trimmed.startsWith('*') ||
+            /^<\?php/.test(trimmed) ||
+            /^declare\s*\(/.test(trimmed)
+        ) {
+            continue;
+        }
+
+        const isImportLine = regexes.some(r => r.test(trimmed));
+
+        if (isImportLine) {
+            if (firstImportLine === -1) {
+                firstImportLine = i;
+            }
+            lastImportLine = i;
+        } else if (firstImportLine !== -1) {
+            break;
+        }
+    }
+
+    if (firstImportLine === -1) {
+        return null;
+    }
+
+    return {
+        symbol: 'imports',
+        node_type: 'imports',
+        line_start: firstImportLine,
+        line_end: lastImportLine,
+        children: [],
+    };
+}
+
 function kindToString(kind: vscode.SymbolKind): string {
     return KIND_NAMES[kind] ?? 'symbol';
 }

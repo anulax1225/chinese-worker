@@ -18,6 +18,7 @@
     "trait_declaration",
     "enum_declaration"
   ],
+  "importPatterns": ["^namespace\\s", "^use\\s"],
   "nodeStopPatterns": {
     "class_declaration": ["\nclass "],
     "function_definition": ["\nfunction "],

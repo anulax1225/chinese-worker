@@ -4,7 +4,7 @@ import type { CWApiClient } from '../api/client';
 import type { ProjectConfig } from './config';
 import { IndexStore, type IndexData, type IndexFileEntry, type IndexNodeEntry } from './store';
 import { scanProject, shouldIndexLanguage } from './scanner';
-import { getTopLevelNodes } from './symbols';
+import { getTopLevelNodes, getImportNode } from './symbols';
 import { enrichNode } from './enricher';
 import { hashContent, hashFile } from './hasher';
 import { logger } from '../util/logger';
@@ -168,13 +168,16 @@ export class IndexManager {
             return;
         }
 
-        const nodes = await getTopLevelNodes(uri);
-        if (nodes.length === 0) {
-            return;
-        }
-
         const langConfig = this.langConfigs.get(document.languageId);
         const commentPrefix = langConfig?.commentPrefix ?? '//';
+
+        const nodes = await getTopLevelNodes(uri);
+        const importNode = getImportNode(document, langConfig?.importPatterns ?? []);
+        const allNodes = importNode ? [importNode, ...nodes] : nodes;
+
+        if (allNodes.length === 0) {
+            return;
+        }
 
         const existing = this.index!.files[filePath];
         const existingNodeMap = new Map<string, IndexNodeEntry>();
@@ -186,7 +189,7 @@ export class IndexManager {
 
         const newNodes: IndexNodeEntry[] = [];
 
-        for (const node of nodes) {
+        for (const node of allNodes) {
             const enrichedText = await enrichNode(node, document, filePath, commentPrefix);
             const contentHash = hashContent(enrichedText);
             const key = `${node.node_type}:${node.symbol}`;

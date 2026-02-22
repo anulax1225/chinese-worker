@@ -18,6 +18,7 @@
     "export_statement",
     "import_statement"
   ],
+  "importPatterns": ["^import\\s", "^export\\s+\\{"],
   "nodeStopPatterns": {
     "class_declaration": ["\nclass "],
     "function_declaration": ["\nfunction "],

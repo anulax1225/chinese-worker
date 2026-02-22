@@ -25,6 +25,8 @@ export interface IndexData {
     files: Record<string, IndexFileEntry>;
 }
 
+const CURRENT_INDEX_VERSION = 2;
+
 export class IndexStore {
     async load(workspaceRoot: string): Promise<IndexData> {
         const indexPath = path.join(workspaceRoot, '.cw', 'index.json');
@@ -33,8 +35,8 @@ export class IndexStore {
             const raw = await fs.readFile(indexPath, 'utf-8');
             const data = JSON.parse(raw) as IndexData;
 
-            if (data.version !== 1) {
-                logger.warn(`Index version mismatch: expected 1, got ${data.version}. Creating fresh index.`);
+            if (data.version !== CURRENT_INDEX_VERSION) {
+                logger.warn(`Index version mismatch: expected ${CURRENT_INDEX_VERSION}, got ${data.version}. Re-indexing.`);
                 return this.createEmpty();
             }
 
@@ -90,7 +92,7 @@ export class IndexStore {
 
     private createEmpty(): IndexData {
         return {
-            version: 1,
+            version: CURRENT_INDEX_VERSION,
             model: '',
             updated_at: new Date().toISOString(),
             files: {},

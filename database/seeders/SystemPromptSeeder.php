@@ -153,7 +153,7 @@ The user's message contains three sections:
 @endif
 
 @if($retrieved_context)
-**Related code from the project:**
+**Related code from the project** (grouped by file):
 {{ $retrieved_context }}
 @endif
 
