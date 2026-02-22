@@ -1,71 +1,146 @@
-# cw-copilot README
+# CW Copilot
 
-This is the README for your extension "cw-copilot". After writing up a brief description, we recommend including the following sections.
+Intelligent inline code completion for VS Code, powered by the Chinese Worker backend. Combines Fill-in-the-Middle (FIM) generation with semantic project-wide retrieval to deliver context-aware suggestions directly in the editor.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### Inline Code Completion
 
-For example if there is an image subfolder under your extension project workspace:
+Real-time inline completion suggestions as you type, with two operating modes:
 
-\!\[feature X\]\(images/feature-x.png\)
+- **FIM Mode** (Fill-in-the-Middle) — Uses suffix-aware generation for models that support context-aware infilling.
+- **Ghost Mode** (default) — Uses conversational multi-turn completion for broader model compatibility.
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+### Project-Wide Semantic Retrieval
+
+- Automatically indexes project symbols (classes, functions, interfaces, enums, imports, etc.) using VS Code's Language Server Protocol.
+- Uses vector embeddings to find semantically similar code chunks across the project.
+- Injects the most relevant context into completion prompts for better suggestions.
+
+### Incremental Indexing
+
+- Full background indexing on activation (non-blocking).
+- Automatic incremental re-indexing on file save.
+- Automatic cleanup when files are deleted.
+- Content-hash based change detection — skips re-embedding unchanged code.
+- Manual reindex via the `CW Copilot: Reindex Project` command.
+
+### Multi-Model FIM Support
+
+Supports 10+ FIM-capable model families out of the box: Qwen, Qwen3, CodeLlama, StarCoder, SantaCoder, DeepSeek, DeepSeek-v2, Codestral, Mistral, DevStral, CodeGemma, and StableCode.
+
+Each model has configurable token markers for prefix/suffix/middle boundaries, optional repo/file separators, and stop sequences.
+
+### Status Bar Integration
+
+A status bar item shows whether CW Copilot is enabled or disabled. Click it to toggle.
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- A running [Chinese Worker](https://github.com/your-org/chinese-worker) instance with the embeddings and generation APIs available.
+- A valid API token (Sanctum bearer token) configured in `cw.apiToken`.
+- VS Code `^1.109.0`.
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+### Connection & Model
 
-For example:
+| Setting | Description | Default |
+|---|---|---|
+| `cw.apiUrl` | Base URL of the Chinese Worker instance | `http://localhost` |
+| `cw.apiToken` | Sanctum API bearer token | — |
+| `cw.agentId` | Agent ID to use for completions | `1` |
 
-This extension contributes the following settings:
+### Completion Behavior
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+| Setting | Description | Default |
+|---|---|---|
+| `cw.enabled` | Enable/disable inline completions | `true` |
+| `cw.debounceMs` | Delay (ms) before triggering a completion | `300` |
+| `cw.maxPrefixLines` | Max lines before cursor sent as prompt | `100` |
+| `cw.maxSuffixLines` | Max lines after cursor sent as suffix | `30` |
+| `cw.maxTokens` | Maximum tokens in the response | `100` |
+| `cw.temperature` | Sampling temperature (0–2) | `0.2` |
 
-## Known Issues
+### FIM Mode
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+| Setting | Description | Default |
+|---|---|---|
+| `cw.enableFIM` | Enable fill-in-the-middle mode | `false` |
+| `cw.fimTokenFamily` | FIM token family to use | `qwen` |
+| `cw.thinkingModel` | Strip `<think>` blocks from thinking models | `false` |
+
+### Retrieval (Context)
+
+| Setting | Description | Default |
+|---|---|---|
+| `cw.retrieval.enabled` | Enable project context retrieval | `true` |
+| `cw.retrieval.topK` | Max code chunks to retrieve | `3` |
+| `cw.retrieval.threshold` | Minimum similarity score (0–1) | `0.5` |
+| `cw.retrieval.maxLines` | Maximum total lines of context to inject | `50` |
+| `cw.retrieval.timeoutMs` | Max wait time (ms) for retrieval before fallback | `5000` |
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `CW Copilot: Toggle` | Enable or disable inline completions |
+| `CW Copilot: Reindex Project` | Manually reindex the entire project |
+
+## Project Configuration
+
+CW Copilot uses a `.cw/` directory at the project root for local configuration and index storage.
+
+### `.cw/config.json`
+
+Controls which files are scanned for indexing:
+
+```json
+{
+  "scan": ["."],
+  "ignore": ["node_modules", ".git", "vendor", "dist", "out", "build", ".cw"]
+}
+```
+
+### `.cw/fim-tokens.json`
+
+Defines FIM token families. Each entry contains `prefix`, `suffix`, `middle` markers, optional `repoName`/`fileSep` tokens, `stop` sequences, and a `modelPattern` regex for auto-detection.
+
+### `.cw/index.json`
+
+Persistent index of all embedded symbols. Managed automatically — should be added to `.gitignore`.
+
+## Architecture
+
+```
+src/
+├── extension.ts           # Activation & lifecycle
+├── config.ts              # Configuration loader
+├── api/
+│   └── client.ts          # HTTP client for Chinese Worker APIs
+├── copilot/
+│   ├── provider.ts        # InlineCompletionItemProvider
+│   ├── context.ts         # FIM & Ghost context builders
+│   ├── fim-tokens.ts      # FIM token family definitions
+│   └── languages.ts       # Language-specific stop sequences & comments
+├── indexer/
+│   ├── manager.ts         # Full & incremental indexing orchestration
+│   ├── scanner.ts         # File system scanning with globs
+│   ├── symbols.ts         # Symbol extraction via VS Code LSP
+│   ├── enricher.ts        # Symbol enrichment with surrounding code
+│   ├── store.ts           # Index persistence (.cw/index.json)
+│   ├── hasher.ts          # Content hashing for change detection
+│   └── config.ts          # Project config loader
+├── retriever/
+│   ├── retriever.ts       # Semantic search via embeddings API
+│   └── query-builder.ts   # Builds retrieval queries from editor context
+└── util/
+    ├── logger.ts          # Output channel logging
+    └── debounce.ts        # Debounce utilities
+```
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+Initial release.
