@@ -22,7 +22,7 @@ export interface RetrievalOptions {
 
 const DEFAULT_OPTIONS: RetrievalOptions = {
     topK: 3,
-    threshold: 0.5,
+    threshold: 0.25,
     maxLines: 50,
 };
 
@@ -62,7 +62,7 @@ export class ContextRetriever {
         }
 
         // Cap at 50 targets (compare endpoint limit)
-        if (targets.length > 50) {
+        if (targets.length > 200) {
             targets = targets.slice(0, 50);
         }
 
