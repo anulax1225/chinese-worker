@@ -146,6 +146,15 @@ describe('Ghost Conversations', function () {
 
             $response->assertOk();
         });
+
+        test('accepts context parameter and returns 200', function () {
+            $response = $this->postJson("/api/v1/agents/{$this->agent->id}/ghost", [
+                'content' => 'Hello',
+                'context' => ['project_name' => 'Acme'],
+            ]);
+
+            $response->assertOk();
+        });
     });
 
     describe('SSE Stream Mode', function () {

@@ -43,6 +43,8 @@ class GhostConversationRequest extends FormRequest
             'client_tool_schemas.*.description' => ['required_with:client_tool_schemas', 'string'],
             'client_tool_schemas.*.parameters' => ['required_with:client_tool_schemas', 'array'],
             'max_turns' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'context' => ['nullable', 'array'],
+            'context.*' => ['nullable', 'string'],
         ];
     }
 }

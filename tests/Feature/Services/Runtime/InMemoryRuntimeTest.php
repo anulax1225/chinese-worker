@@ -296,6 +296,23 @@ describe('InMemoryRuntime', function () {
         });
     });
 
+    describe('Context Variables', function () {
+        test('getContextVariables returns empty array by default', function () {
+            expect($this->runtime->getContextVariables())->toBe([]);
+        });
+
+        test('getContextVariables returns variables passed to constructor', function () {
+            $variables = ['project_name' => 'Acme', 'environment' => 'production'];
+
+            $runtime = new InMemoryRuntime(
+                agent: $this->agent,
+                contextVariables: $variables,
+            );
+
+            expect($runtime->getContextVariables())->toBe($variables);
+        });
+    });
+
     describe('No-op Methods', function () {
         test('storeSnapshot does not throw an exception', function () {
             expect(fn () => $this->runtime->storeSnapshot('system prompt', ['context'], ['config']))

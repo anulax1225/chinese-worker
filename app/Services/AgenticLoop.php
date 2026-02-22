@@ -12,6 +12,7 @@ use App\DTOs\ToolResult;
 use App\Services\Prompts\PromptAssembler;
 use App\Services\RAG\RAGPipeline;
 use App\Services\Runtime\DatabaseRuntime;
+use App\Services\Runtime\InMemoryRuntime;
 use App\Services\Tools\ConversationMemoryToolHandler;
 use App\Services\Tools\DocumentToolHandler;
 use App\Services\Tools\TodoToolHandler;
@@ -324,14 +325,21 @@ class AgenticLoop
             );
         }
 
+        $runtimeContext = [
+            'conversation_id' => $runtime->getId(),
+            'message_count' => $runtime->getMessageCount(),
+            'user_name' => $runtime->getUser()?->name,
+        ];
+
+        // Merge caller-provided context variables (e.g. from ghost route)
+        if ($runtime instanceof InMemoryRuntime) {
+            $runtimeContext = array_merge($runtimeContext, $runtime->getContextVariables());
+        }
+
         return $this->promptAssembler->assemble(
             $runtime->getAgent(),
             null,
-            [
-                'conversation_id' => $runtime->getId(),
-                'message_count' => $runtime->getMessageCount(),
-                'user_name' => $runtime->getUser()?->name,
-            ],
+            $runtimeContext,
         );
     }
 

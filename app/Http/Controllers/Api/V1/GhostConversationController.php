@@ -55,6 +55,7 @@ class GhostConversationController extends Controller
      * @bodyParam client_tool_schemas[].description string required The tool description. Example: Run a shell command
      * @bodyParam client_tool_schemas[].parameters object required JSON Schema for tool parameters. Example: {"type": "object"}
      * @bodyParam max_turns integer Maximum number of agentic loop turns (1-50). Example: 25
+     * @bodyParam context object Key-value pairs of context variables for system prompt template rendering. These are merged into the runtime context passed to the PromptAssembler. Example: {"project_name": "Acme", "language": "en"}
      *
      * @response 200 scenario="Completed" {"status": "completed", "messages": [{"role": "user", "content": "What files are in /tmp?", "tool_calls": null, "tool_call_id": null, "images": null, "thinking": null, "name": null, "token_count": null, "counted_at": null}, {"role": "assistant", "content": "I found 3 files in /tmp: file1.txt, file2.txt, notes.md", "tool_calls": null, "tool_call_id": null, "images": null, "thinking": null, "name": null, "token_count": 15, "counted_at": null}], "tool_request": null, "error": null, "stats": {"turns": 1, "tokens": 150, "prompt_tokens": 100, "completion_tokens": 50}}
      * @response 200 scenario="Waiting for Tool" {"status": "waiting_for_tool", "messages": [{"role": "user", "content": "List files in /tmp", "tool_calls": null, "tool_call_id": null, "images": null, "thinking": null, "name": null, "token_count": null, "counted_at": null}, {"role": "assistant", "content": "", "tool_calls": [{"call_id": "call_abc123", "name": "bash", "arguments": {"command": "ls /tmp"}}], "tool_call_id": null, "images": null, "thinking": null, "name": null, "token_count": 10, "counted_at": null}], "tool_request": {"call_id": "call_abc123", "name": "bash", "arguments": {"command": "ls /tmp"}}, "error": null, "stats": {"turns": 1, "tokens": 120, "prompt_tokens": 80, "completion_tokens": 40}}
@@ -121,6 +122,7 @@ class GhostConversationController extends Controller
      * @bodyParam client_tool_schemas[].description string required The tool description. Example: Run a shell command
      * @bodyParam client_tool_schemas[].parameters object required JSON Schema for tool parameters. Example: {"type": "object"}
      * @bodyParam max_turns integer Maximum number of agentic loop turns (1-50). Example: 25
+     * @bodyParam context object Key-value pairs of context variables for system prompt template rendering. These are merged into the runtime context passed to the PromptAssembler. Example: {"project_name": "Acme", "language": "en"}
      *
      * @response 200 scenario="SSE Stream" {"event": "connected", "data": {"runtime_id": "ghost_550e8400-e29b-41d4-a716-446655440000", "status": "connected"}}
      * @response 403 scenario="Forbidden" {"message": "This action is unauthorized."}
@@ -194,6 +196,7 @@ class GhostConversationController extends Controller
             user: $request->user(),
             clientToolSchemas: $request->input('client_tool_schemas', []),
             maxTurns: $request->integer('max_turns', 25),
+            contextVariables: $request->input('context', []),
         );
 
         // Hydrate previous messages for multi-turn

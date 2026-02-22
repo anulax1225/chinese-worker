@@ -33,11 +33,15 @@ class InMemoryRuntime implements ConversationRuntime
     /** @var array<ChatMessage> */
     protected array $messages = [];
 
+    /**
+     * @param  array<string, string>  $contextVariables  Custom variables for system prompt template rendering.
+     */
     public function __construct(
         protected Agent $agent,
         protected ?User $user = null,
         protected array $clientToolSchemas = [],
         protected int $maxTurns = 25,
+        protected array $contextVariables = [],
     ) {
         $this->id = 'ghost_'.Str::uuid()->toString();
         $this->maxTurns = $maxTurns ?: (int) config('agent.max_turns', 25);
@@ -56,6 +60,14 @@ class InMemoryRuntime implements ConversationRuntime
     public function getUser(): ?User
     {
         return $this->user;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getContextVariables(): array
+    {
+        return $this->contextVariables;
     }
 
     public function getClientToolSchemas(): array
