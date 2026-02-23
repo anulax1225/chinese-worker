@@ -139,6 +139,7 @@ export function buildGhostContext(
     projectName?: string,
     relativeFilePath?: string,
     diagnostics?: DiagnosticContext | null,
+    fimTokenFamily?: FIMTokenFamily,
 ): GhostContext {
     const startLine = Math.max(0, position.line - maxPrefixLines);
     const endLine = Math.min(document.lineCount - 1, position.line + maxSuffixLines);
@@ -150,7 +151,12 @@ export function buildGhostContext(
     const suffixRange = new vscode.Range(position.line, position.character, endLine, lastChar);
     const suffix = document.getText(suffixRange);
 
-    const userMessage = `<prefix>\n${prefix}\n<blank/>\n<suffix>\n${suffix}\n</suffix>`;
+    let userMessage: string;
+    if (fimTokenFamily) {
+        userMessage = `${fimTokenFamily.prefix}${prefix}${fimTokenFamily.suffix}${suffix}${fimTokenFamily.middle}`;
+    } else {
+        userMessage = `<prefix>\n${prefix}\n<blank/>\n<suffix>\n${suffix}\n</suffix>`;
+    }
 
     const contextVariables: Record<string, string> = {};
 

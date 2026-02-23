@@ -239,6 +239,10 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         relativeFilePath: string | undefined,
         token: vscode.CancellationToken,
     ): Promise<vscode.InlineCompletionItem[] | undefined> {
+        const fimFamily = config.enableFIM && config.fimTokenFamily
+            ? this.fimTokens[config.fimTokenFamily]
+            : undefined;
+
         const ghostCtx = buildGhostContext(
             document,
             position,
@@ -248,6 +252,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             projectName,
             relativeFilePath,
             diagnostics,
+            fimFamily,
         );
 
         if (ghostCtx.isEmpty) {
