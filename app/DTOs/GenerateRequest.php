@@ -189,6 +189,66 @@ readonly class GenerateRequest
     }
 
     /**
+     * Convert to vLLM /v1/completions payload.
+     *
+     * @return array<string, mixed>
+     */
+    public function toVLLMPayload(string $model, bool $stream = true): array
+    {
+        $payload = [
+            'model' => $model,
+            'prompt' => $this->prompt,
+            'stream' => $stream,
+        ];
+
+        if ($this->suffix !== null) {
+            $payload['suffix'] = $this->suffix;
+        }
+
+        if ($this->maxTokens !== null) {
+            $payload['max_tokens'] = $this->maxTokens;
+        }
+
+        if ($this->temperature !== null) {
+            $payload['temperature'] = $this->temperature;
+        }
+
+        if ($this->topP !== null) {
+            $payload['top_p'] = $this->topP;
+        }
+
+        if ($this->topK !== null) {
+            $payload['top_k'] = $this->topK;
+        }
+
+        if ($this->minP !== null) {
+            $payload['min_p'] = $this->minP;
+        }
+
+        if ($this->seed !== null) {
+            $payload['seed'] = $this->seed;
+        }
+
+        if ($this->stop !== null) {
+            $payload['stop'] = is_array($this->stop) ? $this->stop : [$this->stop];
+        }
+
+        if ($this->logprobs !== null) {
+            $payload['logprobs'] = $this->logprobs;
+        }
+
+        if ($this->topLogprobs !== null) {
+            $payload['top_logprobs'] = $this->topLogprobs;
+        }
+
+        if ($this->keepAlive !== null) {
+            $payload['keep_alive'] = $this->keepAlive;
+        }
+
+        return $payload;
+    }
+
+    /**
      * Convert to array for serialization.
      *
      * @return array<string, mixed>

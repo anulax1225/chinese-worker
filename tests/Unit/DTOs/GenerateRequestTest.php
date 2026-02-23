@@ -165,8 +165,10 @@ test('toOllamaPayload includes all generation options', function () {
         ->toHaveKey('top_k', 50)
         ->toHaveKey('min_p', 0.1)
         ->toHaveKey('seed', 123)
-        ->toHaveKey('stop', ['STOP'])
         ->toHaveKey('num_ctx', 8192);
+
+    // stop is a top-level Ollama parameter, not inside options
+    expect($payload)->toHaveKey('stop', ['STOP']);
 });
 
 test('toOllamaPayload includes images when provided', function () {

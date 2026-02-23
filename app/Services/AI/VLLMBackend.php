@@ -922,44 +922,172 @@ class VLLMBackend implements AIBackendInterface
     /**
      * Generate embeddings for the given texts.
      *
-     * vLLM embeddings are not implemented yet.
+     * vLLM embeddings require a separate embedding model and are not yet supported.
+     * Use the Ollama or OpenAI backend for embeddings.
      *
-     * @throws RuntimeException Always throws as embeddings are not yet implemented
+     * @throws RuntimeException Always throws as embeddings are not supported
      */
     public function generateEmbeddings(array $_texts, ?string $_model = null): array
     {
-        throw new RuntimeException('Embeddings are not yet implemented for vLLM backend. Use OpenAI or Ollama backend for embeddings.');
+        throw new RuntimeException('Embeddings are not supported by the vLLM backend. Use Ollama or OpenAI for embeddings.');
     }
 
     /**
      * Get the embedding dimensions for a model.
      *
-     * @throws RuntimeException Always throws as embeddings are not yet implemented
+     * @throws RuntimeException Always throws as embeddings are not supported
      */
     public function getEmbeddingDimensions(?string $_model = null): int
     {
-        throw new RuntimeException('Embeddings are not yet implemented for vLLM backend.');
+        throw new RuntimeException('Embeddings are not supported by the vLLM backend.');
     }
 
     /**
      * Generate text completion from a prompt (non-streaming).
      *
-     * @throws RuntimeException Always throws as generate endpoint is not yet implemented
+     * Uses the vLLM /v1/completions endpoint (OpenAI-compatible).
+     * Supports FIM (fill-in-the-middle) via the suffix parameter.
      */
     public function generate(GenerateRequest $request): GenerateResponse
     {
-        throw new RuntimeException('Generate endpoint is not yet implemented for vLLM backend.');
+        $request->validate();
+
+        try {
+            $payload = $request->toVLLMPayload($this->model, false);
+
+            if ($this->normalizedConfig) {
+                $params = $this->normalizedConfig->toVLLMParams();
+                unset($params['max_tokens']);
+                $payload = array_merge($payload, array_filter($params));
+            }
+
+            Log::info('vLLM generate request', [
+                'model' => $this->model,
+                'prompt_length' => strlen($request->prompt),
+                'has_suffix' => $request->suffix !== null,
+            ]);
+
+            $response = $this->client->post('completions', [
+                'json' => $payload,
+                'timeout' => $this->timeout,
+            ]);
+
+            $data = json_decode($response->getBody()->getContents(), true);
+
+            return GenerateResponse::fromVLLMResponse($data);
+        } catch (GuzzleException $e) {
+            $this->handleApiError($e);
+        }
     }
 
     /**
      * Generate text completion with streaming.
      *
-     * @param  callable(string, string): void  $callback
+     * Uses the vLLM /v1/completions endpoint with SSE streaming.
      *
-     * @throws RuntimeException Always throws as generate endpoint is not yet implemented
+     * @param  callable(string, string): void  $callback  Receives (content, type)
      */
     public function streamGenerate(GenerateRequest $request, callable $callback): GenerateResponse
     {
-        throw new RuntimeException('Generate endpoint is not yet implemented for vLLM backend.');
+        $request->validate();
+
+        try {
+            $payload = $request->toVLLMPayload($this->model, true);
+
+            if ($this->normalizedConfig) {
+                $params = $this->normalizedConfig->toVLLMParams();
+                unset($params['max_tokens']);
+                $payload = array_merge($payload, array_filter($params));
+            }
+
+            Log::info('vLLM streaming generate request', [
+                'model' => $this->model,
+                'prompt_length' => strlen($request->prompt),
+                'has_suffix' => $request->suffix !== null,
+            ]);
+
+            $response = $this->client->post('completions', [
+                'json' => $payload,
+                'stream' => true,
+            ]);
+
+            $body = $response->getBody();
+            $fullContent = '';
+            $lastData = [];
+
+            try {
+                $buffer = '';
+
+                while (! $body->eof()) {
+                    $chunk = $body->read(1024);
+                    $buffer .= $chunk;
+
+                    while (($lineEnd = strpos($buffer, "\n")) !== false) {
+                        $line = substr($buffer, 0, $lineEnd);
+                        $buffer = substr($buffer, $lineEnd + 1);
+
+                        $line = trim($line);
+
+                        if (empty($line)) {
+                            continue;
+                        }
+
+                        if ($line === 'data: [DONE]') {
+                            break 2;
+                        }
+
+                        if (! str_starts_with($line, 'data: ')) {
+                            continue;
+                        }
+
+                        $jsonData = substr($line, 6);
+                        $data = json_decode($jsonData, true);
+
+                        if (json_last_error() !== JSON_ERROR_NONE) {
+                            continue;
+                        }
+
+                        $lastData = $data;
+                        $choices = $data['choices'] ?? [];
+
+                        foreach ($choices as $choice) {
+                            $text = $choice['text'] ?? '';
+                            if ($text !== '') {
+                                $fullContent .= $text;
+                                $callback($text, 'content');
+                            }
+
+                            if (isset($choice['finish_reason']) && $choice['finish_reason'] !== null) {
+                                $lastData['finish_reason'] = $choice['finish_reason'];
+                            }
+                        }
+                    }
+                }
+
+                $usage = $lastData['usage'] ?? [];
+                $finishReason = $lastData['finish_reason']
+                    ?? $lastData['choices'][0]['finish_reason']
+                    ?? 'stop';
+
+                return new GenerateResponse(
+                    content: $fullContent,
+                    model: $lastData['model'] ?? $this->model,
+                    done: true,
+                    doneReason: $finishReason,
+                    thinking: null,
+                    totalDuration: null,
+                    loadDuration: null,
+                    promptEvalCount: $usage['prompt_tokens'] ?? null,
+                    promptEvalDuration: null,
+                    evalCount: $usage['completion_tokens'] ?? null,
+                    evalDuration: null,
+                    createdAt: isset($lastData['created']) ? date('c', $lastData['created']) : null,
+                );
+            } finally {
+                $body->close();
+            }
+        } catch (GuzzleException $e) {
+            $this->handleApiError($e);
+        }
     }
 }

@@ -62,6 +62,36 @@ readonly class GenerateResponse
     }
 
     /**
+     * Create from a vLLM /v1/completions response.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromVLLMResponse(array $data): self
+    {
+        $choices = $data['choices'] ?? [];
+        $choice = $choices[0] ?? [];
+        $usage = $data['usage'] ?? [];
+
+        return new self(
+            content: $choice['text'] ?? '',
+            model: $data['model'] ?? '',
+            done: true,
+            doneReason: $choice['finish_reason'] ?? 'stop',
+            thinking: null,
+            totalDuration: null,
+            loadDuration: null,
+            promptEvalCount: $usage['prompt_tokens'] ?? null,
+            promptEvalDuration: null,
+            evalCount: $usage['completion_tokens'] ?? null,
+            evalDuration: null,
+            logprobs: $choice['logprobs'] ?? null,
+            createdAt: isset($data['created'])
+                ? date('c', $data['created'])
+                : null,
+        );
+    }
+
+    /**
      * Get the total number of tokens used.
      */
     public function getTokensUsed(): int
