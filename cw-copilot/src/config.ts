@@ -13,6 +13,7 @@ export interface CWConfig {
     enableFIM: boolean;
     fimTokenFamily: string;
     thinkingModel: boolean;
+    ghostUseTool: boolean;
     retrievalEnabled: boolean;
     retrievalTopK: number;
     retrievalThreshold: number;
@@ -44,6 +45,7 @@ export function getConfig(): CWConfig {
         enableFIM: cfg.get<boolean>('enableFIM', false),
         fimTokenFamily: cfg.get<string>('fimTokenFamily', ''),
         thinkingModel: cfg.get<boolean>('thinkingModel', false),
+        ghostUseTool: cfg.get<boolean>('ghostUseTool', true),
         retrievalEnabled: cfg.get<boolean>('retrieval.enabled', true),
         retrievalTopK: cfg.get<number>('retrieval.topK', 8),
         retrievalThreshold: cfg.get<number>('retrieval.threshold', 0.5),

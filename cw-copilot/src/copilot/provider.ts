@@ -277,7 +277,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
                 {
                     content: ghostCtx.userMessage,
                     messages: [],
-                    client_tool_schemas: [FILL_BLANK_TOOL],
+                    client_tool_schemas: config.ghostUseTool ? [FILL_BLANK_TOOL] : undefined,
                     max_turns: 1,
                     context: ghostCtx.contextVariables,
                 },

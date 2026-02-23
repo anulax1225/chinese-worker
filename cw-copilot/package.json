@@ -77,6 +77,11 @@
           "default": false,
           "description": "Strip <think> blocks from response (for thinking models like lfm2.5-thinking)"
         },
+        "cw.ghostUseTool": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send fill_blank tool schema to ghost endpoint (disable to let the model respond freely)"
+        },
         "cw.retrieval.enabled": {
           "type": "boolean",
           "default": true,
