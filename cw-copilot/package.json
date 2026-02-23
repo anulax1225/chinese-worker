@@ -62,10 +62,16 @@
           "default": 0.2,
           "description": "Sampling temperature (0-2)"
         },
+        "cw.completionMode": {
+          "type": "string",
+          "enum": ["generate", "ghost"],
+          "default": "generate",
+          "description": "Which API endpoint to use: 'generate' (raw/FIM generation) or 'ghost' (conversational multi-turn)"
+        },
         "cw.enableFIM": {
           "type": "boolean",
           "default": false,
-          "description": "Send suffix for fill-in-the-middle (requires FIM-capable model)"
+          "description": "Wrap prompt with FIM tokens (prefix/suffix/middle) when using generate mode"
         },
         "cw.fimTokenFamily": {
           "type": "string",

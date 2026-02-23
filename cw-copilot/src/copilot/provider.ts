@@ -122,8 +122,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             ? path.relative(this.workspaceRoot, document.uri.fsPath)
             : undefined;
 
-        // Branch: FIM mode uses generate endpoint, non-FIM uses ghost conversation
-        if (config.enableFIM) {
+        // Branch: generate endpoint vs ghost conversation
+        if (config.completionMode === 'generate') {
             return this.completeFIM(document, position, config, retrievedChunks, diagnostics, projectName, relativeFilePath, token);
         }
 

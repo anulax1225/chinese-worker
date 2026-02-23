@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 
+export type CompletionMode = 'generate' | 'ghost';
+
 export interface CWConfig {
     apiUrl: string;
     apiToken: string;
@@ -10,6 +12,7 @@ export interface CWConfig {
     maxSuffixLines: number;
     maxTokens: number;
     temperature: number;
+    completionMode: CompletionMode;
     enableFIM: boolean;
     fimTokenFamily: string;
     thinkingModel: boolean;
@@ -42,6 +45,7 @@ export function getConfig(): CWConfig {
         maxSuffixLines: cfg.get<number>('maxSuffixLines', 30),
         maxTokens: cfg.get<number>('maxTokens', 256),
         temperature: cfg.get<number>('temperature', 0.2),
+        completionMode: cfg.get<string>('completionMode', 'generate') as CompletionMode,
         enableFIM: cfg.get<boolean>('enableFIM', false),
         fimTokenFamily: cfg.get<string>('fimTokenFamily', ''),
         thinkingModel: cfg.get<boolean>('thinkingModel', false),
