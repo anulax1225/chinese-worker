@@ -234,3 +234,125 @@ test('toArray excludes null and default false values', function () {
         ->not->toHaveKey('suffix')
         ->not->toHaveKey('format');
 });
+
+test('toVLLMPayload includes required fields only for minimal request', function () {
+    $request = new GenerateRequest(prompt: 'Hello vLLM');
+
+    $payload = $request->toVLLMPayload('meta-llama/Llama-3.1-8B', false);
+
+    expect($payload)->toHaveKey('model', 'meta-llama/Llama-3.1-8B')
+        ->toHaveKey('prompt', 'Hello vLLM')
+        ->toHaveKey('stream', false)
+        ->not->toHaveKey('suffix')
+        ->not->toHaveKey('max_tokens')
+        ->not->toHaveKey('temperature')
+        ->not->toHaveKey('top_p')
+        ->not->toHaveKey('top_k')
+        ->not->toHaveKey('min_p')
+        ->not->toHaveKey('seed')
+        ->not->toHaveKey('stop')
+        ->not->toHaveKey('logprobs')
+        ->not->toHaveKey('top_logprobs')
+        ->not->toHaveKey('keep_alive');
+});
+
+test('toVLLMPayload sets stream to true by default', function () {
+    $request = new GenerateRequest(prompt: 'Test');
+
+    $payload = $request->toVLLMPayload('model');
+
+    expect($payload['stream'])->toBeTrue();
+});
+
+test('toVLLMPayload includes suffix when set', function () {
+    $request = new GenerateRequest(prompt: 'def hello(', suffix: '):\n    pass');
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload)->toHaveKey('suffix', '):\n    pass');
+});
+
+test('toVLLMPayload includes all generation parameters when set', function () {
+    $request = new GenerateRequest(
+        prompt: 'Test',
+        maxTokens: 512,
+        temperature: 0.6,
+        topP: 0.95,
+        topK: 40,
+        minP: 0.05,
+        seed: 99,
+    );
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload)->toHaveKey('max_tokens', 512)
+        ->toHaveKey('temperature', 0.6)
+        ->toHaveKey('top_p', 0.95)
+        ->toHaveKey('top_k', 40)
+        ->toHaveKey('min_p', 0.05)
+        ->toHaveKey('seed', 99);
+});
+
+test('toVLLMPayload converts string stop to array', function () {
+    $request = new GenerateRequest(prompt: 'Test', stop: '<|endoftext|>');
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload['stop'])->toBe(['<|endoftext|>']);
+});
+
+test('toVLLMPayload keeps array stop as array', function () {
+    $request = new GenerateRequest(prompt: 'Test', stop: ['</s>', '<|im_end|>']);
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload['stop'])->toBe(['</s>', '<|im_end|>']);
+});
+
+test('toVLLMPayload includes logprobs settings', function () {
+    $request = new GenerateRequest(prompt: 'Test', logprobs: true, topLogprobs: 5);
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload)->toHaveKey('logprobs', true)
+        ->toHaveKey('top_logprobs', 5);
+});
+
+test('toVLLMPayload includes keep_alive when set', function () {
+    $request = new GenerateRequest(prompt: 'Test', keepAlive: '10m');
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload)->toHaveKey('keep_alive', '10m');
+});
+
+test('toVLLMPayload does not include Ollama-specific fields', function () {
+    $request = new GenerateRequest(
+        prompt: 'Test',
+        images: ['base64data'],
+        format: 'json',
+        system: 'System prompt',
+        think: true,
+        raw: true,
+        contextLength: 4096,
+    );
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload)->not->toHaveKey('images')
+        ->not->toHaveKey('format')
+        ->not->toHaveKey('system')
+        ->not->toHaveKey('think')
+        ->not->toHaveKey('raw')
+        ->not->toHaveKey('options');
+});
+
+test('toVLLMPayload does not include context_length in any form', function () {
+    $request = new GenerateRequest(prompt: 'Test', contextLength: 8192);
+
+    $payload = $request->toVLLMPayload('model', false);
+
+    expect($payload)->not->toHaveKey('context_length')
+        ->not->toHaveKey('num_ctx')
+        ->not->toHaveKey('options');
+});
