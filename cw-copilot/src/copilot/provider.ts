@@ -86,6 +86,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
                     {
                         maxLines: config.retrievalMaxLines,
                         topK: config.retrievalTopK,
+                        embeddingEnabled: config.retrievalEmbeddingEnabled,
                         embeddingTimeout: config.retrievalEmbeddingTimeout,
                         lspTimeout: config.retrievalLspTimeout,
                         embeddingThreshold: config.retrievalThreshold,

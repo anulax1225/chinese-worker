@@ -113,6 +113,11 @@
           "default": 5000,
           "description": "Maximum time in ms to wait for the full retrieval pipeline"
         },
+        "cw.retrieval.embeddingEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable embedding semantic search (requires API). Disable to use only local signals (LSP, tabs, imports)."
+        },
         "cw.retrieval.embeddingTimeout": {
           "type": "number",
           "default": 200,

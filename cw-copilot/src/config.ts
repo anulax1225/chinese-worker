@@ -22,6 +22,7 @@ export interface CWConfig {
     retrievalThreshold: number;
     retrievalMaxLines: number;
     retrievalTimeoutMs: number;
+    retrievalEmbeddingEnabled: boolean;
     retrievalEmbeddingTimeout: number;
     retrievalLspTimeout: number;
     retrievalWeights: {
@@ -55,6 +56,7 @@ export function getConfig(): CWConfig {
         retrievalThreshold: cfg.get<number>('retrieval.threshold', 0.5),
         retrievalMaxLines: cfg.get<number>('retrieval.maxLines', 60),
         retrievalTimeoutMs: cfg.get<number>('retrieval.timeoutMs', 5000),
+        retrievalEmbeddingEnabled: cfg.get<boolean>('retrieval.embeddingEnabled', true),
         retrievalEmbeddingTimeout: cfg.get<number>('retrieval.embeddingTimeout', 200),
         retrievalLspTimeout: cfg.get<number>('retrieval.lspTimeout', 100),
         retrievalWeights: {

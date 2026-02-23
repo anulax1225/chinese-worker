@@ -19,6 +19,7 @@ import { logger } from '../util/logger';
 export interface PipelineConfig {
     maxLines: number;
     topK: number;
+    embeddingEnabled: boolean;
     embeddingTimeout: number;
     lspTimeout: number;
     embeddingThreshold: number;
@@ -34,6 +35,7 @@ export interface PipelineConfig {
 const DEFAULT_CONFIG: PipelineConfig = {
     maxLines: 60,
     topK: 8,
+    embeddingEnabled: true,
     embeddingTimeout: 200,
     lspTimeout: 100,
     jaccardThreshold: 0.05,
@@ -88,7 +90,9 @@ export class RetrievalPipeline {
             collectLSPCandidates(document, position, workspaceRoot, cfg.lspTimeout),
             collectTabCandidates(document, position, workspaceRoot, this.tracker, queryTokens, cfg.jaccardThreshold),
             collectImportCandidates(document, workspaceRoot, langConfig),
-            this.collectEmbeddings(document, position, workspaceRoot, cfg),
+            cfg.embeddingEnabled
+                ? this.collectEmbeddings(document, position, workspaceRoot, cfg)
+                : Promise.resolve([]),
             Promise.resolve(collectDiagnostics(document, position)),
         ]);
 
