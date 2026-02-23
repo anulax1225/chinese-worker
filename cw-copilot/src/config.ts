@@ -18,6 +18,14 @@ export interface CWConfig {
     retrievalThreshold: number;
     retrievalMaxLines: number;
     retrievalTimeoutMs: number;
+    retrievalEmbeddingTimeout: number;
+    retrievalLspTimeout: number;
+    retrievalWeights: {
+        lsp: number;
+        tabs: number;
+        import: number;
+        embedding: number;
+    };
 }
 
 export function getConfig(): CWConfig {
@@ -37,9 +45,17 @@ export function getConfig(): CWConfig {
         fimTokenFamily: cfg.get<string>('fimTokenFamily', ''),
         thinkingModel: cfg.get<boolean>('thinkingModel', false),
         retrievalEnabled: cfg.get<boolean>('retrieval.enabled', true),
-        retrievalTopK: cfg.get<number>('retrieval.topK', 3),
+        retrievalTopK: cfg.get<number>('retrieval.topK', 8),
         retrievalThreshold: cfg.get<number>('retrieval.threshold', 0.5),
-        retrievalMaxLines: cfg.get<number>('retrieval.maxLines', 50),
+        retrievalMaxLines: cfg.get<number>('retrieval.maxLines', 60),
         retrievalTimeoutMs: cfg.get<number>('retrieval.timeoutMs', 5000),
+        retrievalEmbeddingTimeout: cfg.get<number>('retrieval.embeddingTimeout', 200),
+        retrievalLspTimeout: cfg.get<number>('retrieval.lspTimeout', 100),
+        retrievalWeights: {
+            lsp: cfg.get<number>('retrieval.weights.lsp', 1.5),
+            tabs: cfg.get<number>('retrieval.weights.tabs', 1.0),
+            import: cfg.get<number>('retrieval.weights.import', 1.2),
+            embedding: cfg.get<number>('retrieval.weights.embedding', 1.0),
+        },
     };
 }

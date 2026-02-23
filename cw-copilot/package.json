@@ -84,23 +84,53 @@
         },
         "cw.retrieval.topK": {
           "type": "number",
-          "default": 3,
-          "description": "Maximum number of code chunks to retrieve as context"
+          "default": 8,
+          "description": "Maximum number of code chunks after fusion"
         },
         "cw.retrieval.threshold": {
           "type": "number",
           "default": 0.5,
-          "description": "Minimum similarity score for retrieved context (0-1)"
+          "description": "Minimum similarity score for embedding retrieval (0-1)"
         },
         "cw.retrieval.maxLines": {
           "type": "number",
-          "default": 50,
-          "description": "Maximum total lines of retrieved context to inject into the prompt"
+          "default": 60,
+          "description": "Total line budget for retrieved context"
         },
         "cw.retrieval.timeoutMs": {
           "type": "number",
           "default": 5000,
-          "description": "Maximum time in ms to wait for retrieval before falling back to plain completion"
+          "description": "Maximum time in ms to wait for the full retrieval pipeline"
+        },
+        "cw.retrieval.embeddingTimeout": {
+          "type": "number",
+          "default": 200,
+          "description": "Ms before giving up on embedding API call"
+        },
+        "cw.retrieval.lspTimeout": {
+          "type": "number",
+          "default": 100,
+          "description": "Ms budget for all LSP calls (definition, references, call hierarchy)"
+        },
+        "cw.retrieval.weights.lsp": {
+          "type": "number",
+          "default": 1.5,
+          "description": "RRF weight for LSP-targeted source"
+        },
+        "cw.retrieval.weights.tabs": {
+          "type": "number",
+          "default": 1.0,
+          "description": "RRF weight for open tabs source"
+        },
+        "cw.retrieval.weights.import": {
+          "type": "number",
+          "default": 1.2,
+          "description": "RRF weight for import follow source"
+        },
+        "cw.retrieval.weights.embedding": {
+          "type": "number",
+          "default": 1.0,
+          "description": "RRF weight for embedding source"
         }
       }
     },

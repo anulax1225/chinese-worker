@@ -8,8 +8,8 @@ import { delay } from '../util/debounce';
 import { logger } from '../util/logger';
 import type { LanguageConfig } from './languages';
 import type { FIMTokenMap } from './fim-tokens';
-import type { ContextRetriever, RetrievedChunk } from '../retriever/retriever';
-import { buildRetrievalQuery } from '../retriever/query-builder';
+import type { RetrievalPipeline, PipelineResult } from '../retriever/pipeline';
+import type { RetrievalCandidate, DiagnosticContext } from '../retriever/sources/types';
 
 const FILL_BLANK_TOOL = {
     name: 'fill_blank',
@@ -28,7 +28,7 @@ const FILL_BLANK_TOOL = {
 
 export class CWCompletionProvider implements vscode.InlineCompletionItemProvider {
     private abortController: AbortController | null = null;
-    private retriever: ContextRetriever | null = null;
+    private pipeline: RetrievalPipeline | null = null;
     private workspaceRoot: string | null = null;
 
     constructor(
@@ -36,8 +36,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         private fimTokens: FIMTokenMap,
     ) {}
 
-    setRetriever(retriever: ContextRetriever, workspaceRoot: string): void {
-        this.retriever = retriever;
+    setPipeline(pipeline: RetrievalPipeline, workspaceRoot: string): void {
+        this.pipeline = pipeline;
         this.workspaceRoot = workspaceRoot;
     }
 
@@ -71,50 +71,45 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             return undefined;
         }
 
-        // Retrieve project context (before generate, with abort-based timeout)
-        let retrievedChunks: RetrievedChunk[] | undefined;
+        // Phase 3: multi-signal retrieval pipeline
+        let retrievedChunks: RetrievalCandidate[] | undefined;
+        let diagnostics: DiagnosticContext | null = null;
 
-        if (this.retriever && this.workspaceRoot && config.retrievalEnabled) {
+        if (this.pipeline && this.workspaceRoot && config.retrievalEnabled) {
             const retrievalStart = Date.now();
-            const retrievalAbort = new AbortController();
-            const retrievalTimer = setTimeout(
-                () => retrievalAbort.abort(),
-                config.retrievalTimeoutMs,
-            );
 
             try {
-                const query = await buildRetrievalQuery(document, position, this.workspaceRoot);
-                logger.info(`Retrieval query (${query.queryText.length} chars):\n${query.queryText}`);
-
-                retrievedChunks = await this.retriever.retrieve(
-                    query,
+                const result: PipelineResult = await this.pipeline.retrieve(
+                    document,
+                    position,
+                    this.workspaceRoot,
                     {
-                        topK: config.retrievalTopK,
-                        threshold: config.retrievalThreshold,
                         maxLines: config.retrievalMaxLines,
+                        topK: config.retrievalTopK,
+                        embeddingTimeout: config.retrievalEmbeddingTimeout,
+                        lspTimeout: config.retrievalLspTimeout,
+                        embeddingThreshold: config.retrievalThreshold,
+                        weights: config.retrievalWeights,
                     },
-                    retrievalAbort.signal,
                 );
+
+                retrievedChunks = result.chunks.length > 0 ? result.chunks : undefined;
+                diagnostics = result.diagnostics;
 
                 const retrievalMs = Date.now() - retrievalStart;
 
                 if (retrievedChunks?.length) {
-                    logger.info(`Retrieved ${retrievedChunks.length} chunk(s) in ${retrievalMs}ms:`);
-                    for (const chunk of retrievedChunks) {
-                        logger.info(`  - ${chunk.filePath} :: ${chunk.node_type} ${chunk.symbol} (similarity=${chunk.similarity.toFixed(3)}, ${chunk.lineCount} lines)`);
-                    }
+                    logger.info(`Pipeline retrieved ${retrievedChunks.length} chunk(s) in ${retrievalMs}ms`);
                 } else {
-                    logger.info(`Retrieval returned 0 chunks in ${retrievalMs}ms`);
+                    logger.info(`Pipeline returned 0 chunks in ${retrievalMs}ms`);
+                }
+
+                if (diagnostics) {
+                    logger.info(`Pipeline found ${diagnostics.count} diagnostic(s) near cursor`);
                 }
             } catch (err: unknown) {
                 const retrievalMs = Date.now() - retrievalStart;
-                if (retrievalAbort.signal.aborted) {
-                    logger.info(`Retrieval timed out after ${retrievalMs}ms (limit: ${config.retrievalTimeoutMs}ms)`);
-                } else {
-                    logger.warn(`Retrieval failed: ${err instanceof Error ? err.message : String(err)}`);
-                }
-            } finally {
-                clearTimeout(retrievalTimer);
+                logger.warn(`Pipeline failed in ${retrievalMs}ms: ${err instanceof Error ? err.message : String(err)}`);
             }
         }
 
@@ -129,17 +124,18 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
 
         // Branch: FIM mode uses generate endpoint, non-FIM uses ghost conversation
         if (config.enableFIM) {
-            return this.completeFIM(document, position, config, retrievedChunks, projectName, relativeFilePath, token);
+            return this.completeFIM(document, position, config, retrievedChunks, diagnostics, projectName, relativeFilePath, token);
         }
 
-        return this.completeGhost(document, position, config, retrievedChunks, projectName, relativeFilePath, token);
+        return this.completeGhost(document, position, config, retrievedChunks, diagnostics, projectName, relativeFilePath, token);
     }
 
     private async completeFIM(
         document: vscode.TextDocument,
         position: vscode.Position,
         config: ReturnType<typeof getConfig>,
-        retrievedChunks: RetrievedChunk[] | undefined,
+        retrievedChunks: RetrievalCandidate[] | undefined,
+        diagnostics: DiagnosticContext | null,
         projectName: string | undefined,
         relativeFilePath: string | undefined,
         token: vscode.CancellationToken,
@@ -166,6 +162,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             commentPrefix,
             projectName,
             relativeFilePath,
+            diagnostics,
         );
 
         if (ctx.prompt.trim() === '') {
@@ -178,7 +175,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         const stopSequences = [...new Set([...langStop, ...fimStop])];
 
         const chunkInfo = retrievedChunks?.length ? `, context=${retrievedChunks.length} chunks` : '';
-        logger.info(`Request: fim=true, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars${chunkInfo}`);
+        const diagInfo = diagnostics ? `, diagnostics=${diagnostics.count}` : '';
+        logger.info(`Request: fim=true, lang=${ctx.languageId}, file=${ctx.fileName}, line=${position.line + 1}:${position.character}, prompt=${ctx.prompt.length} chars, suffix=${ctx.suffix.length} chars${chunkInfo}${diagInfo}`);
         logger.info(`Prompt being sent to AI:\n--- PROMPT START ---\n${ctx.prompt}\n--- PROMPT END ---`);
 
         this.abortController = new AbortController();
@@ -235,7 +233,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
         document: vscode.TextDocument,
         position: vscode.Position,
         config: ReturnType<typeof getConfig>,
-        retrievedChunks: RetrievedChunk[] | undefined,
+        retrievedChunks: RetrievalCandidate[] | undefined,
+        diagnostics: DiagnosticContext | null,
         projectName: string | undefined,
         relativeFilePath: string | undefined,
         token: vscode.CancellationToken,
@@ -248,6 +247,7 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
             retrievedChunks,
             projectName,
             relativeFilePath,
+            diagnostics,
         );
 
         if (ghostCtx.isEmpty) {
@@ -257,7 +257,8 @@ export class CWCompletionProvider implements vscode.InlineCompletionItemProvider
 
         const fileName = path.basename(document.fileName);
         const chunkInfo = retrievedChunks?.length ? `, context=${retrievedChunks.length} chunks` : '';
-        logger.info(`Ghost request: lang=${document.languageId}, file=${fileName}, line=${position.line + 1}:${position.character}${chunkInfo}`);
+        const diagInfo = diagnostics ? `, diagnostics=${diagnostics.count}` : '';
+        logger.info(`Ghost request: lang=${document.languageId}, file=${fileName}, line=${position.line + 1}:${position.character}${chunkInfo}${diagInfo}`);
         logger.info(`Ghost user message:\n--- MSG START ---\n${ghostCtx.userMessage}\n--- MSG END ---`);
 
         if (Object.keys(ghostCtx.contextVariables).length > 0) {
