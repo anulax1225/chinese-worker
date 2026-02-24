@@ -166,12 +166,17 @@ class VectorSearchService
         $rrfK = 60;
         $fusedScores = [];
 
+        $denseWeight = 0.7;
+        $sparseWeight = 0.3;
+
         foreach ($denseResult->items as $rank => $item) {
-            $fusedScores[$item->id] = ($fusedScores[$item->id] ?? 0) + 1 / ($rank + $rrfK);
+            $fusedScores[$item->id] = ($fusedScores[$item->id] ?? 0)
+                + $denseWeight / ($rank + $rrfK);
         }
 
         foreach ($sparseResult->items as $rank => $item) {
-            $fusedScores[$item->id] = ($fusedScores[$item->id] ?? 0) + 1 / ($rank + $rrfK);
+            $fusedScores[$item->id] = ($fusedScores[$item->id] ?? 0)
+                + $sparseWeight / ($rank + $rrfK);
         }
 
         arsort($fusedScores);

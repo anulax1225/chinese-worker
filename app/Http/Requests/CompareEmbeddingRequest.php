@@ -37,7 +37,7 @@ class CompareEmbeddingRequest extends FormRequest
             'source' => ['required', 'array'],
             'source.id' => ['required_without:source.text', 'nullable', 'integer', 'exists:embeddings,id'],
             'source.text' => ['required_without:source.id', 'nullable', 'string', 'min:1', 'max:8192'],
-            'targets' => ['required', 'array', 'min:1', 'max:50'],
+            'targets' => ['required', 'array', 'min:1', 'max:500'],
             'targets.*.id' => ['required_without:targets.*.text', 'nullable', 'integer', 'exists:embeddings,id'],
             'targets.*.text' => ['required_without:targets.*.id', 'nullable', 'string', 'min:1', 'max:8192'],
             'model' => ['nullable', 'string'],
