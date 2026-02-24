@@ -101,6 +101,7 @@ def test_glob():
         "pattern": "*.py",
         "path": "."
     })
+    # Test finding specific
     print(f"✓ Glob test: {success}")
     files = output.split("\n") if output else []
     print(f"  Found {len(files)} Python files")

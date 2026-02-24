@@ -50,7 +50,7 @@ class APIClient:
         response = httpx.post(
             f"{self.base_url}/api/v1/auth/login",
             json={"email": email, "password": password},
-            timeout=self.timeout,                  
+            timeout=self.timeout,
         )
         response.raise_for_status()
 
