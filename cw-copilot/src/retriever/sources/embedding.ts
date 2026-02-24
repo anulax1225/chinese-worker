@@ -22,6 +22,7 @@ export async function collectEmbeddingCandidates(
     threshold: number,
     topK: number,
     timeoutMs: number,
+    queryInstruction?: string,
 ): Promise<RetrievalCandidate[]> {
     if (!index) {
         return [];
@@ -46,8 +47,12 @@ export async function collectEmbeddingCandidates(
     const timer = setTimeout(() => abortController.abort(), timeoutMs);
 
     try {
+        const sourceText = queryInstruction
+            ? `${queryInstruction}\n\n${query.queryText}`
+            : query.queryText;
+
         const compareResult = await api.compareEmbeddings(
-            { text: query.queryText },
+            { text: sourceText },
             targets.map(t => ({ id: t.id })),
             undefined,
             abortController.signal,

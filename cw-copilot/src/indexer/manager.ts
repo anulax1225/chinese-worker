@@ -170,6 +170,8 @@ export class IndexManager {
 
         const langConfig = this.langConfigs.get(document.languageId);
         const commentPrefix = langConfig?.commentPrefix ?? '//';
+        const strategies = langConfig?.embeddingStrategies ?? {};
+        const instruction = langConfig?.embeddingInstruction ?? 'Represent this code snippet for retrieval:';
 
         const nodes = await getTopLevelNodes(uri);
         const importNode = getImportNode(document, langConfig?.importPatterns ?? []);
@@ -189,9 +191,35 @@ export class IndexManager {
 
         const newNodes: IndexNodeEntry[] = [];
 
+        // Partition nodes by strategy
+        const individualNodes: typeof allNodes = [];
+        const groupBuckets = new Map<string, typeof allNodes>();
+
         for (const node of allNodes) {
+            const strategy = strategies[node.node_type] ?? 'individual';
+
+            if (strategy === 'skip') {
+                continue;
+            }
+
+            if (strategy === 'group') {
+                const bucket = groupBuckets.get(node.node_type);
+                if (bucket) {
+                    bucket.push(node);
+                } else {
+                    groupBuckets.set(node.node_type, [node]);
+                }
+                continue;
+            }
+
+            individualNodes.push(node);
+        }
+
+        // Process individual nodes
+        for (const node of individualNodes) {
             const enrichedText = await enrichNode(node, document, filePath, commentPrefix);
-            const contentHash = hashContent(enrichedText);
+            const textForEmbedding = `${instruction}\n\n${enrichedText}`;
+            const contentHash = hashContent(textForEmbedding);
             const key = `${node.node_type}:${node.symbol}`;
 
             const existingNode = existingNodeMap.get(key);
@@ -214,7 +242,7 @@ export class IndexManager {
             existingNodeMap.delete(key);
 
             // Create new embedding
-            const embResult = await this.api.embedAsync(enrichedText, model || undefined);
+            const embResult = await this.api.embedAsync(textForEmbedding, model || undefined);
             const embeddingId = embResult?.id ?? 0;
 
             newNodes.push({
@@ -223,6 +251,55 @@ export class IndexManager {
                 embedding_id: embeddingId,
                 line_start: node.line_start,
                 line_end: node.line_end,
+                content_hash: contentHash,
+            });
+        }
+
+        // Process grouped nodes
+        for (const [nodeType, groupNodes] of groupBuckets) {
+            const enrichedParts: string[] = [];
+            let firstLine = Infinity;
+            let lastLine = 0;
+
+            for (const node of groupNodes) {
+                const enrichedText = await enrichNode(node, document, filePath, commentPrefix);
+                enrichedParts.push(enrichedText);
+                firstLine = Math.min(firstLine, node.line_start);
+                lastLine = Math.max(lastLine, node.line_end);
+            }
+
+            const groupSymbol = `${nodeType}_group`;
+            const combinedText = enrichedParts.join('\n\n');
+            const textForEmbedding = `${instruction}\n\n${combinedText}`;
+            const contentHash = hashContent(textForEmbedding);
+            const key = `${nodeType}:${groupSymbol}`;
+
+            const existingNode = existingNodeMap.get(key);
+
+            if (existingNode && existingNode.content_hash === contentHash) {
+                newNodes.push({
+                    ...existingNode,
+                    line_start: firstLine,
+                    line_end: lastLine,
+                });
+                existingNodeMap.delete(key);
+                continue;
+            }
+
+            if (existingNode && existingNode.embedding_id > 0) {
+                await this.api.deleteEmbedding(existingNode.embedding_id);
+            }
+            existingNodeMap.delete(key);
+
+            const embResult = await this.api.embedAsync(textForEmbedding, model || undefined);
+            const embeddingId = embResult?.id ?? 0;
+
+            newNodes.push({
+                symbol: groupSymbol,
+                node_type: nodeType,
+                embedding_id: embeddingId,
+                line_start: firstLine,
+                line_end: lastLine,
                 content_hash: contentHash,
             });
         }

@@ -175,6 +175,9 @@ export class RetrievalPipeline {
         }
 
         const query = await buildRetrievalQuery(document, position, workspaceRoot);
+        const langConfig = this.langConfigs.get(document.languageId) ?? null;
+        const queryInstruction = langConfig?.embeddingQueryInstruction
+            ?? 'Represent this code query for searching relevant code:';
 
         return collectEmbeddingCandidates(
             query,
@@ -185,6 +188,7 @@ export class RetrievalPipeline {
             cfg.embeddingThreshold,
             cfg.topK,
             cfg.embeddingTimeout,
+            queryInstruction,
         );
     }
 }

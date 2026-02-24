@@ -25,5 +25,14 @@
     "interface_declaration": ["\ninterface "],
     "trait_declaration": ["\ntrait "],
     "enum_declaration": ["\nenum "]
-  }
+  },
+  "embeddingStrategies": {
+    "class": "individual",
+    "function": "individual",
+    "interface": "individual",
+    "enum": "individual",
+    "variable": "group",
+    "constant": "group"
+  },
+  "embeddingInstruction": "Represent this PHP code snippet for retrieval:"
 }

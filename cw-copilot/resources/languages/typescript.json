@@ -31,5 +31,15 @@
     "type_alias_declaration": ["\ntype "],
     "enum_declaration": ["\nenum "],
     "export_statement": ["\nexport "]
-  }
+  },
+  "embeddingStrategies": {
+    "class": "individual",
+    "function": "individual",
+    "interface": "individual",
+    "enum": "individual",
+    "type": "individual",
+    "variable": "group",
+    "constant": "group"
+  },
+  "embeddingInstruction": "Represent this TypeScript code snippet for retrieval:"
 }

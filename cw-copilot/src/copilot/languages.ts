@@ -11,6 +11,9 @@ export interface LanguageConfig {
     topLevelNodes: string[];
     nodeStopPatterns: Record<string, string[]>;
     importPatterns?: string[];
+    embeddingStrategies?: Record<string, 'individual' | 'group' | 'skip'>;
+    embeddingInstruction?: string;
+    embeddingQueryInstruction?: string;
 }
 
 export async function scaffoldLanguageConfigs(
