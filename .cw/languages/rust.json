@@ -20,6 +20,7 @@
     "trait_item",
     "mod_item"
   ],
+  "importPatterns": ["^use\\s", "^pub\\s+use\\s"],
   "nodeStopPatterns": {
     "function_item": ["\nfn ", "\npub fn "],
     "struct_item": ["\nstruct ", "\npub struct "],
@@ -27,5 +28,15 @@
     "enum_item": ["\nenum ", "\npub enum "],
     "trait_item": ["\ntrait ", "\npub trait "],
     "mod_item": ["\nmod "]
-  }
+  },
+  "embeddingStrategies": {
+    "function": "individual",
+    "struct": "individual",
+    "enum": "individual",
+    "interface": "individual",
+    "variable": "group",
+    "constant": "group",
+    "module": "group"
+  },
+  "embeddingInstruction": "Represent this Rust code snippet for retrieval:"
 }

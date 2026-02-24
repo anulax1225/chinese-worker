@@ -14,9 +14,18 @@
     "method_declaration",
     "type_declaration"
   ],
+  "importPatterns": ["^import\\s"],
   "nodeStopPatterns": {
     "function_declaration": ["\nfunc "],
     "method_declaration": ["\nfunc "],
     "type_declaration": ["\ntype "]
-  }
+  },
+  "embeddingStrategies": {
+    "function": "individual",
+    "struct": "individual",
+    "interface": "individual",
+    "variable": "group",
+    "constant": "group"
+  },
+  "embeddingInstruction": "Represent this Go code snippet for retrieval:"
 }

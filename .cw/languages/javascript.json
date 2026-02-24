@@ -18,11 +18,19 @@
     "export_statement",
     "import_statement"
   ],
+  "importPatterns": ["^import\\s", "^export\\s+\\{"],
   "nodeStopPatterns": {
     "class_declaration": ["\nclass "],
     "function_declaration": ["\nfunction "],
     "lexical_declaration": ["\nconst ", "\nlet ", "\nvar "],
     "export_statement": ["\nexport "],
     "import_statement": ["\nimport "]
-  }
+  },
+  "embeddingStrategies": {
+    "class": "individual",
+    "function": "individual",
+    "variable": "group",
+    "constant": "group"
+  },
+  "embeddingInstruction": "Represent this JavaScript code snippet for retrieval:"
 }

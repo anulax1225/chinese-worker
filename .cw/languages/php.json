@@ -18,11 +18,21 @@
     "trait_declaration",
     "enum_declaration"
   ],
+  "importPatterns": ["^namespace\\s", "^use\\s"],
   "nodeStopPatterns": {
     "class_declaration": ["\nclass "],
     "function_definition": ["\nfunction "],
     "interface_declaration": ["\ninterface "],
     "trait_declaration": ["\ntrait "],
     "enum_declaration": ["\nenum "]
-  }
+  },
+  "embeddingStrategies": {
+    "class": "individual",
+    "function": "individual",
+    "interface": "individual",
+    "enum": "individual",
+    "variable": "group",
+    "constant": "group"
+  },
+  "embeddingInstruction": "Represent this PHP code snippet for retrieval:"
 }

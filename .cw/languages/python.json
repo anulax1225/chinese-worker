@@ -14,9 +14,18 @@
     "function_definition",
     "decorated_definition"
   ],
+  "importPatterns": ["^import\\s", "^from\\s+\\S+\\s+import\\s"],
   "nodeStopPatterns": {
     "class_definition": ["\nclass "],
     "function_definition": ["\ndef "],
     "decorated_definition": ["\n@"]
-  }
+  },
+  "embeddingStrategies": {
+    "class": "individual",
+    "function": "individual",
+    "variable": "group",
+    "constant": "group",
+    "module": "group"
+  },
+  "embeddingInstruction": "Represent this Python code snippet for retrieval:"
 }
