@@ -121,17 +121,17 @@ return [
         'enabled' => env('RAG_ENABLED', true),
 
         // Embedding configuration
-        'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:0.6b'),
+        'embedding_model' => env('RAG_EMBEDDING_MODEL', 'qwen3-embedding:8b'),
         'embedding_backend' => env('RAG_EMBEDDING_BACKEND', 'ollama'),
-        'embedding_dimensions' => env('RAG_EMBEDDING_DIMENSIONS', 30000),
+        'embedding_dimensions' => env('RAG_EMBEDDING_DIMENSIONS', 4096),
         'embedding_batch_size' => 100,
         'cache_embeddings' => true,
 
         // Search configuration
-        'search_type' => env('RAG_SEARCH_TYPE', 'dense'), // dense, sparse, hybrid
-        'top_k' => 10,
-        'similarity_threshold' => 0.3,
-        'max_context_tokens' => 10000,
+        'search_type' => env('RAG_SEARCH_TYPE', 'hybrid'), // dense, sparse, hybrid
+        'top_k' => 50,
+        'similarity_threshold' => 0.1,
+        'max_context_tokens' => 40000,
 
         // Logging
         'log_retrievals' => true,
